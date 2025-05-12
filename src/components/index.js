@@ -49,9 +49,11 @@ export { default as BiometricAuth } from './BiometricAuth/BiometricAuth';
 // Composants de rapport
 export { default as ReportGenerator } from './ReportGenerator/ReportGenerator';
 
-// Composants de commission
-export { default as CommissionParametersForm } from './Commission/CommissionParametersForm';
-export { default as CommissionVisualization } from './Commission/CommissionVisualization';
-
 // Wrapper d'application
 export { default as AppWrapper } from './AppWrapper';
+
+// Note: Les composants Commission sont commentés temporairement pour éviter les cycles de dépendances
+// Une fois le problème de cycle résolu, vous pourrez les réactiver
+
+// export { default as CommissionParametersForm } from './Commission/CommissionParametersForm';
+// export { default as CommissionVisualization } from './Commission/CommissionVisualization';

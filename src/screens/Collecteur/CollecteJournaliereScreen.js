@@ -1,320 +1,287 @@
-// src/screens/Collecteur/CollecteJournaliereScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  TextInput,
-  FlatList,
   Alert,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import Header from '../../components/Header/Header';
-import Card from '../../components/Card/Card';
-import Button from '../../components/Button/Button';
-import theme from '../../theme';
+import {
+  Card,
+  Title,
+  Text,
+  Button,
+  TextInput,
+  RadioButton,
+  List,
+  Surface,
+  Chip,
+  ActivityIndicator,
+  HelperText,
+} from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthStore } from '../../store/authStore';
+import { useClientStore } from '../../store/clientStore';
+import MouvementService from '../../services/mouvementService';
+import JournalService from '../../services/journalService';
+import { theme } from '../../theme/theme';
 
-// Données fictives pour la démo - à remplacer par l'API réelle
-const mockClients = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Marie',
-    numeroCompte: '37305D0100015254',
-    solde: 124500.0,
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Jean',
-    numeroCompte: '37305D0100015255',
-    solde: 56700.0,
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Sophie',
-    numeroCompte: '37305D0100015256',
-    solde: 83200.0,
-  },
-  {
-    id: 4,
-    nom: 'Bernard',
-    prenom: 'Michel',
-    numeroCompte: '37305D0100015257',
-    solde: 42100.0,
-  },
-  {
-    id: 5,
-    nom: 'Thomas',
-    prenom: 'Laura',
-    numeroCompte: '37305D0100015258',
-    solde: 95000.0,
-  },
-];
-
-const CollecteJournaliereScreen = ({ navigation }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTab, setSelectedTab] = useState('epargne'); // epargne ou retrait
-  const [clientsList, setClientsList] = useState(mockClients);
-  const [filteredClients, setFilteredClients] = useState(mockClients);
+export const CollecteJournaliereScreen = ({ navigation }) => {
+  const { user } = useAuthStore();
+  const { clients, fetchClients } = useClientStore();
+  
   const [selectedClient, setSelectedClient] = useState(null);
+  const [operation, setOperation] = useState('epargne'); // 'epargne' ou 'retrait'
   const [montant, setMontant] = useState('');
+  const [journalActif, setJournalActif] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [recentOperations, setRecentOperations] = useState([]);
 
+  // Charger les données au montage
   useEffect(() => {
-    // Filtrer les clients en fonction de la recherche
-    if (searchQuery.trim() === '') {
-      setFilteredClients(clientsList);
-    } else {
-      const filtered = clientsList.filter(
-        client =>
-          client.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          client.numeroCompte.includes(searchQuery)
-      );
-      setFilteredClients(filtered);
-    }
-  }, [searchQuery, clientsList]);
+    loadInitialData();
+  }, []);
 
-  const handleSearch = (text) => {
-    setSearchQuery(text);
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+      // Charger le journal actif
+      const journal = await JournalService.getJournalActif(user.id);
+      if (journal) {
+        setJournalActif(journal);
+        // Charger les mouvements récents du journal
+        loadRecentOperations(journal.id);
+      }
+      
+      // Charger les clients
+      await fetchClients(user.id);
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleClientSelect = (client) => {
-    setSelectedClient(client);
-    setMontant('');
+  const loadRecentOperations = async (journalId) => {
+    try {
+      const operations = await MouvementService.getMouvementsByJournal(journalId);
+      setRecentOperations(operations.slice(-5)); // Les 5 dernières opérations
+    } catch (error) {
+      console.error('Error loading recent operations:', error);
+    }
   };
 
-  const validateMontant = () => {
-    const montantValue = parseFloat(montant);
-    if (isNaN(montantValue) || montantValue <= 0) {
-      Alert.alert('Erreur', 'Veuillez entrer un montant valide.');
-      return false;
-    }
+  const validateForm = () => {
+    const newErrors = {};
 
-    if (selectedTab === 'retrait' && montantValue > selectedClient.solde) {
-      Alert.alert('Erreur', 'Solde insuffisant pour effectuer ce retrait.');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleOperation = () => {
     if (!selectedClient) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un client.');
-      return;
+      newErrors.client = 'Veuillez sélectionner un client';
     }
 
-    if (!validateMontant()) {
+    if (!montant || isNaN(montant) || parseFloat(montant) <= 0) {
+      newErrors.montant = 'Veuillez saisir un montant valide';
+    }
+
+    if (!journalActif) {
+      newErrors.journal = 'Aucun journal actif. Créez un nouveau journal.';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleOperation = async () => {
+    if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
+    
+    try {
+      const operationData = {
+        clientId: selectedClient.id,
+        collecteurId: user.id,
+        montant: parseFloat(montant),
+        journalId: journalActif.id,
+      };
 
-    // Simuler un appel API
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      // Mettre à jour le solde du client localement (pour la démo)
-      const montantValue = parseFloat(montant);
-      const updatedClients = clientsList.map(client => {
-        if (client.id === selectedClient.id) {
-          const newSolde = selectedTab === 'epargne' 
-            ? client.solde + montantValue 
-            : client.solde - montantValue;
-          
-          return { ...client, solde: newSolde };
-        }
-        return client;
-      });
-      
-      setClientsList(updatedClients);
-      setSelectedClient(null);
+      let result;
+      if (operation === 'epargne') {
+        result = await MouvementService.enregistrerEpargne(operationData);
+        Alert.alert('Succès', `Épargne de ${montant} FCFA enregistrée pour ${selectedClient.nom} ${selectedClient.prenom}`);
+      } else {
+        result = await MouvementService.effectuerRetrait(operationData);
+        Alert.alert('Succès', `Retrait de ${montant} FCFA effectué pour ${selectedClient.nom} ${selectedClient.prenom}`);
+      }
+
+      // Réinitialiser le formulaire
       setMontant('');
+      setSelectedClient(null);
       
-      // Afficher une confirmation
-      const message = selectedTab === 'epargne' 
-        ? `Épargne de ${montantValue.toFixed(2)} FCFA enregistrée avec succès.` 
-        : `Retrait de ${montantValue.toFixed(2)} FCFA effectué avec succès.`;
-      
-      Alert.alert('Succès', message, [
-        { text: 'OK', onPress: () => console.log('OK Pressed') }
-      ]);
-    }, 1000);
+      // Recharger les opérations récentes
+      loadRecentOperations(journalActif.id);
+    } catch (error) {
+      Alert.alert('Erreur', `Impossible d'effectuer l'opération: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Formatage des montants
-  const formatCurrency = (amount) => {
-    return amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
-  };
-
-  const renderClientItem = ({ item }) => (
-    <TouchableOpacity
-      style={[
-        styles.clientItem,
-        selectedClient?.id === item.id && styles.selectedClientItem
-      ]}
-      onPress={() => handleClientSelect(item)}
-    >
-      <View style={styles.clientInfo}>
-        <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
-        <Text style={styles.clientAccount}>{item.numeroCompte}</Text>
-      </View>
-      <View style={styles.clientBalanceContainer}>
-        <Text style={styles.clientBalanceLabel}>Solde</Text>
-        <Text style={styles.clientBalance}>{formatCurrency(item.solde)} FCFA</Text>
-      </View>
-    </TouchableOpacity>
+  const renderClientItem = (client) => (
+    <List.Item
+      key={client.id}
+      title={`${client.nom} ${client.prenom}`}
+      description={`CNI: ${client.numeroCni} | Tel: ${client.telephone}`}
+      left={(props) => <List.Icon {...props} icon="account" />}
+      onPress={() => {
+        setSelectedClient(client);
+        setErrors({ ...errors, client: null });
+      }}
+      style={selectedClient?.id === client.id ? styles.selectedClient : null}
+    />
   );
+
+  const renderRecentOperation = (operation, index) => (
+    <List.Item
+      key={index}
+      title={`${operation.type} - ${operation.montant} FCFA`}
+      description={`${operation.client.nom} ${operation.client.prenom} - ${new Date(operation.dateOperation).toLocaleTimeString()}`}
+      left={(props) => (
+        <List.Icon 
+          {...props} 
+          icon={operation.type === 'EPARGNE' ? 'cash-plus' : 'cash-minus'}
+          color={operation.type === 'EPARGNE' ? theme.colors.primary : theme.colors.error}
+        />
+      )}
+    />
+  );
+
+  if (isLoading && !journalActif) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
+
+  if (!journalActif) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.noJournalContainer}>
+          <Text style={styles.noJournalText}>Aucun journal actif</Text>
+          <Button
+            mode="contained"
+            onPress={() => navigation.goBack()}
+          >
+            Retour
+          </Button>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+        style={styles.keyboardView}
       >
-        <Header
-          title="Collecte Journalière"
-          showBackButton={false}
-          rightComponent={
-            <TouchableOpacity
-              style={styles.notificationButton}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-            </TouchableOpacity>
-          }
-        />
-        
         <ScrollView style={styles.scrollView}>
-          {/* Onglets Épargne/Retrait */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, selectedTab === 'epargne' && styles.activeTab]}
-              onPress={() => setSelectedTab('epargne')}
-            >
-              <Ionicons
-                name="arrow-down-circle-outline"
-                size={20}
-                color={selectedTab === 'epargne' ? theme.colors.primary : theme.colors.textLight}
-              />
-              <Text
-                style={[styles.tabText, selectedTab === 'epargne' && styles.activeTabText]}
-              >
-                Épargne
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.tab, selectedTab === 'retrait' && styles.activeTab]}
-              onPress={() => setSelectedTab('retrait')}
-            >
-              <Ionicons
-                name="arrow-up-circle-outline"
-                size={20}
-                color={selectedTab === 'retrait' ? theme.colors.primary : theme.colors.textLight}
-              />
-              <Text
-                style={[styles.tabText, selectedTab === 'retrait' && styles.activeTabText]}
-              >
-                Retrait
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* En-tête journal */}
+          <Surface style={styles.header}>
+            <Title>Collecte Journalière</Title>
+            <Text style={styles.journalInfo}>
+              Journal #{journalActif.id} - {new Date(journalActif.dateDebut).toLocaleDateString()}
+            </Text>
+          </Surface>
 
-          {/* Recherche de client */}
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputContainer}>
-              <Ionicons name="search" size={20} color={theme.colors.gray} style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Rechercher un client..."
-                value={searchQuery}
-                onChangeText={handleSearch}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={20} color={theme.colors.gray} />
-                </TouchableOpacity>
+          {/* Type d'opération */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title>Type d'opération</Title>
+              <RadioButton.Group onValueChange={setOperation} value={operation}>
+                <View style={styles.radioContainer}>
+                  <View style={styles.radioItem}>
+                    <RadioButton value="epargne" />
+                    <Text>Épargne</Text>
+                  </View>
+                  <View style={styles.radioItem}>
+                    <RadioButton value="retrait" />
+                    <Text>Retrait</Text>
+                  </View>
+                </View>
+              </RadioButton.Group>
+            </Card.Content>
+          </Card>
+
+          {/* Sélection client */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title>Sélectionner un client</Title>
+              {errors.client && (
+                <HelperText type="error">{errors.client}</HelperText>
               )}
-            </View>
-          </View>
+              {selectedClient ? (
+                <Chip
+                  mode="outlined"
+                  onClose={() => setSelectedClient(null)}
+                  style={styles.selectedChip}
+                >
+                  {selectedClient.nom} {selectedClient.prenom}
+                </Chip>
+              ) : (
+                <ScrollView style={styles.clientsList} nestedScrollEnabled>
+                  {clients.map(renderClientItem)}
+                </ScrollView>
+              )}
+            </Card.Content>
+          </Card>
 
-          {/* Liste des clients */}
-          <View style={styles.clientsListContainer}>
-            <Text style={styles.sectionTitle}>Clients ({filteredClients.length})</Text>
-            <FlatList
-              data={filteredClients}
-              renderItem={renderClientItem}
-              keyExtractor={item => item.id.toString()}
-              contentContainerStyle={styles.clientsList}
-              scrollEnabled={false}
-              ListEmptyComponent={
-                <View style={styles.emptyListContainer}>
-                  <Ionicons name="people" size={48} color={theme.colors.gray} />
-                  <Text style={styles.emptyListText}>Aucun client trouvé</Text>
-                </View>
-              }
-            />
-          </View>
-
-          {/* Formulaire d'opération */}
-          {selectedClient && (
-            <Card style={styles.operationCard}>
-              <Text style={styles.operationTitle}>
-                {selectedTab === 'epargne' ? 'Épargne' : 'Retrait'}
-              </Text>
-              
-              <View style={styles.clientInfoCard}>
-                <Text style={styles.clientInfoTitle}>Client sélectionné</Text>
-                <Text style={styles.selectedClientName}>
-                  {selectedClient.prenom} {selectedClient.nom}
-                </Text>
-                <Text style={styles.selectedClientAccount}>
-                  {selectedClient.numeroCompte}
-                </Text>
-                <Text style={styles.selectedClientBalance}>
-                  Solde: {formatCurrency(selectedClient.solde)} FCFA
-                </Text>
-              </View>
-              
-              <View style={styles.montantContainer}>
-                <Text style={styles.montantLabel}>Montant ({selectedTab === 'epargne' ? 'à collecter' : 'à retirer'})</Text>
-                <View style={styles.montantInputContainer}>
-                  <TextInput
-                    style={styles.montantInput}
-                    placeholder="0.00"
-                    value={montant}
-                    onChangeText={setMontant}
-                    keyboardType="decimal-pad"
-                    autoFocus
-                  />
-                  <Text style={styles.currencyLabel}>FCFA</Text>
-                </View>
-              </View>
-              
-              <Button
-                title={selectedTab === 'epargne' ? 'Enregistrer l\'épargne' : 'Effectuer le retrait'}
-                onPress={handleOperation}
-                loading={isLoading}
-                disabled={isLoading || !montant}
-                fullWidth
+          {/* Montant */}
+          <Card style={styles.card}>
+            <Card.Content>
+              <TextInput
+                mode="outlined"
+                label="Montant (FCFA)"
+                value={montant}
+                onChangeText={(text) => {
+                  setMontant(text);
+                  if (errors.montant) {
+                    setErrors({ ...errors, montant: null });
+                  }
+                }}
+                keyboardType="numeric"
+                error={!!errors.montant}
+                style={styles.montantInput}
               />
-              
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setSelectedClient(null)}
-                disabled={isLoading}
-              >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
-              </TouchableOpacity>
+              {errors.montant && (
+                <HelperText type="error">{errors.montant}</HelperText>
+              )}
+            </Card.Content>
+          </Card>
+
+          {/* Bouton d'action */}
+          <Button
+            mode="contained"
+            onPress={handleOperation}
+            disabled={isLoading}
+            loading={isLoading}
+            style={styles.actionButton}
+            contentStyle={styles.buttonContent}
+          >
+            {operation === 'epargne' ? 'Enregistrer Épargne' : 'Effectuer Retrait'}
+          </Button>
+
+          {/* Opérations récentes */}
+          {recentOperations.length > 0 && (
+            <Card style={styles.card}>
+              <Card.Content>
+                <Title>Opérations récentes</Title>
+                {recentOperations.map(renderRecentOperation)}
+              </Card.Content>
             </Card>
           )}
         </ScrollView>
@@ -326,208 +293,77 @@ const CollecteJournaliereScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.background,
   },
-  keyboardAvoidingView: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    color: theme.colors.onSurface,
+  },
+  noJournalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noJournalText: {
+    fontSize: 18,
+    marginBottom: 20,
+    color: theme.colors.onSurface,
+  },
+  keyboardView: {
     flex: 1,
   },
   scrollView: {
     flex: 1,
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
   },
-  notificationButton: {
-    padding: 8,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginTop: 20,
-    marginBottom: 16,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 10,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
+  header: {
+    padding: 16,
+    margin: 16,
+    elevation: 2,
     borderRadius: 8,
   },
-  activeTab: {
-    backgroundColor: theme.colors.white,
-    ...theme.shadows.small,
-  },
-  tabText: {
-    marginLeft: 8,
+  journalInfo: {
     fontSize: 14,
-    color: theme.colors.textLight,
+    color: theme.colors.onSurface,
+    opacity: 0.7,
+    marginTop: 4,
   },
-  activeTabText: {
-    color: theme.colors.text,
-    fontWeight: '500',
+  card: {
+    margin: 16,
+    elevation: 2,
   },
-  searchContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+  radioContainer: {
+    flexDirection: 'row',
+    marginTop: 8,
   },
-  searchInputContainer: {
+  radioItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    ...theme.shadows.small,
+    marginRight: 24,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    height: 40,
-  },
-  clientsListContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: theme.colors.text,
+  selectedChip: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
   },
   clientsList: {
-    paddingBottom: 8,
+    maxHeight: 200,
+    marginTop: 8,
   },
-  clientItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    ...theme.shadows.small,
-  },
-  selectedClientItem: {
-    borderWidth: 2,
-    borderColor: theme.colors.primary,
-  },
-  clientInfo: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  clientAccount: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  clientBalanceContainer: {
-    alignItems: 'flex-end',
-  },
-  clientBalanceLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginBottom: 2,
-  },
-  clientBalance: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-  },
-  emptyListContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  emptyListText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: theme.colors.textLight,
-  },
-  operationCard: {
-    marginHorizontal: 16,
-    marginBottom: 24,
-    padding: 16,
-  },
-  operationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  clientInfoCard: {
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  clientInfoTitle: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginBottom: 6,
-  },
-  selectedClientName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  selectedClientAccount: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginBottom: 6,
-  },
-  selectedClientBalance: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.primary,
-  },
-  montantContainer: {
-    marginBottom: 20,
-  },
-  montantLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: 8,
-  },
-  montantInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 10,
-    paddingHorizontal: 12,
+  selectedClient: {
+    backgroundColor: theme.colors.surfaceVariant,
   },
   montantInput: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: 'bold',
-    paddingVertical: 12,
+    marginTop: 8,
   },
-  currencyLabel: {
-    fontSize: 16,
-    color: theme.colors.textLight,
+  actionButton: {
+    margin: 16,
   },
-  cancelButton: {
-    alignItems: 'center',
-    padding: 12,
-    marginTop: 12,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: theme.colors.textLight,
+  buttonContent: {
+    paddingVertical: 8,
   },
 });
-
-export default CollecteJournaliereScreen;
