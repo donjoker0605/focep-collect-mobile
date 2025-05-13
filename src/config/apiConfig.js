@@ -1,6 +1,6 @@
 ﻿// src/config/apiConfig.js
 export const API_CONFIG = {
-  baseURL: 'http://192.168.88.60:8080/api',
+  baseURL: 'http://192.168.111.57:8080/api',
   timeout: 10000,
   retryAttempts: 3,
   retryDelay: 1000,

@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configuration de l'API
-const API_BASE_URL = 'http://192.168.88.60:8080/api';
+const API_BASE_URL = 'http://192.168.111.57:8080/api';
 
 class ApiService {
   constructor() {
