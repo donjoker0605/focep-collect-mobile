@@ -5,7 +5,6 @@ import { useOfflineSync } from '../hooks/useOfflineSync';
 import { useAuth } from '../hooks/useAuth';
 import SyncStatusIndicator from './SyncStatusIndicator/SyncStatusIndicator';
 import OfflineIndicator from './OfflineIndicator/OfflineIndicator';
-import DevQuickLogin from './DevQuickLogin'; // Importez le composant
 
 const AppWrapper = ({ children }) => {
   const { isOnline, syncStatus, pendingCount, syncNow } = useOfflineSync();

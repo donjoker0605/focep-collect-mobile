@@ -1,6 +1,8 @@
 import axios from 'axios';
 import api, { handleApiError } from './axiosConfig';
 import { ENDPOINTS } from '../config/apiConfig';
+import { BACKEND_URL } from '@env'; 
+
 
 // Configuration de base pour Axios
 const API = axios.create({

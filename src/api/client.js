@@ -4,7 +4,7 @@ import { ENDPOINTS } from '../config/apiConfig';
 
 // Configuration de base pour Axios
 const API = axios.create({
-  baseURL: BACKEND_URL,
+  baseURL: process.env.EXPO_BACKEND_URL,
   headers: {
     'Content-Type': 'application/json',
   },
