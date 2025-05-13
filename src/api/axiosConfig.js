@@ -1,12 +1,12 @@
 // src/api/axiosConfig.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../constants/api';
+import { API_CONFIG } from '../config/apiConfig';
 
 // Créer une instance axios avec une configuration par défaut
 const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 15000, // 15 secondes
+  baseURL: API_CONFIG.baseURL, 
+  timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

@@ -1,6 +1,6 @@
 // src/api/dashboard.js
 import axios from 'axios';
-import { API_BASE_URL } from '../constants/api';
+import api from './axiosConfig';
 import axiosInstance from './axiosConfig';
 
 // Service de gestion du tableau de bord

@@ -13,8 +13,6 @@ const AppWrapper = ({ children }) => {
 
   return (
     <View style={styles.container}>
-      {/* Bouton de connexion rapide en développement */}
-      {__DEV__ && <DevQuickLogin />}
       
       {/* Indicateur de mode hors ligne */}
       <OfflineIndicator />
@@ -43,3 +41,7 @@ const styles = StyleSheet.create({
 });
 
 export default AppWrapper;
+
+
+
+

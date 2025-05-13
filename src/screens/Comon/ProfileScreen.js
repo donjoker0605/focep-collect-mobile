@@ -31,10 +31,7 @@ import { updateUserProfile, getUserProfile } from '../../api/auth';
 import theme from '../../theme';
 
 // Composant RoleSwitcher pour le mode développement
-const RoleSwitcher = ({ user, onSwitchRole }) => {
-  if (!__DEV__) return null;
-  
-  return (
+const RoleSwitcher = ({ user, onSwitchRole }) => {\n  return (
     <Card style={styles.devCard}>
       <Text style={styles.devCardTitle}>Mode développement</Text>
       <Text style={styles.devCardSubtitle}>Changer de rôle pour tester l'application</Text>
@@ -143,16 +140,6 @@ const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
       setError(null);
-      
-      // En mode développement, on peut simplement utiliser les données de l'utilisateur
-      if (__DEV__) {
-        setProfile(user);
-        setTelephone(user.telephone || '');
-        setAdresse(user.adresse || '');
-        setEmail(user.adresseMail || '');
-        setLoading(false);
-        return;
-      }
       
       const response = await getUserProfile(user.id);
       setProfile(response);
@@ -374,8 +361,6 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         )}
         
-        {/* Sélecteur de rôles (mode développement uniquement) */}
-        {__DEV__ && <RoleSwitcher user={profile} onSwitchRole={handleSwitchRole} />}
         
         {/* Informations personnelles */}
         <Card style={styles.infoCard}>
@@ -740,3 +725,6 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
+
+
+

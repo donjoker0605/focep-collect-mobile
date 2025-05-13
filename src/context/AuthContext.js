@@ -19,26 +19,19 @@ export const AuthProvider = ({ children }) => {
     const loadAuthState = async () => {
       try {
         setIsLoading(true);
-        
-        // Récupérer les données stockées
+
         const storedToken = await AsyncStorage.getItem('auth_token');
         const storedUserData = await AsyncStorage.getItem('user_data');
-        
+
         if (storedToken && storedUserData) {
-          // Restaurer la session
           const parsedUser = JSON.parse(storedUserData);
           setToken(storedToken);
           setUser(parsedUser);
           setIsAuthenticated(true);
-          
-          // Configurer axios
+
           axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-          
+
           console.log('Session restaurée:', { role: parsedUser.role });
-        } else if (__DEV__) {
-          // En développement, connecter automatiquement en tant que collecteur
-          console.log('Mode DEV: Connexion automatique en tant que collecteur');
-          await loginWithRole('COLLECTEUR');
         }
       } catch (error) {
         console.error('Erreur lors du chargement de l\'état d\'authentification:', error);
@@ -46,72 +39,35 @@ export const AuthProvider = ({ children }) => {
         setIsLoading(false);
       }
     };
-    
+
     loadAuthState();
   }, []);
 
-  // Fonction utilitaire pour créer un utilisateur selon le rôle
-  const createMockUser = (role) => {
-    switch (role) {
-      case 'ADMIN':
-        return {
-          id: 1,
-          nom: 'Admin',
-          prenom: 'FOCEP',
-          adresseMail: 'admin@focep.cm',
-          telephone: '+237 655 123 456',
-          numeroCni: 'AD12345678',
-          role: 'ADMIN',
-          agenceId: 1
-        };
-      case 'SUPER_ADMIN':
-        return {
-          id: 3,
-          nom: 'Super',
-          prenom: 'Admin',
-          adresseMail: 'super.admin@focep.cm',
-          telephone: '+237 655 789 012',
-          numeroCni: 'SA12345678',
-          role: 'SUPER_ADMIN',
-          agenceId: null
-        };
-      case 'COLLECTEUR':
-      default:
-        return {
-          id: 2,
-          nom: 'Dupont',
-          prenom: 'Jean',
-          adresseMail: 'collecteur@focep.cm',
-          telephone: '+237 677 234 567',
-          numeroCni: 'CM12345678',
-          role: 'COLLECTEUR',
-          agenceId: 1
-        };
-    }
-  };
+  // Fonction de connexion
+  const login = async (email, password) => {
+    setError(null);
+    setIsLoading(true);
 
-  // Fonction interne pour se connecter avec un rôle spécifique
-  const loginWithRole = async (role) => {
     try {
-      const userData = createMockUser(role);
-      const mockToken = `mock_token_${role}_${Date.now()}`;
-      
-      // Stocker les données
-      await AsyncStorage.setItem('auth_token', mockToken);
+      // Exemple de requête à l'API (à adapter à ton backend)
+      const response = await axios.post('https://api.exemple.com/login', {
+        email,
+        password
+      });
+
+      const { token: receivedToken, user: userData } = response.data;
+
+      await AsyncStorage.setItem('auth_token', receivedToken);
       await AsyncStorage.setItem('user_data', JSON.stringify(userData));
-      
-      // Mettre à jour l'état
-      setToken(mockToken);
+
+      setToken(receivedToken);
       setUser(userData);
       setIsAuthenticated(true);
-      
-      // Configurer axios
-      axios.defaults.headers.common['Authorization'] = `Bearer ${mockToken}`;
-      
-      console.log(`Connecté en tant que ${role}`);
-      
-      // Redirection automatique
-      switch (role) {
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${receivedToken}`;
+
+      // Rediriger selon le rôle
+      switch (userData.role) {
         case 'ADMIN':
           router.replace('/admin');
           break;
@@ -123,29 +79,8 @@ export const AuthProvider = ({ children }) => {
           router.replace('/(tabs)');
           break;
       }
-      
-      return { success: true, user: userData };
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-      setError('Erreur de connexion');
-      return { success: false, error: 'Erreur de connexion' };
-    }
-  };
 
-  // Fonction de connexion
-  const login = async (email, password, role = 'COLLECTEUR') => {
-    setError(null);
-    setIsLoading(true);
-    
-    try {
-      // En développement, utiliser l'authentification simulée
-      if (__DEV__) {
-        return await loginWithRole(role);
-      }
-      
-      // Code pour l'authentification réelle (pour la production)
-      // ...
-      
+      return { success: true };
     } catch (error) {
       console.error('Erreur de connexion:', error);
       setError('Identifiants invalides');
@@ -158,46 +93,30 @@ export const AuthProvider = ({ children }) => {
   // Fonction de déconnexion
   const logout = async () => {
     try {
-      // Supprimer les données stockées
       await AsyncStorage.removeItem('auth_token');
       await AsyncStorage.removeItem('user_data');
-      
-      // Supprimer les en-têtes d'autorisation
+
       delete axios.defaults.headers.common['Authorization'];
-      
-      // Réinitialiser l'état
+
       setToken(null);
       setUser(null);
       setIsAuthenticated(false);
-      
-      // Rediriger vers la page de connexion
+
       router.replace('/auth');
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     }
   };
 
-  // Fonction pour changer de rôle (utile pour le développement)
-  const switchRole = async (newRole) => {
-    if (!['COLLECTEUR', 'ADMIN', 'SUPER_ADMIN'].includes(newRole)) {
-      throw new Error('Rôle invalide');
-    }
-    
-    console.log(`Changement de rôle vers ${newRole}`);
-    return await loginWithRole(newRole);
-  };
-
   // Fonction pour mettre à jour les informations de l'utilisateur
   const updateUserInfo = async (updatedInfo) => {
     try {
       const updatedUser = { ...user, ...updatedInfo };
-      
-      // Sauvegarder les données mises à jour
+
       await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-      
-      // Mettre à jour l'état
+
       setUser(updatedUser);
-      
+
       return { success: true };
     } catch (error) {
       console.error('Erreur lors de la mise à jour des infos utilisateur:', error);
@@ -214,7 +133,6 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     logout,
-    switchRole,
     updateUserInfo,
     setError
   };
