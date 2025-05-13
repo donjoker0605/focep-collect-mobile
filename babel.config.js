@@ -22,7 +22,7 @@ module.exports = function (api) {
           },
         },
       ],
-      'react-native-reanimated/plugin', // ⚠️ Toujours en dernier
+      'react-native-reanimated/plugin', 
     ],
   };
 };
