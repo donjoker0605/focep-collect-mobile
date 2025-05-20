@@ -1,16 +1,17 @@
 ﻿// src/config/apiConfig.js
 export const API_CONFIG = {
-  baseURL: 'http://192.168.111.57:8080/api',
-  timeout: 10000,
+  baseURL: 'http://192.168.111.57:8080/api'
+  timeout: 15000,
   retryAttempts: 3,
   retryDelay: 1000,
 };
 
 export const STORAGE_KEYS = {
-  JWT_TOKEN: 'jwt_token',
-  REFRESH_TOKEN: 'refresh_token',
-  USER_DATA: 'user_data',
-  IS_FIRST_LAUNCH: 'is_first_launch',
+  JWT_TOKEN: 'focep_jwt_token',
+  REFRESH_TOKEN: 'focep_refresh_token',
+  USER_DATA: 'focep_user_data',
+  OFFLINE_DATA: 'focep_offline_data',
+  LAST_SYNC: 'focep_last_sync',
 };
 
 // Endpoints

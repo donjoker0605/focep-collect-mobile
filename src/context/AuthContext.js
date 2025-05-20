@@ -1,8 +1,10 @@
 // src/context/AuthContext.js
 import React, { createContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import { authService } from '../api/auth';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../config/apiConfig';
+import axiosInstance from '../api/axiosConfig';
 
 export const AuthContext = createContext();
 
@@ -10,37 +12,47 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
   const [error, setError] = useState(null);
   const router = useRouter();
 
-  // Charger l'état d'authentification au démarrage
+  // Vérifier l'état d'authentification au démarrage
   useEffect(() => {
-    const loadAuthState = async () => {
+    const checkAuthStatus = async () => {
       try {
         setIsLoading(true);
-
-        const storedToken = await AsyncStorage.getItem('auth_token');
-        const storedUserData = await AsyncStorage.getItem('user_data');
-
-        if (storedToken && storedUserData) {
-          const parsedUser = JSON.parse(storedUserData);
-          setToken(storedToken);
-          setUser(parsedUser);
+        
+        // Vérifier si le token est valide
+        const isValid = await authService.isAuthenticated();
+        
+        if (isValid) {
+          // Récupérer les données utilisateur
+          const userData = await authService.getCurrentUser();
+          
+          setUser(userData);
           setIsAuthenticated(true);
-
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-
-          console.log('Session restaurée:', { role: parsedUser.role });
+          
+          console.log('Session restaurée:', { role: userData?.role });
+        } else {
+          // Si le token n'est pas valide, nettoyer les données
+          await AsyncStorage.multiRemove([
+            STORAGE_KEYS.JWT_TOKEN,
+            STORAGE_KEYS.REFRESH_TOKEN,
+            STORAGE_KEYS.USER_DATA,
+          ]);
+          
+          setUser(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Erreur lors du chargement de l\'état d\'authentification:', error);
+        console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
+        setUser(null);
+        setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadAuthState();
+    checkAuthStatus();
   }, []);
 
   // Fonction de connexion
@@ -49,42 +61,19 @@ export const AuthProvider = ({ children }) => {
     setIsLoading(true);
 
     try {
-      // Exemple de requête à l'API (à adapter à ton backend)
-      const response = await axios.post('https://api.exemple.com/login', {
-        email,
-        password
-      });
-
-      const { token: receivedToken, user: userData } = response.data;
-
-      await AsyncStorage.setItem('auth_token', receivedToken);
-      await AsyncStorage.setItem('user_data', JSON.stringify(userData));
-
-      setToken(receivedToken);
-      setUser(userData);
+      const result = await authService.login({ email, password });
+      
+      setUser(result.user);
       setIsAuthenticated(true);
 
-      axios.defaults.headers.common['Authorization'] = `Bearer ${receivedToken}`;
-
       // Rediriger selon le rôle
-      switch (userData.role) {
-        case 'ADMIN':
-          router.replace('/admin');
-          break;
-        case 'SUPER_ADMIN':
-          router.replace('/super-admin');
-          break;
-        case 'COLLECTEUR':
-        default:
-          router.replace('/(tabs)');
-          break;
-      }
-
+      redirectBasedOnRole(result.user.role);
+      
       return { success: true };
     } catch (error) {
       console.error('Erreur de connexion:', error);
-      setError('Identifiants invalides');
-      return { success: false, error: 'Identifiants invalides' };
+      setError(error.message || 'Identifiants invalides');
+      return { success: false, error: error.message || 'Identifiants invalides' };
     } finally {
       setIsLoading(false);
     }
@@ -93,48 +82,83 @@ export const AuthProvider = ({ children }) => {
   // Fonction de déconnexion
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('user_data');
-
-      delete axios.defaults.headers.common['Authorization'];
-
-      setToken(null);
+      setIsLoading(true);
+      await authService.logout();
+      
       setUser(null);
       setIsAuthenticated(false);
+      setError(null);
 
       router.replace('/auth');
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
+      // Même en cas d'erreur, on réinitialise l'état
+      setUser(null);
+      setIsAuthenticated(false);
+      router.replace('/auth');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Fonction pour mettre à jour les informations de l'utilisateur
+  // Fonction pour rediriger selon le rôle
+  const redirectBasedOnRole = (role) => {
+    if (!role) return;
+    
+    switch (role) {
+      case 'ADMIN':
+        router.replace('/admin');
+        break;
+      case 'SUPER_ADMIN':
+        router.replace('/super-admin');
+        break;
+      case 'COLLECTEUR':
+      default:
+        router.replace('/(tabs)');
+        break;
+    }
+  };
+
+  // Fonction pour mettre à jour l'utilisateur
   const updateUserInfo = async (updatedInfo) => {
     try {
       const updatedUser = { ...user, ...updatedInfo };
-
-      await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
       setUser(updatedUser);
-
       return { success: true };
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des infos utilisateur:', error);
+      console.error('Erreur lors de la mise à jour des informations utilisateur:', error);
       return { success: false, error: error.message };
     }
   };
 
-  // Exposer le contexte et ses fonctions
+  // Exposer le contexte
   const authContext = {
     isAuthenticated,
     isLoading,
     user,
-    token,
     error,
     login,
     logout,
     updateUserInfo,
-    setError
+    setError,
+    checkAuthStatus: async () => {
+      setIsLoading(true);
+      try {
+        const isValid = await authService.isAuthenticated();
+        const userData = isValid ? await authService.getCurrentUser() : null;
+        
+        setUser(userData);
+        setIsAuthenticated(isValid);
+        
+        return isValid;
+      } catch (error) {
+        console.error('Erreur lors de la vérification du statut d\'authentification:', error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    }
   };
 
   return (

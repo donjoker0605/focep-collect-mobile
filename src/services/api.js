@@ -1,91 +1,240 @@
-// API Service simplifié pour déboguer
+// src/services/api.js
+import axiosInstance, { handleApiError } from '../api/axiosConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Configuration de l'API
-const API_BASE_URL = 'http://192.168.111.57:8080/api';
+import NetInfo from '@react-native-community/netinfo';
+import { STORAGE_KEYS } from '../config/apiConfig';
+import uuid from 'react-native-uuid';
 
 class ApiService {
-  constructor() {
-    this.baseURL = API_BASE_URL;
+  // Vérifier la connectivité
+  async isConnected() {
+    const netInfo = await NetInfo.fetch();
+    return netInfo.isConnected && netInfo.isInternetReachable;
   }
 
-  // Méthode pour obtenir les headers avec le token
-  async getHeaders(includeToken = true) {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
+  // Récupérer un endpoint avec gestion de cache
+  async get(endpoint, params = {}, cacheOptions = { useCache: true, maxAge: 60 * 60 * 1000 }) {
     try {
-      if (includeToken) {
-        const token = await AsyncStorage.getItem('authToken');
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
+      // Vérifier si on est en ligne
+      const isOnline = await this.isConnected();
+      
+      // Si on est hors ligne et que le cache est activé
+      if (!isOnline && cacheOptions.useCache) {
+        return this._getFromCache(endpoint, params);
       }
+      
+      // Requête en ligne
+      const response = await axiosInstance.get(endpoint, { params });
+      
+      // Mise en cache si nécessaire
+      if (cacheOptions.useCache) {
+        await this._saveToCache(endpoint, params, response.data);
+      }
+      
+      return response.data;
     } catch (error) {
-      console.error('Error getting headers:', error);
+      // Si hors ligne, tenter de récupérer depuis le cache
+      if (error.offline && cacheOptions.useCache) {
+        return this._getFromCache(endpoint, params);
+      }
+      
+      throw handleApiError(error);
     }
-
-    return headers;
   }
 
-  // Méthode générique pour les requêtes
-  async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
-    
+  // Envoyer des données avec gestion hors ligne
+  async post(endpoint, data = {}, offlineOptions = { canQueue: false }) {
     try {
-      const headers = await this.getHeaders(options.includeToken !== false);
-      const config = { ...options, headers };
-
-      console.log(`API Request: ${config.method || 'GET'} ${url}`);
-      
-      const response = await fetch(url, config);
-      
-      console.log(`API Response: ${response.status}`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const response = await axiosInstance.post(endpoint, data);
+      return response.data;
+    } catch (error) {
+      // Si hors ligne et la file d'attente est activée
+      if (error.offline && offlineOptions.canQueue) {
+        await this._queueOperation('POST', endpoint, data);
+        return { queued: true, message: 'Opération mise en file d\'attente' };
       }
+      
+      throw handleApiError(error);
+    }
+  }
 
-      const data = await response.json();
+  // Mettre à jour des données avec gestion hors ligne
+  async put(endpoint, data = {}, offlineOptions = { canQueue: false }) {
+    try {
+      const response = await axiosInstance.put(endpoint, data);
+      return response.data;
+    } catch (error) {
+      // Si hors ligne et la file d'attente est activée
+      if (error.offline && offlineOptions.canQueue) {
+        await this._queueOperation('PUT', endpoint, data);
+        return { queued: true, message: 'Opération mise en file d\'attente' };
+      }
+      
+      throw handleApiError(error);
+    }
+  }
+
+  // Supprimer des données 
+  async delete(endpoint, offlineOptions = { canQueue: false }) {
+    try {
+      const response = await axiosInstance.delete(endpoint);
+      return response.data;
+    } catch (error) {
+      // Si hors ligne et la file d'attente est activée
+      if (error.offline && offlineOptions.canQueue) {
+        await this._queueOperation('DELETE', endpoint);
+        return { queued: true, message: 'Opération mise en file d\'attente' };
+      }
+      
+      throw handleApiError(error);
+    }
+  }
+
+  // Méthodes privées pour la gestion du cache et des opérations hors ligne
+  
+  // Récupérer depuis le cache
+  async _getFromCache(endpoint, params) {
+    try {
+      const cacheKey = this._generateCacheKey(endpoint, params);
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+      
+      if (!cachedData) {
+        throw new Error('Données non disponibles en mode hors ligne');
+      }
+      
+      const { data, timestamp } = JSON.parse(cachedData);
+      
       return data;
     } catch (error) {
-      console.error(`API Error for ${endpoint}:`, error);
-      throw error;
+      throw {
+        message: 'Données non disponibles en mode hors ligne',
+        isOfflineError: true
+      };
     }
   }
 
-  // Méthodes HTTP
-  async get(endpoint, params = {}) {
-    const queryString = new URLSearchParams(params).toString();
-    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-    return this.request(url, { method: 'GET' });
+  // Sauvegarder dans le cache
+  async _saveToCache(endpoint, params, data) {
+    try {
+      const cacheKey = this._generateCacheKey(endpoint, params);
+      const cacheData = {
+        data,
+        timestamp: Date.now()
+      };
+      
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    } catch (error) {
+      console.warn('Erreur lors de la mise en cache:', error);
+    }
   }
 
-  async post(endpoint, data = {}, includeToken = true) {
-    return this.request(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
-      includeToken,
-    });
+  // Ajouter une opération à la file d'attente
+  async _queueOperation(method, endpoint, data = null) {
+    try {
+      const queuedOperations = await this._getQueuedOperations();
+      
+      queuedOperations.push({
+        id: uuid.v4(),
+        method,
+        endpoint,
+        data,
+        timestamp: Date.now()
+      });
+      
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.OFFLINE_DATA, 
+        JSON.stringify(queuedOperations)
+      );
+    } catch (error) {
+      console.error('Erreur lors de la mise en file d\'attente de l\'opération:', error);
+      throw {
+        message: 'Impossible de mettre l\'opération en file d\'attente',
+        isOfflineError: true
+      };
+    }
   }
 
-  async put(endpoint, data = {}) {
-    return this.request(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+  // Récupérer les opérations en file d'attente
+  async _getQueuedOperations() {
+    try {
+      const queuedData = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_DATA);
+      return queuedData ? JSON.parse(queuedData) : [];
+    } catch (error) {
+      console.error('Erreur lors de la récupération des opérations en file d\'attente:', error);
+      return [];
+    }
   }
 
-  async delete(endpoint) {
-    return this.request(endpoint, {
-      method: 'DELETE',
-    });
+  // Traiter les opérations en file d'attente
+  async processQueuedOperations() {
+    const isOnline = await this.isConnected();
+    if (!isOnline) {
+      return { success: false, message: 'Hors ligne, impossible de traiter la file d\'attente' };
+    }
+    
+    const queuedOperations = await this._getQueuedOperations();
+    
+    if (queuedOperations.length === 0) {
+      return { success: true, message: 'Aucune opération en file d\'attente' };
+    }
+    
+    const results = {
+      success: [],
+      failed: []
+    };
+    
+    // Traiter les opérations dans l'ordre d'ajout
+    for (const operation of queuedOperations) {
+      try {
+        switch (operation.method) {
+          case 'POST':
+            await axiosInstance.post(operation.endpoint, operation.data);
+            results.success.push(operation.id);
+            break;
+          case 'PUT':
+            await axiosInstance.put(operation.endpoint, operation.data);
+            results.success.push(operation.id);
+            break;
+          case 'DELETE':
+            await axiosInstance.delete(operation.endpoint);
+            results.success.push(operation.id);
+            break;
+          default:
+            console.warn(`Méthode non prise en charge: ${operation.method}`);
+            results.failed.push(operation.id);
+        }
+      } catch (error) {
+        console.error(`Erreur lors du traitement de l'opération ${operation.id}:`, error);
+        results.failed.push(operation.id);
+      }
+    }
+    
+    // Supprimer les opérations réussies
+    const remainingOperations = queuedOperations.filter(
+      op => !results.success.includes(op.id)
+    );
+    
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.OFFLINE_DATA, 
+      JSON.stringify(remainingOperations)
+    );
+    
+    return {
+      success: true,
+      processed: results.success.length,
+      failed: results.failed.length,
+      remaining: remainingOperations.length
+    };
   }
 
-  // Test de connectivité
-  async ping() {
-    return this.get('/public/ping', {});
+  // Générer une clé de cache
+  _generateCacheKey(endpoint, params) {
+    const paramString = Object.keys(params)
+      .sort()
+      .map(key => `${key}=${JSON.stringify(params[key])}`)
+      .join('&');
+    
+    return `cache_${endpoint}${paramString ? '_' + paramString : ''}`;
   }
 }
 

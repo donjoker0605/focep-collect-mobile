@@ -1,62 +1,49 @@
+// src/services/clientService.js
 import ApiService from './api';
 
 class ClientService {
-  // Lister les clients d'un collecteur
+  // Lister les clients d'un collecteur avec mise en cache
   async getClientsByCollecteur(collecteurId) {
     try {
-      return await ApiService.get(`/clients/collecteur/${collecteurId}`);
+      return await ApiService.get(`/clients/collecteur/${collecteurId}`, {}, {
+        useCache: true,
+        maxAge: 60 * 60 * 1000 // 1 heure
+      });
     } catch (error) {
-      console.error('Error fetching clients:', error);
+      console.error('Erreur lors de la récupération des clients:', error);
       throw error;
     }
   }
 
-  // Créer un nouveau client
+  // Créer un nouveau client avec gestion hors ligne
   async createClient(clientData) {
     try {
-      return await ApiService.post('/clients', clientData);
+      return await ApiService.post('/clients', clientData, { canQueue: true });
     } catch (error) {
-      console.error('Error creating client:', error);
+      console.error('Erreur lors de la création du client:', error);
       throw error;
     }
   }
 
-  // Mettre à jour un client
+  // Mettre à jour un client avec gestion hors ligne
   async updateClient(clientId, clientData) {
     try {
-      return await ApiService.put(`/clients/${clientId}`, clientData);
+      return await ApiService.put(`/clients/${clientId}`, clientData, { canQueue: true });
     } catch (error) {
-      console.error('Error updating client:', error);
+      console.error('Erreur lors de la mise à jour du client:', error);
       throw error;
     }
   }
 
-  // Supprimer un client
-  async deleteClient(clientId) {
-    try {
-      return await ApiService.delete(`/clients/${clientId}`);
-    } catch (error) {
-      console.error('Error deleting client:', error);
-      throw error;
-    }
-  }
-
-  // Obtenir les comptes d'un client
-  async getComptesClient(clientId) {
-    try {
-      return await ApiService.get(`/comptes/client/${clientId}`);
-    } catch (error) {
-      console.error('Error fetching comptes client:', error);
-      throw error;
-    }
-  }
-
-  // Obtenir le détail d'un client
+  // Obtenir le détail d'un client avec mise en cache
   async getClientById(clientId) {
     try {
-      return await ApiService.get(`/clients/${clientId}`);
+      return await ApiService.get(`/clients/${clientId}`, {}, {
+        useCache: true,
+        maxAge: 60 * 60 * 1000 // 1 heure
+      });
     } catch (error) {
-      console.error('Error fetching client details:', error);
+      console.error('Erreur lors de la récupération des détails du client:', error);
       throw error;
     }
   }
