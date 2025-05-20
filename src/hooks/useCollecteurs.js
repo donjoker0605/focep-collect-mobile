@@ -1,6 +1,7 @@
 // src/hooks/useCollecteurs.js
 import { useState, useEffect, useCallback } from 'react';
-import CollecteurService from '../api/collecteur';
+import CollecteurService from '../services/collecteurService';
+import { useErrorHandler } from './useErrorHandler'; // Nouveau hook de gestion d'erreurs
 
 export const useCollecteurs = () => {
   const [collecteurs, setCollecteurs] = useState([]);
@@ -9,85 +10,31 @@ export const useCollecteurs = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { handleApiError } = useErrorHandler();
 
-  const fetchCollecteurs = useCallback(async (page = 0, search = '') => {
+  const fetchCollecteurs = useCallback(async (page = 0, size = 10, search = '') => {
     try {
       setLoading(true);
       setError(null);
       
-      // Dans une implémentation réelle, vous appelleriez le service API
-      // const response = await CollecteurService.getAllCollecteurs(page, 10, search);
-      
-      // Pour la démo, on simule une réponse avec un délai
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simuler une réponse paginée
-      const mockResponse = {
-        content: [
-          {
-            id: 1,
-            nom: 'Dupont',
-            prenom: 'Jean',
-            adresseMail: 'jean.dupont@example.com',
-            telephone: '+237 655 123 456',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Centrale'
-            },
-            montantMaxRetrait: 150000,
-            status: 'active',
-            totalClients: 45,
-          },
-          {
-            id: 2,
-            nom: 'Martin',
-            prenom: 'Sophie',
-            adresseMail: 'sophie.martin@example.com',
-            telephone: '+237 677 234 567',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Centrale'
-            },
-            montantMaxRetrait: 150000,
-            status: 'active',
-            totalClients: 32,
-          },
-          {
-            id: 3,
-            nom: 'Dubois',
-            prenom: 'Pierre',
-            adresseMail: 'pierre.dubois@example.com',
-            telephone: '+237 698 345 678',
-            agence: {
-              id: 2,
-              nomAgence: 'Agence Nord'
-            },
-            montantMaxRetrait: 100000,
-            status: 'inactive',
-            totalClients: 0,
-          },
-        ],
-        totalPages: 1,
-        totalElements: 3,
-        size: 10,
-        number: page,
-        last: page >= 0, // Pour la démo, nous n'avons qu'une seule page
-      };
+      // Appel API réel avec pagination et recherche
+      const response = await CollecteurService.getAllCollecteurs(page, size, search);
       
       if (page === 0) {
-        setCollecteurs(mockResponse.content);
+        setCollecteurs(response.content);
       } else {
-        setCollecteurs(prevCollecteurs => [...prevCollecteurs, ...mockResponse.content]);
+        setCollecteurs(prevCollecteurs => [...prevCollecteurs, ...response.content]);
       }
       
       setCurrentPage(page);
-      setHasMore(page < mockResponse.totalPages - 1);
+      setHasMore(page < response.totalPages - 1);
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors du chargement des collecteurs');
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   const refreshCollecteurs = useCallback(async () => {
     setRefreshing(true);
@@ -105,83 +52,66 @@ export const useCollecteurs = () => {
     try {
       setLoading(true);
       
-      // Dans une implémentation réelle, vous appelleriez le service API
-      // await CollecteurService.updateStatus(collecteurId, newStatus);
+      const response = await CollecteurService.updateStatus(collecteurId, newStatus);
       
-      // Pour la démo, on simule un délai
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mettre à jour l'état localement
+      // Mise à jour locale de l'état après confirmation par le serveur
       setCollecteurs(prevCollecteurs => 
         prevCollecteurs.map(c => 
           c.id === collecteurId ? { ...c, status: newStatus } : c
         )
       );
       
-      return { success: true };
+      return { success: true, data: response };
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors de la mise à jour du statut');
-      return { success: false, error: err.message };
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   const createCollecteur = useCallback(async (collecteurData) => {
     try {
       setLoading(true);
       
-      // Dans une implémentation réelle, vous appelleriez le service API
-      // const response = await CollecteurService.createCollecteur(collecteurData);
-      
-      // Pour la démo, on simule un délai
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Simuler une réponse
-      const mockResponse = {
-        ...collecteurData,
-        id: Math.floor(Math.random() * 1000) + 4, // Générer un ID aléatoire
-        status: 'active',
-        totalClients: 0,
-      };
+      const response = await CollecteurService.createCollecteur(collecteurData);
       
       // Ajouter le nouveau collecteur à l'état
-      setCollecteurs(prevCollecteurs => [mockResponse, ...prevCollecteurs]);
+      setCollecteurs(prevCollecteurs => [response, ...prevCollecteurs]);
       
-      return { success: true, collecteur: mockResponse };
+      return { success: true, collecteur: response };
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors de la création du collecteur');
-      return { success: false, error: err.message };
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   const updateCollecteur = useCallback(async (collecteurId, collecteurData) => {
     try {
       setLoading(true);
       
-      // Dans une implémentation réelle, vous appelleriez le service API
-      // const response = await CollecteurService.updateCollecteur(collecteurId, collecteurData);
+      const response = await CollecteurService.updateCollecteur(collecteurId, collecteurData);
       
-      // Pour la démo, on simule un délai
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mettre à jour l'état localement
+      // Mettre à jour l'état localement après confirmation du serveur
       setCollecteurs(prevCollecteurs => 
         prevCollecteurs.map(c => 
-          c.id === collecteurId ? { ...c, ...collecteurData } : c
+          c.id === collecteurId ? response : c
         )
       );
       
-      return { success: true };
+      return { success: true, data: response };
     } catch (err) {
-      setError(err.message || 'Une erreur est survenue lors de la mise à jour du collecteur');
-      return { success: false, error: err.message };
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleApiError]);
 
   // Charger les collecteurs au montage du composant
   useEffect(() => {

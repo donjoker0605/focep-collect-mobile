@@ -1,5 +1,6 @@
-import axios from 'axios';
+// src/api/collecteur.js
 import api, { handleApiError } from './axiosConfig';
+import { ENDPOINTS } from '../config/apiConfig';ig';
 import { ENDPOINTS } from '../config/apiConfig';
 
 // Configuration de base pour Axios
@@ -13,41 +14,14 @@ const API = axios.create({
 // Service de gestion des collecteurs
 const CollecteurService = {
   // Récupérer tous les collecteurs (avec pagination)
-  getAllCollecteurs: async (page = 0, size = 10, search = '') => {
+  getCollecteurDashboard: async (collecteurId) => {
     try {
-      const response = await API.get(`${API_ENDPOINTS.COLLECTEURS.BASE}?page=${page}&size=${size}&search=${search}`);
+      const response = await api.get(`${ENDPOINTS.COLLECTEURS}/${collecteurId}/dashboard`);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
     }
   },
-
-  // Récupérer les données du tableau de bord d'un collecteur
-getCollecteurDashboard: async (collecteurId) => {
-  try {
-    // En production, vous appelleriez l'API réelle
-    // const response = await API.get(`/api/collecteurs/${collecteurId}/dashboard`);
-    // return response.data;
-    
-    // Pour le développement, simuler des données
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Délai simulé
-    
-    return {
-      soldeTotal: 1248500,
-      totalClients: 45,
-      clientsPercentChange: 5.2,
-      totalTransactions: 132,
-      transactionsPercentChange: 12.8,
-      totalEpargnes: 1850000,
-      epargnesPercentChange: 8.7,
-      totalRetraits: 601500,
-      retraitsPercentChange: -3.2,
-      unreadNotifications: 3
-    };
-  } catch (error) {
-    throw handleApiError(error);
-  }
-},
 
   // Récupérer les collecteurs d'une agence spécifique
   getCollecteursByAgence: async (agenceId, page = 0, size = 10) => {

@@ -1,10 +1,15 @@
 // src/context/AuthContext.js
 import React, { createContext, useState, useEffect } from 'react';
-import { authService } from '../api/auth';
+import authService from '../services/authService';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../config/apiConfig';
-import axiosInstance from '../api/axiosConfig';
+import { SecureStorage } from '../services/secureStorage';
+import { EventEmitter } from 'events';
+import * as LocalAuthentication from 'expo-local-authentication';
+
+// Créer un émetteur d'événements global pour l'authentification
+if (!global.authEventEmitter) {
+  global.authEventEmitter = new EventEmitter();
+}
 
 export const AuthContext = createContext();
 
@@ -14,6 +19,47 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [error, setError] = useState(null);
   const router = useRouter();
+
+  // Gestionnaire de session expirée
+  // src/context/AuthContext.js (suite)
+  // Gestionnaire de session expirée
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setIsAuthenticated(false);
+      router.replace('/auth');
+      setError('Votre session a expiré. Veuillez vous reconnecter.');
+    };
+
+    // S'abonner à l'événement de session expirée
+    global.authEventEmitter.on('SESSION_EXPIRED', handleSessionExpired);
+
+    // Nettoyage
+    return () => {
+      global.authEventEmitter.off('SESSION_EXPIRED', handleSessionExpired);
+    };
+  }, [router]);
+
+  // Vérification périodique de la session
+  useEffect(() => {
+    let sessionCheckInterval;
+
+    if (isAuthenticated) {
+      // Vérifier la session toutes les 5 minutes
+      sessionCheckInterval = setInterval(async () => {
+        const sessionActive = await authService.checkSessionActivity(30); // 30 minutes max
+        if (!sessionActive) {
+          global.authEventEmitter.emit('SESSION_EXPIRED');
+        }
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+
+    return () => {
+      if (sessionCheckInterval) {
+        clearInterval(sessionCheckInterval);
+      }
+    };
+  }, [isAuthenticated]);
 
   // Vérifier l'état d'authentification au démarrage
   useEffect(() => {
@@ -34,11 +80,7 @@ export const AuthProvider = ({ children }) => {
           console.log('Session restaurée:', { role: userData?.role });
         } else {
           // Si le token n'est pas valide, nettoyer les données
-          await AsyncStorage.multiRemove([
-            STORAGE_KEYS.JWT_TOKEN,
-            STORAGE_KEYS.REFRESH_TOKEN,
-            STORAGE_KEYS.USER_DATA,
-          ]);
+          await SecureStorage.clearAuthData();
           
           setUser(null);
           setIsAuthenticated(false);
@@ -55,21 +97,39 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
-  // Fonction de connexion
-  const login = async (email, password) => {
+  // Fonction de connexion avec authentification biométrique optionnelle
+  const login = async (email, password, useBiometrics = false) => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const result = await authService.login({ email, password });
+      // Vérifier si l'authentification biométrique est disponible et activée
+      if (useBiometrics) {
+        const biometricAuth = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Authentification pour FOCEP Collect',
+          fallbackLabel: 'Utiliser le mot de passe',
+        });
+        
+        if (!biometricAuth.success) {
+          setIsLoading(false);
+          return { success: false, error: 'Authentification biométrique échouée' };
+        }
+      }
       
-      setUser(result.user);
-      setIsAuthenticated(true);
+      const result = await authService.login(email, password);
+      
+      if (result.success) {
+        setUser(result.user);
+        setIsAuthenticated(true);
 
-      // Rediriger selon le rôle
-      redirectBasedOnRole(result.user.role);
-      
-      return { success: true };
+        // Rediriger selon le rôle
+        redirectBasedOnRole(result.user.role);
+        
+        return { success: true };
+      } else {
+        setError(result.error);
+        return { success: false, error: result.error };
+      }
     } catch (error) {
       console.error('Erreur de connexion:', error);
       setError(error.message || 'Identifiants invalides');
@@ -122,8 +182,12 @@ export const AuthProvider = ({ children }) => {
   // Fonction pour mettre à jour l'utilisateur
   const updateUserInfo = async (updatedInfo) => {
     try {
+      if (!user) {
+        return { success: false, error: 'Utilisateur non connecté' };
+      }
+      
       const updatedUser = { ...user, ...updatedInfo };
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+      await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, updatedUser);
       setUser(updatedUser);
       return { success: true };
     } catch (error) {

@@ -1,6 +1,9 @@
-import ApiService from './api';
+// src/services/authService.js
+import { SecureStorage, SECURE_KEYS } from './secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ApiService from './api';
 import { jwtDecode } from 'jwt-decode';
+import { STORAGE_KEYS } from '../config/apiConfig';
 
 class AuthService {
   // Connexion utilisateur
@@ -12,8 +15,13 @@ class AuthService {
       }, false); // false = pas de token requis pour login
 
       if (response.token) {
-        // Stocker le token
-        await AsyncStorage.setItem('authToken', response.token);
+        // Stocker le token de manière sécurisée
+        await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, response.token);
+        
+        // Stocker le refresh token s'il existe
+        if (response.refreshToken) {
+          await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, response.refreshToken);
+        }
         
         // Décoder le token pour obtenir les infos utilisateur
         const decodedToken = jwtDecode(response.token);
@@ -24,9 +32,15 @@ class AuthService {
           nom: decodedToken.nom,
           prenom: decodedToken.prenom,
           agenceId: decodedToken.agenceId,
+          // Ajouter la date d'expiration pour pouvoir vérifier côté client
+          exp: decodedToken.exp,
         };
         
-        await AsyncStorage.setItem('userInfo', JSON.stringify(userInfo));
+        // Stocker les informations utilisateur de manière sécurisée
+        await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, userInfo);
+        
+        // Sauvegarder la date de dernière connexion
+        await AsyncStorage.setItem('lastLoginAt', new Date().toISOString());
         
         return { success: true, user: userInfo, token: response.token };
       }
@@ -41,7 +55,19 @@ class AuthService {
   // Déconnexion
   async logout() {
     try {
-      await AsyncStorage.multiRemove(['authToken', 'userInfo']);
+      // Tenter d'appeler le endpoint de logout si connecté
+      try {
+        await ApiService.post('/auth/logout');
+      } catch (e) {
+        // Ignorer les erreurs, nous voulons nettoyer localement de toute façon
+      }
+      
+      // Nettoyage sécurisé
+      await SecureStorage.clearAuthData();
+      
+      // Nettoyage des préférences non sensibles
+      await AsyncStorage.removeItem('lastLoginAt');
+      
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
@@ -52,7 +78,7 @@ class AuthService {
   // Vérifier si l'utilisateur est connecté
   async isAuthenticated() {
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      const token = await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
       
       if (!token) {
         return false;
@@ -62,10 +88,11 @@ class AuthService {
       const decodedToken = jwtDecode(token);
       const currentTime = Date.now() / 1000;
       
+      // Vérification de l'expiration du token
       if (decodedToken.exp && decodedToken.exp < currentTime) {
-        // Token expiré, nettoyer le storage
-        await this.logout();
-        return false;
+        // Token expiré, essayer de le rafraîchir
+        const refreshed = await this.refreshToken();
+        return refreshed;
       }
 
       return true;
@@ -74,12 +101,53 @@ class AuthService {
       return false;
     }
   }
+  
+  // Rafraîchir le token si possible
+  async refreshToken() {
+    try {
+      const refreshToken = await SecureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN);
+      
+      if (!refreshToken) {
+        return false;
+      }
+      
+      const response = await ApiService.post('/auth/refresh-token', {
+        refreshToken
+      }, false);
+      
+      if (!response.token) {
+        return false;
+      }
+      
+      // Stocker le nouveau token
+      await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, response.token);
+      
+      // Stocker le nouveau refresh token s'il existe
+      if (response.refreshToken) {
+        await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      }
+      
+      // Mettre à jour la session utilisateur
+      const decodedToken = jwtDecode(response.token);
+      const userInfo = await SecureStorage.getJSON(SECURE_KEYS.USER_SESSION);
+      
+      if (userInfo) {
+        // Mettre à jour uniquement l'expiration
+        userInfo.exp = decodedToken.exp;
+        await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, userInfo);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      return false;
+    }
+  }
 
   // Obtenir l'utilisateur actuel
   async getCurrentUser() {
     try {
-      const userInfo = await AsyncStorage.getItem('userInfo');
-      return userInfo ? JSON.parse(userInfo) : null;
+      return await SecureStorage.getJSON(SECURE_KEYS.USER_SESSION);
     } catch (error) {
       console.error('Get current user error:', error);
       return null;
@@ -89,7 +157,7 @@ class AuthService {
   // Obtenir le token
   async getToken() {
     try {
-      return await AsyncStorage.getItem('authToken');
+      return await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
     } catch (error) {
       console.error('Get token error:', error);
       return null;
@@ -107,6 +175,33 @@ class AuthService {
     } catch (error) {
       console.error('Reset password error:', error);
       return { success: false, error: error.message };
+    }
+  }
+  
+  // Vérifier si la session est active
+  async checkSessionActivity(maxInactivityMinutes = 30) {
+    try {
+      const lastLoginString = await AsyncStorage.getItem('lastLoginAt');
+      if (!lastLoginString) {
+        return false;
+      }
+      
+      const lastLogin = new Date(lastLoginString);
+      const now = new Date();
+      const diffMinutes = (now - lastLogin) / (1000 * 60);
+      
+      // Si inactif trop longtemps, déconnecter
+      if (diffMinutes > maxInactivityMinutes) {
+        await this.logout();
+        return false;
+      }
+      
+      // Mettre à jour le timestamp de dernière activité
+      await AsyncStorage.setItem('lastLoginAt', now.toISOString());
+      return true;
+    } catch (error) {
+      console.error('Check session activity error:', error);
+      return false;
     }
   }
 }
