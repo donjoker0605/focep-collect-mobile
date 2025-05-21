@@ -1,6 +1,6 @@
 // src/api/authService.js
 import api from './config';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 
 export const authService = {
   // Connexion utilisateur

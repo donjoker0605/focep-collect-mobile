@@ -1,6 +1,6 @@
 // src/api/collecteur.js
+import axios from 'axios';
 import api, { handleApiError } from './axiosConfig';
-import { ENDPOINTS } from '../config/apiConfig';ig';
 import { ENDPOINTS } from '../config/apiConfig';
 
 // Configuration de base pour Axios

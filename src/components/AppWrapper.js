@@ -7,26 +7,30 @@ import SyncStatusIndicator from './SyncStatusIndicator/SyncStatusIndicator';
 import OfflineIndicator from './OfflineIndicator/OfflineIndicator';
 
 const AppWrapper = ({ children }) => {
-  const { isOnline, syncStatus, pendingCount, syncNow } = useOfflineSync();
+  const offlineSync = useOfflineSync();
   const { isAuthenticated } = useAuth();
+  
+  // Vérifier si les propriétés nécessaires existent
+  const showSyncIndicator = isAuthenticated && 
+                           offlineSync && 
+                           typeof offlineSync.isOnline !== 'undefined';
 
   return (
     <View style={styles.container}>
-      
-      {/* Indicateur de mode hors ligne */}
-      <OfflineIndicator />
+      {/* Indicateur de mode hors ligne - rendu conditionnel */}
+      {offlineSync && <OfflineIndicator />}
       
       {/* Contenu principal */}
       {children}
       
-      {/* Indicateur de synchronisation */}
-      {isAuthenticated && (
+      {/* Indicateur de synchronisation - rendu conditionnel */}
+      {showSyncIndicator && (
         <SyncStatusIndicator 
           position="bottom-right" 
-          syncStatus={syncStatus}
-          isOnline={isOnline}
-          pendingCount={pendingCount}
-          onPress={syncNow}
+          syncStatus={offlineSync.syncStatus}
+          isOnline={offlineSync.isOnline}
+          pendingCount={offlineSync.pendingCount}
+          onPress={offlineSync.syncNow}
         />
       )}
     </View>
@@ -40,7 +44,3 @@ const styles = StyleSheet.create({
 });
 
 export default AppWrapper;
-
-
-
-

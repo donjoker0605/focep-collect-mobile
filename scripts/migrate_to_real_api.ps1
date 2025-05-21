@@ -75,7 +75,7 @@ Write-Host "⚙️ Configuration d'Axios..." -ForegroundColor Yellow
 $axiosConfigContent = @"
 // src/api/axiosConfig.js
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 
 // Créer l'instance Axios
@@ -200,7 +200,7 @@ Write-Host "🔐 Création du service d'authentification..." -ForegroundColor Ye
 $authServiceContent = @"
 // src/api/auth.js
 import api, { handleApiError } from './axiosConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 import { ENDPOINTS, STORAGE_KEYS } from '../config/apiConfig';
 
 export const authService = {

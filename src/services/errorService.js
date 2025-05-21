@@ -1,7 +1,7 @@
 // src/services/errorService.js
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
 import { APP_CONFIG } from '../config/appConfig';

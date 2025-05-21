@@ -1,7 +1,8 @@
-// src/services/api.js (mise à jour)
+// src/services/api.js
 import axiosInstance, { handleApiError } from '../api/axiosConfig';
 import cacheService from './cacheService';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '../utils/storage';
 import { STORAGE_KEYS } from '../config/apiConfig';
 import uuid from 'react-native-uuid';
 
@@ -81,47 +82,48 @@ class ApiService {
       
       throw handleApiError(error);
     }
-	
-	// Envoyer des données avec gestion hors ligne
- async post(endpoint, data = {}, options = {}) {
-   const {
-     canQueue = false,
-     invalidateCache = [],
-     retryCount = 1,
-   } = options;
-   
-   try {
-     const response = await axiosInstance.post(endpoint, data);
-     
-     // Invalider le cache si nécessaire
-     if (invalidateCache && invalidateCache.length > 0) {
-       await Promise.all(invalidateCache.map(cacheInfo => 
-         cacheService.invalidate(cacheInfo.endpoint, cacheInfo.params)
-       ));
-     }
-     
-     return response.data;
-   } catch (error) {
-     // Si hors ligne et la file d'attente est activée
-     if (error.offline && canQueue) {
-       await this._queueOperation('POST', endpoint, data, options);
-       return { queued: true, message: 'Opération mise en file d\'attente' };
-     }
-     
-     // Si c'est une erreur réseau et que nous avons encore des tentatives
-     if (error.code === 'ECONNABORTED' && retryCount > 0) {
-       // Attendre un court délai et réessayer
-       await new Promise(resolve => setTimeout(resolve, 1000));
-       
-       return this.post(endpoint, data, {
-         ...options,
-         retryCount: retryCount - 1,
-       });
-     }
-     
-     throw handleApiError(error);
-   }
- }
+  }
+
+  // Envoyer des données avec gestion hors ligne
+  async post(endpoint, data = {}, options = {}) {
+    const {
+      canQueue = false,
+      invalidateCache = [],
+      retryCount = 1,
+    } = options;
+    
+    try {
+      const response = await axiosInstance.post(endpoint, data);
+      
+      // Invalider le cache si nécessaire
+      if (invalidateCache && invalidateCache.length > 0) {
+        await Promise.all(invalidateCache.map(cacheInfo => 
+          cacheService.invalidate(cacheInfo.endpoint, cacheInfo.params)
+        ));
+      }
+      
+      return response.data;
+    } catch (error) {
+      // Si hors ligne et la file d'attente est activée
+      if (error.offline && canQueue) {
+        await this._queueOperation('POST', endpoint, data, options);
+        return { queued: true, message: 'Opération mise en file d\'attente' };
+      }
+      
+      // Si c'est une erreur réseau et que nous avons encore des tentatives
+      if (error.code === 'ECONNABORTED' && retryCount > 0) {
+        // Attendre un court délai et réessayer
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        return this.post(endpoint, data, {
+          ...options,
+          retryCount: retryCount - 1,
+        });
+      }
+      
+      throw handleApiError(error);
+    }
+  }
 
  // Mettre à jour des données avec gestion hors ligne
  async put(endpoint, data = {}, options = {}) {

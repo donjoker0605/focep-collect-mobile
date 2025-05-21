@@ -5,7 +5,7 @@ import { authService } from '../api/auth';
 import { API_CONFIG } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
 import useSyncStatus from '../hooks/useSyncStatus';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 
 export default function ApiDiagnosticTool() {
   const [connectionStatus, setConnectionStatus] = useState('checking');

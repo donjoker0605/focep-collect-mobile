@@ -1,6 +1,6 @@
 // src/hooks/useSyncStatus.js
 import { useState, useEffect } from 'react';
-import SyncService, { SYNC_STATUS } from '../services/syncService';
+import SyncService, { SYNC_STATUS } from '../services/SyncService';
 import NetInfo from '@react-native-community/netinfo';
 
 export default function useSyncStatus() {

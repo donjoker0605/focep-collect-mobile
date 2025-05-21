@@ -1,6 +1,6 @@
 // src/api/auth.js
 import axiosInstance, { handleApiError } from './axiosConfig';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/storage';
 import { STORAGE_KEYS } from '../config/apiConfig';
 import { jwtDecode } from 'jwt-decode';
 
