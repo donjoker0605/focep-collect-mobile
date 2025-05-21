@@ -1,7 +1,7 @@
 // src/api/axiosConfig.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../config/apiConfig';
+import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
 
 // Codes d'erreur personnalisés
@@ -63,8 +63,8 @@ axiosInstance.interceptors.request.use(
     
     // Récupérer le token depuis le stockage avec la clé correcte
     try {
-      // Important: Utiliser la clé correcte depuis STORAGE_KEYS
-      const token = await AsyncStorage.getItem(API_CONFIG.STORAGE_KEYS.JWT_TOKEN);
+      // Utiliser STORAGE_KEYS importé, pas API_CONFIG.STORAGE_KEYS
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -138,7 +138,7 @@ axiosInstance.interceptors.response.use(
       
       try {
         // Essayer de rafraîchir le token
-        const refreshToken = await AsyncStorage.getItem(API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
+        const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
         
         if (refreshToken) {
           // Appeler l'API pour obtenir un nouveau token
@@ -167,9 +167,9 @@ axiosInstance.interceptors.response.use(
         
         // Si le rafraîchissement échoue, nettoyer les tokens
         await AsyncStorage.multiRemove([
-          API_CONFIG.STORAGE_KEYS.JWT_TOKEN, 
-          API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, 
-          API_CONFIG.STORAGE_KEYS.USER_DATA
+          STORAGE_KEYS.JWT_TOKEN, 
+          STORAGE_KEYS.REFRESH_TOKEN, 
+          STORAGE_KEYS.USER_DATA
         ]);
         
         // Publier un événement pour la déconnexion

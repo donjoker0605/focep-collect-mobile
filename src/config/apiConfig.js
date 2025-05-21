@@ -2,15 +2,21 @@
 import Constants from 'expo-constants';
 
 const PROD_API_URL = 'https://api.votredomaine.com';
-const DEV_API_URL = 'http://10.0.2.2:8080/api';
+// 10.0.2.2 pour l'émulateur Android standard
+// 192.168.111.57 pour votre réseau local
+const DEV_API_URL = __DEV__ 
+  ? (Platform.OS === 'android' 
+     ? 'http://10.0.2.2:8080/api'  // Émulateur Android
+     : 'http://localhost:8080/api') // iOS ou web
+  : 'http://192.168.111.57:8080/api'; // Utiliser votre IP pour les tests sur appareil physique
 
 export const API_CONFIG = {
-  // Utilisez __DEV__ qui est une variable globale d'Expo/React Native
-  baseURL: __DEV__ ? DEV_API_URL : PROD_API_URL,
+  baseURL: Constants.expoConfig?.extra?.apiUrl || DEV_API_URL,
   timeout: 15000,
   retryAttempts: 3,
   retryDelay: 1000,
 };
+
 
 export const STORAGE_KEYS = {
   JWT_TOKEN: 'focep_jwt_token',

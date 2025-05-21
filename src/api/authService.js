@@ -17,12 +17,12 @@ export const authService = {
   },
 
   // Connexion utilisateur
-  login: async (credentials) => {
+  login: async (email, password) => {
     try {
-      console.log('🚀 Tentative de connexion:', credentials);
+      console.log('🚀 Tentative de connexion:', { email, password });
       
       // Créer une instance axios sans token pour le login
-      const response = await axiosInstance.post('/auth/login', credentials);
+      const response = await axiosInstance.post('/auth/login', { email, password });
       console.log('🚀 Réponse du serveur:', response.data);
       
       // Récupérer le token et extraire les informations utilisateur
@@ -42,12 +42,11 @@ export const authService = {
         // Construire un objet utilisateur à partir des données du token
         const user = {
           id: decodedToken.userId || decodedToken.sub || 0,
-          email: credentials.email, // Utiliser l'email de connexion
+          email: email, // Utiliser l'email de connexion
           role: role || decodedToken.role,
           agenceId: decodedToken.agenceId || 0,
           nom: decodedToken.nom || '',
           prenom: decodedToken.prenom || '',
-          // Ajouter d'autres champs si nécessaire
         };
         
         // Sauvegarder le token 
@@ -86,14 +85,17 @@ export const authService = {
     try {
       await axiosInstance.post('/auth/forgot-password', { email });
       return { success: true };
+	  console.log('Réponse brute du serveur:', JSON.stringify(response));
+    console.log('Données de la réponse:', JSON.stringify(response.data));
     } catch (error) {
-      console.error('Erreur récupération mot de passe:', error);
+		console.error('Détails complets de l\'erreur:', JSON.stringify(error, null, 2));
       return { 
         success: false, 
         error: error.response?.data?.message || 'Erreur' 
       };
     }
   },
+ 
 
   // Déconnexion
   logout: async () => {
