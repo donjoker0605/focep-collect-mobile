@@ -1,9 +1,8 @@
-// src/api/axiosConfig.js (mise à jour)
+// src/api/axiosConfig.js
 import axios from 'axios';
-import { SecureStorage, SECURE_KEYS } from '../services/secureStorage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
-import errorService, { ERROR_TYPES } from '../services/errorService';
 
 // Codes d'erreur personnalisés
 export const ERROR_CODES = {
@@ -33,25 +32,47 @@ axiosInstance.interceptors.request.use(
       requestId: Math.random().toString(36).substring(2, 15),
     };
     
-    // Vérifier la connexion internet
-    const netInfo = await NetInfo.fetch();
-    if (!netInfo.isConnected) {
-      return Promise.reject({
-        code: ERROR_CODES.OFFLINE,
-        message: 'Appareil hors-ligne. Veuillez vérifier votre connexion internet.',
-        offline: true,
-      });
+    // Log de la requête pour débogage
+    console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`);
+    if (config.data) {
+      console.log(`Data:`, config.data);
     }
     
-    // Récupérer le token depuis le stockage sécurisé
-    const token = await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // Vérifier la connexion internet
+    try {
+      const netInfo = await NetInfo.fetch();
+      if (!netInfo.isConnected) {
+        console.error('❌ OFFLINE');
+        return Promise.reject({
+          code: ERROR_CODES.OFFLINE,
+          message: 'Appareil hors-ligne. Veuillez vérifier votre connexion internet.',
+          offline: true,
+        });
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la vérification de la connexion:', error);
+    }
+    
+    // Ne pas ajouter de token pour les requêtes d'authentification
+    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register')) {
+      console.log(`🔵 No token needed for ${config.url}`);
+      return config;
+    }
+    
+    // Récupérer le token depuis le stockage
+    try {
+      const token = await AsyncStorage.getItem('jwt_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.warn('Erreur lors de la récupération du token:', error);
     }
     
     return config;
   },
   (error) => {
+    console.error('❌ REQUEST', error);
     return Promise.reject(error);
   }
 );
@@ -60,16 +81,22 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => {
     // Ajouter des métadonnées à la réponse pour le suivi
-    const requestTime = new Date().getTime() - response.config.metadata.startTime;
-    response.metadata = {
-      ...response.config.metadata,
-      requestTime,
-    };
+    if (response.config?.metadata) {
+      const requestTime = new Date().getTime() - response.config.metadata.startTime;
+      response.metadata = {
+        ...response.config.metadata,
+        requestTime,
+      };
+    }
     
+    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url}`);
     return response;
   },
   async (error) => {
     // Enrichir l'erreur avec des métadonnées
+    console.error(`❌ ${error.config?.method?.toUpperCase() || 'NETWORK'} ${error.config?.url || ''}`);
+    console.error('Error:', error.message || error);
+    
     const enhancedError = {
       ...error,
       message: error.message || 'Une erreur est survenue',
@@ -99,22 +126,16 @@ axiosInstance.interceptors.response.use(
     
     // Si nous avons déjà détecté une erreur hors ligne
     if (error.offline) {
-      // Enregistrer l'erreur
-      errorService.handleError(new Error(error.message), {
-        type: ERROR_TYPES.NETWORK,
-        silent: true, // Ne pas afficher de notification
-      });
-      
       return Promise.reject(enhancedError);
     }
     
-    // Erreur 401 (non autorisé) - essayer de rafraîchir le token
+    // Erreur 401 (non autorisé) - essayer de rafraîchir le token si disponible
     if (error.response && error.response.status === 401 && error.config && !error.config._retry) {
       error.config._retry = true;
       
       try {
         // Essayer de rafraîchir le token
-        const refreshToken = await SecureStorage.getItem(SECURE_KEYS.REFRESH_TOKEN);
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
         
         if (refreshToken) {
           // Appeler l'API pour obtenir un nouveau token
@@ -124,12 +145,12 @@ axiosInstance.interceptors.response.use(
           
           const { token, newRefreshToken } = response.data;
           
-          // Stocker le nouveau token de manière sécurisée
-          await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, token);
+          // Stocker le nouveau token
+          await AsyncStorage.setItem('jwt_token', token);
           
           // Stocker le nouveau refresh token s'il existe
           if (newRefreshToken) {
-            await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, newRefreshToken);
+            await AsyncStorage.setItem('refresh_token', newRefreshToken);
           }
           
           // Mettre à jour l'en-tête avec le nouveau token
@@ -139,8 +160,10 @@ axiosInstance.interceptors.response.use(
           return axiosInstance(error.config);
         }
       } catch (refreshError) {
+        console.error('Erreur lors du rafraîchissement du token:', refreshError);
+        
         // Si le rafraîchissement échoue, nettoyer les tokens
-        await SecureStorage.clearAuthData();
+        await AsyncStorage.multiRemove(['jwt_token', 'refresh_token', 'user_data']);
         
         // Publier un événement pour la déconnexion
         if (global.authEventEmitter) {
@@ -149,12 +172,6 @@ axiosInstance.interceptors.response.use(
         
         enhancedError.authError = true;
         enhancedError.message = 'Session expirée. Veuillez vous reconnecter.';
-        
-        // Enregistrer l'erreur d'authentification
-        errorService.handleError(new Error('Session expirée'), {
-          type: ERROR_TYPES.AUTH,
-          silent: true, // La notification sera gérée par l'écouteur d'événements
-        });
       }
     }
     
@@ -172,43 +189,12 @@ axiosInstance.interceptors.response.use(
       }
     }
     
-    // Enregistrer l'erreur (sauf pour les erreurs d'authentification déjà traitées)
-    if (!enhancedError.authError) {
-      let errorType = ERROR_TYPES.API;
-      
-      if (error.response) {
-        if (error.response.status === 400) {
-          errorType = ERROR_TYPES.VALIDATION;
-        } else if (error.response.status === 403) {
-          errorType = ERROR_TYPES.AUTH;
-        } else if (error.response.status >= 500) {
-          errorType = ERROR_TYPES.API;
-        }
-      } else if (!error.response && error.request) {
-        errorType = ERROR_TYPES.NETWORK;
-      } else {
-        errorType = ERROR_TYPES.UNEXPECTED;
-      }
-      
-      // Envoyer l'erreur au service
-      errorService.handleError(enhancedError, {
-        type: errorType,
-        silent: true, // Ne pas afficher de notification ici, cela sera géré au niveau du composant
-        context: {
-          url: error.config?.url,
-          method: error.config?.method,
-          requestData: error.config?.data,
-        },
-      });
-    }
-    
     return Promise.reject(enhancedError);
   }
 );
 
 // Fonction pour gérer les erreurs API de manière standardisée
 export const handleApiError = (error) => {
-  // Cette fonction est maintenant simplifiée car la logique est dans le service d'erreur
   return {
     status: error.status || 500,
     message: error.message || 'Une erreur est survenue',

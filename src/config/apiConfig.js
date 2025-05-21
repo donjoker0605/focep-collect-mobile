@@ -2,9 +2,10 @@
 import Constants from 'expo-constants';
 
 const PROD_API_URL = 'https://api.votredomaine.com';
-const DEV_API_URL = 'http://192.168.111.57:8080/api';
+const DEV_API_URL = 'http://10.0.2.2:8080/api';
 
 export const API_CONFIG = {
+  // Utilisez __DEV__ qui est une variable globale d'Expo/React Native
   baseURL: __DEV__ ? DEV_API_URL : PROD_API_URL,
   timeout: 15000,
   retryAttempts: 3,
