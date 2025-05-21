@@ -21,8 +21,6 @@ export const AuthProvider = ({ children }) => {
   const router = useRouter();
 
   // Gestionnaire de session expirée
-  // src/context/AuthContext.js (suite)
-  // Gestionnaire de session expirée
   useEffect(() => {
     const handleSessionExpired = () => {
       setUser(null);
@@ -63,39 +61,48 @@ export const AuthProvider = ({ children }) => {
 
   // Vérifier l'état d'authentification au démarrage
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        setIsLoading(true);
+  const checkAuthStatus = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Vérifier si le token est valide
+      const authResult = await authService.isAuthenticated();
+      
+      // Gérer différents formats de retour possibles
+      if (authResult && typeof authResult === 'object' && authResult.token) {
+        // Format { token, userData }
+        const userData = authResult.userData;
         
-        // Vérifier si le token est valide
-        const isValid = await authService.isAuthenticated();
+        setUser(userData);
+        setIsAuthenticated(true);
         
-        if (isValid) {
-          // Récupérer les données utilisateur
-          const userData = await authService.getCurrentUser();
-          
-          setUser(userData);
-          setIsAuthenticated(true);
-          
-          console.log('Session restaurée:', { role: userData?.role });
-        } else {
-          // Si le token n'est pas valide, nettoyer les données
-          await SecureStorage.clearAuthData();
-          
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
+        console.log('Session restaurée:', { role: userData?.role });
+      } else if (authResult === true) {
+        // Format booléen (ancienne implémentation)
+        const userData = await authService.getCurrentUser();
+        
+        setUser(userData);
+        setIsAuthenticated(true);
+        
+        console.log('Session restaurée (boolean):', { role: userData?.role });
+      } else {
+        // Token invalide ou format incorrect
+        await SecureStorage.clearAuthData();
+        
         setUser(null);
         setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
+      setUser(null);
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    checkAuthStatus();
-  }, []);
+  checkAuthStatus();
+}, []);
 
   // Fonction de connexion avec authentification biométrique optionnelle
   const login = async (email, password, useBiometrics = false) => {

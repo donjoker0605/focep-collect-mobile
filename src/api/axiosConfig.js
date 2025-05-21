@@ -149,11 +149,11 @@ axiosInstance.interceptors.response.use(
           const { token, newRefreshToken } = response.data;
           
           // Stocker le nouveau token
-          await AsyncStorage.setItem(API_CONFIG.STORAGE_KEYS.JWT_TOKEN, token);
+          await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
           
           // Stocker le nouveau refresh token s'il existe
           if (newRefreshToken) {
-            await AsyncStorage.setItem(API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+            await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
           }
           
           // Mettre à jour l'en-tête avec le nouveau token

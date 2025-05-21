@@ -76,29 +76,32 @@ class AuthService {
   }
 
   // Vérifier si l'utilisateur est connecté
-  async isAuthenticated() {
+async isAuthenticated() { 
     try {
-      const token = await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+      if (!token) return { token: null, userData: null };
       
-      if (!token) {
-        return false;
-      }
-
       // Vérifier si le token n'est pas expiré
-      const decodedToken = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
-      
-      // Vérification de l'expiration du token
-      if (decodedToken.exp && decodedToken.exp < currentTime) {
-        // Token expiré, essayer de le rafraîchir
-        const refreshed = await this.refreshToken();
-        return refreshed;
+      try {
+        const decodedToken = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        
+        if (decodedToken.exp && decodedToken.exp < currentTime) {
+          // Token expiré
+          console.log('Token expiré, tentative de déconnexion');
+          await this.logout(); // Utiliser this au lieu de authService
+          return { token: null, userData: null };
+        }
+      } catch (decodeError) {
+        console.error('Erreur lors du décodage du token:', decodeError);
+        return { token: null, userData: null };
       }
-
-      return true;
+      
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      return { token, userData: userData ? JSON.parse(userData) : null };
     } catch (error) {
-      console.error('Auth check error:', error);
-      return false;
+      console.error('Erreur vérification authentification:', error);
+      return { token: null, userData: null };
     }
   }
   

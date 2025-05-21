@@ -1,18 +1,32 @@
 ﻿// src/config/apiConfig.js
 import Constants from 'expo-constants';
+import { Platform } from 'react-native'; // Import manquant ajouté
 
 const PROD_API_URL = 'https://api.votredomaine.com';
-// 10.0.2.2 pour l'émulateur Android standard
-// 192.168.111.57 pour votre réseau local
-const DEV_API_URL = __DEV__ 
-  ? (Platform.OS === 'android' 
-     ? 'http://10.0.2.2:8080/api'  // Émulateur Android
-     : 'http://localhost:8080/api') // iOS ou web
-  : 'http://192.168.111.57:8080/api'; // Utiliser votre IP pour les tests sur appareil physique
+
+// Fonction utilitaire pour obtenir l'URL de base de manière sécurisée
+const getBaseApiUrl = () => {
+  try {
+    if (__DEV__) { // Correction de **DEV** en __DEV__
+      // En développement
+      if (Platform.OS === 'android') {
+        return 'http://10.0.2.2:8080/api';
+      } else {
+        return 'http://localhost:8080/api';
+      }
+    } else {
+      // En production ou en cas d'erreur
+      return 'http://192.168.111.57:8080/api';
+    }
+  } catch (error) {
+    console.warn('Erreur lors de la détermination de l\'URL de base:', error);
+    return 'http://192.168.111.57:8080/api'; // URL par défaut en cas d'erreur
+  }
+};
 
 export const API_CONFIG = {
-  baseURL: Constants.expoConfig?.extra?.apiUrl || DEV_API_URL,
-  timeout: 15000,
+  baseURL: Constants.expoConfig?.extra?.apiUrl || getBaseApiUrl(),
+  timeout: 25000,
   retryAttempts: 3,
   retryDelay: 1000,
 };

@@ -119,33 +119,33 @@ export const authService = {
 
   // Vérifier si l'utilisateur est connecté
   isAuthenticated: async () => {
+  try {
+    const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+    if (!token) return { token: null, userData: null }; // Format cohérent même si échoue
+    
+    // Vérifier si le token n'est pas expiré
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
-      if (!token) return false;
+      const decodedToken = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
       
-      // Vérifier si le token n'est pas expiré
-      try {
-        const decodedToken = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        
-        if (decodedToken.exp && decodedToken.exp < currentTime) {
-          // Token expiré
-          console.log('Token expiré, tentative de déconnexion');
-          await authService.logout();
-          return false;
-        }
-      } catch (decodeError) {
-        console.error('Erreur lors du décodage du token:', decodeError);
-        return false;
+      if (decodedToken.exp && decodedToken.exp < currentTime) {
+        // Token expiré
+        console.log('Token expiré, tentative de déconnexion');
+        await authService.logout();
+        return { token: null, userData: null };
       }
-      
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      return { token, userData: userData ? JSON.parse(userData) : null };
-    } catch (error) {
-      console.error('Erreur vérification authentification:', error);
-      return false;
+    } catch (decodeError) {
+      console.error('Erreur lors du décodage du token:', decodeError);
+      return { token: null, userData: null };
     }
-  },
+    
+    const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+    return { token, userData: userData ? JSON.parse(userData) : null };
+  } catch (error) {
+    console.error('Erreur vérification authentification:', error);
+    return { token: null, userData: null };
+  }
+},
   
   // Vérifier l'activité de la session
   checkSessionActivity: async (maxInactivityMinutes = 30) => {
