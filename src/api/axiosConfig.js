@@ -15,6 +15,7 @@ export const ERROR_CODES = {
 
 // Instance Axios avec configuration
 const axiosInstance = axios.create({
+  // Utiliser l'adresse IP 10.0.2.2 pour l'émulateur Android qui pointe vers localhost
   baseURL: API_CONFIG.baseURL, 
   timeout: API_CONFIG.timeout,
   headers: {
@@ -54,14 +55,16 @@ axiosInstance.interceptors.request.use(
     }
     
     // Ne pas ajouter de token pour les requêtes d'authentification
-    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register')) {
+    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register') || 
+        config.url?.includes('/auth/forgot-password') || config.url?.includes('/public/')) {
       console.log(`🔵 No token needed for ${config.url}`);
       return config;
     }
     
-    // Récupérer le token depuis le stockage
+    // Récupérer le token depuis le stockage avec la clé correcte
     try {
-      const token = await AsyncStorage.getItem('jwt_token');
+      // Important: Utiliser la clé correcte depuis STORAGE_KEYS
+      const token = await AsyncStorage.getItem(API_CONFIG.STORAGE_KEYS.JWT_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -135,7 +138,7 @@ axiosInstance.interceptors.response.use(
       
       try {
         // Essayer de rafraîchir le token
-        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        const refreshToken = await AsyncStorage.getItem(API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN);
         
         if (refreshToken) {
           // Appeler l'API pour obtenir un nouveau token
@@ -146,11 +149,11 @@ axiosInstance.interceptors.response.use(
           const { token, newRefreshToken } = response.data;
           
           // Stocker le nouveau token
-          await AsyncStorage.setItem('jwt_token', token);
+          await AsyncStorage.setItem(API_CONFIG.STORAGE_KEYS.JWT_TOKEN, token);
           
           // Stocker le nouveau refresh token s'il existe
           if (newRefreshToken) {
-            await AsyncStorage.setItem('refresh_token', newRefreshToken);
+            await AsyncStorage.setItem(API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
           }
           
           // Mettre à jour l'en-tête avec le nouveau token
@@ -163,7 +166,11 @@ axiosInstance.interceptors.response.use(
         console.error('Erreur lors du rafraîchissement du token:', refreshError);
         
         // Si le rafraîchissement échoue, nettoyer les tokens
-        await AsyncStorage.multiRemove(['jwt_token', 'refresh_token', 'user_data']);
+        await AsyncStorage.multiRemove([
+          API_CONFIG.STORAGE_KEYS.JWT_TOKEN, 
+          API_CONFIG.STORAGE_KEYS.REFRESH_TOKEN, 
+          API_CONFIG.STORAGE_KEYS.USER_DATA
+        ]);
         
         // Publier un événement pour la déconnexion
         if (global.authEventEmitter) {

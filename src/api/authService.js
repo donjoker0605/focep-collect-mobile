@@ -2,6 +2,7 @@
 import axiosInstance from './axiosConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/apiConfig';
+import { jwtDecode } from 'jwt-decode';
 
 export const authService = {
   // Test de connectivité avec le backend
@@ -24,13 +25,53 @@ export const authService = {
       const response = await axiosInstance.post('/auth/login', credentials);
       console.log('🚀 Réponse du serveur:', response.data);
       
-      const { token, user } = response.data;
+      // Récupérer le token et extraire les informations utilisateur
+      const { token, role } = response.data;
       
-      // Sauvegarder le token et les données utilisateur
-      await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      if (!token) {
+        return { 
+          success: false, 
+          error: 'Token non reçu du serveur' 
+        };
+      }
       
-      return { success: true, user, token };
+      try {
+        // Décoder le token pour extraire les informations utilisateur
+        const decodedToken = jwtDecode(token);
+        
+        // Construire un objet utilisateur à partir des données du token
+        const user = {
+          id: decodedToken.userId || decodedToken.sub || 0,
+          email: credentials.email, // Utiliser l'email de connexion
+          role: role || decodedToken.role,
+          agenceId: decodedToken.agenceId || 0,
+          nom: decodedToken.nom || '',
+          prenom: decodedToken.prenom || '',
+          // Ajouter d'autres champs si nécessaire
+        };
+        
+        // Sauvegarder le token 
+        await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+        
+        // Sauvegarder le refresh token s'il existe
+        if (response.data.refreshToken) {
+          await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.data.refreshToken);
+        }
+        
+        // Sauvegarder les données utilisateur
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+        
+        // Enregistrer le timestamp de la dernière connexion
+        await AsyncStorage.setItem('lastLoginAt', new Date().toISOString());
+        
+        return { success: true, user, token };
+      } catch (decodeError) {
+        console.error('❌ Erreur de décodage JWT:', decodeError);
+        return { 
+          success: false, 
+          error: 'Erreur lors du traitement des données utilisateur' 
+        };
+      }
     } catch (error) {
       console.error('❌ Erreur de connexion:', error);
       return { 
@@ -67,7 +108,8 @@ export const authService = {
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.JWT_TOKEN,
       STORAGE_KEYS.USER_DATA,
-      STORAGE_KEYS.REFRESH_TOKEN
+      STORAGE_KEYS.REFRESH_TOKEN,
+      'lastLoginAt'
     ]);
     
     return { success: true };
@@ -78,6 +120,22 @@ export const authService = {
     try {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
       if (!token) return false;
+      
+      // Vérifier si le token n'est pas expiré
+      try {
+        const decodedToken = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        
+        if (decodedToken.exp && decodedToken.exp < currentTime) {
+          // Token expiré
+          console.log('Token expiré, tentative de déconnexion');
+          await authService.logout();
+          return false;
+        }
+      } catch (decodeError) {
+        console.error('Erreur lors du décodage du token:', decodeError);
+        return false;
+      }
       
       const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
       return { token, userData: userData ? JSON.parse(userData) : null };
@@ -121,6 +179,40 @@ export const authService = {
     } catch (error) {
       console.error('Erreur récupération données utilisateur:', error);
       return null;
+    }
+  },
+  
+  // Rafraîchir le token
+  refreshToken: async () => {
+    try {
+      const refreshToken = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      
+      if (!refreshToken) {
+        return false;
+      }
+      
+      const response = await axiosInstance.post('/auth/refresh-token', {
+        refreshToken
+      });
+      
+      const { token, newRefreshToken } = response.data;
+      
+      if (!token) {
+        return false;
+      }
+      
+      // Stocker le nouveau token
+      await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+      
+      // Stocker le nouveau refresh token s'il existe
+      if (newRefreshToken) {
+        await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement du token:', error);
+      return false;
     }
   }
 };
