@@ -1,4 +1,4 @@
-// src/screens/Collecteur/DashboardScreen.js - VERSION CORRIGÉE
+// src/screens/Collecteur/DashboardScreen.js - IMPORTS CORRIGÉS
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,17 +15,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+// ✅ IMPORTS CORRIGÉS - Named imports
+import { getClients } from '../../api/client';
+import { fetchJournalTransactions, getCollecteurDashboard } from '../../api/transaction';
+import { getNotifications } from '../../api/notification';
+
 // Components
-import { 
-  Card, 
-  EmptyState,
-} from '../../components';
+import { Card, EmptyState } from '../../components';
 
 // Services et hooks
 import { useAuth } from '../../hooks/useAuth';
-import apiService from '../../services/api';
-
-// Theme et utilitaires
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -59,60 +58,107 @@ const DashboardScreen = ({ navigation }) => {
       
       setError(null);
       
-      // Charger les données en parallèle
-      const [clientsResult, transactionsResult] = await Promise.allSettled([
-        apiService.get(`/clients/collecteur/${user.id}`),
-        apiService.get(`/mouvements/collecteur/${user.id}`, { page: 0, size: 5 })
+      // Vérifier que l'utilisateur existe
+      if (!user?.id) {
+        throw new Error('Utilisateur non trouvé');
+      }
+      
+      console.log('🔄 Chargement dashboard pour collecteur:', user.id);
+      
+      // ✅ APPELS API CORRIGÉS
+      const [dashboardResult, clientsResult, transactionsResult, notificationsResult] = await Promise.allSettled([
+        getCollecteurDashboard(user.id),
+        getClients({ collecteurId: user.id, page: 0, size: 1 }),
+        fetchJournalTransactions({ collecteurId: user.id, page: 0, size: 5 }),
+        getNotifications(0, 1)
       ]);
       
-      // Traiter les clients
-      if (clientsResult.status === 'fulfilled') {
-        const clients = clientsResult.value || [];
-        setDashboard(prev => ({
-          ...prev,
-          totalClients: clients.length
-        }));
+      // Log des résultats pour debugging
+      console.log('📊 Résultats API:', {
+        dashboard: dashboardResult.status,
+        clients: clientsResult.status,
+        transactions: transactionsResult.status,
+        notifications: notificationsResult.status
+      });
+      
+      // Traiter les résultats avec fallbacks
+      let dashboardData = {
+        soldeTotal: 0,
+        totalRetraits: 0,
+        totalClients: 0,
+        totalTransactions: 0,
+        totalEpargnes: 0,
+        unreadNotifications: 0
+      };
+      
+      // Dashboard
+      if (dashboardResult.status === 'fulfilled' && dashboardResult.value.success) {
+        dashboardData = { ...dashboardData, ...dashboardResult.value.data };
+        console.log('✅ Dashboard chargé:', dashboardResult.value.data);
+      } else {
+        console.warn('⚠️ Dashboard non disponible:', dashboardResult.reason?.message || 'Erreur inconnue');
       }
       
-      // Traiter les transactions
-      if (transactionsResult.status === 'fulfilled') {
-        const transactionsData = transactionsResult.value?.content || [];
-        setTransactions(transactionsData);
-        
-        // Calculer les totaux
-        const totals = transactionsData.reduce((acc, t) => {
-          if (t.type === 'EPARGNE') {
-            acc.totalEpargnes += t.montant;
-            acc.soldeTotal += t.montant;
-          } else if (t.type === 'RETRAIT') {
-            acc.totalRetraits += t.montant;
-            acc.soldeTotal -= t.montant;
-          }
-          return acc;
-        }, { totalEpargnes: 0, totalRetraits: 0, soldeTotal: 0 });
-        
-        setDashboard(prev => ({
-          ...prev,
-          ...totals,
-          totalTransactions: transactionsData.length
-        }));
+      // Clients
+      if (clientsResult.status === 'fulfilled' && clientsResult.value.success) {
+        dashboardData.totalClients = clientsResult.value.totalElements || 0;
+        console.log('✅ Clients chargés:', clientsResult.value.totalElements);
+      } else {
+        console.warn('⚠️ Clients non disponibles:', clientsResult.reason?.message || 'Erreur inconnue');
       }
+      
+      // Transactions récentes
+      if (transactionsResult.status === 'fulfilled' && transactionsResult.value.success) {
+        const transactionsData = transactionsResult.value.data || [];
+        setTransactions(transactionsData);
+        console.log('✅ Transactions chargées:', transactionsData.length);
+        
+        // Si pas de dashboard dédié, calculer depuis les transactions
+        if (dashboardResult.status === 'rejected') {
+          const totals = transactionsData.reduce((acc, t) => {
+            if (t.type === 'EPARGNE') {
+              acc.totalEpargnes += t.montant || 0;
+            } else if (t.type === 'RETRAIT') {
+              acc.totalRetraits += t.montant || 0;
+            }
+            return acc;
+          }, { totalEpargnes: 0, totalRetraits: 0 });
+          
+          dashboardData.totalEpargnes = totals.totalEpargnes;
+          dashboardData.totalRetraits = totals.totalRetraits;
+          dashboardData.soldeTotal = totals.totalEpargnes - totals.totalRetraits;
+          dashboardData.totalTransactions = transactionsData.length;
+        }
+      } else {
+        console.warn('⚠️ Transactions non disponibles:', transactionsResult.reason?.message || 'Erreur inconnue');
+      }
+      
+      // Notifications
+      if (notificationsResult.status === 'fulfilled') {
+        dashboardData.unreadNotifications = notificationsResult.value.unreadCount || 0;
+        console.log('✅ Notifications chargées:', notificationsResult.value.unreadCount);
+      } else {
+        console.warn('⚠️ Notifications non disponibles:', notificationsResult.reason?.message || 'Erreur inconnue');
+      }
+      
+      setDashboard(dashboardData);
+      console.log('📈 Dashboard final:', dashboardData);
       
     } catch (err) {
-      console.error('Erreur lors du chargement du tableau de bord:', err);
+      console.error('❌ Erreur lors du chargement du tableau de bord:', err);
       setError(err.message || 'Erreur lors du chargement des données');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user.id]);
+  }, [user?.id]);
   
   // Charger les données au premier chargement et à chaque focus
   useEffect(() => {
-    if (isFocused) {
+    if (isFocused && user?.id) {
       loadDashboard();
     }
-  }, [isFocused, loadDashboard]);
+  }, [isFocused, loadDashboard, user?.id]);
   
   // Fonction pour rafraîchir les données
   const handleRefresh = () => {
@@ -138,7 +184,7 @@ const DashboardScreen = ({ navigation }) => {
           {dashboard?.unreadNotifications > 0 && (
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>
-                {dashboard.unreadNotifications > 9 ? '9+' : dashboard.unreadNotifications}
+                {dashboard.unreadNotifications > 9 ? '9+' : dashboard.unreadNotifications.toString()}
               </Text>
             </View>
           )}
@@ -296,14 +342,17 @@ const DashboardScreen = ({ navigation }) => {
               <View style={styles.transactionInfo}>
                 <Text style={styles.transactionType}>{transaction.type}</Text>
                 <Text style={styles.transactionDate}>
-                  {format(new Date(transaction.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr })}
+                  {transaction.dateHeure ? 
+                    format(new Date(transaction.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr }) :
+                    'Date inconnue'
+                  }
                 </Text>
               </View>
               <Text style={[
                 styles.transactionAmount,
                 { color: transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
               ]}>
-                {transaction.type === 'EPARGNE' ? '+' : '-'}{formatCurrency(transaction.montant)} FCFA
+                {transaction.type === 'EPARGNE' ? '+' : '-'}{formatCurrency(transaction.montant || 0)} FCFA
               </Text>
             </View>
           </Card>
@@ -359,6 +408,7 @@ const DashboardScreen = ({ navigation }) => {
   );
 };
 
+// Styles (gardez vos styles existants)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -433,148 +483,150 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
-    color: theme.colors.white,
-    fontSize: 16,
-  },
-  balanceSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  balanceCard: {
-    flex: 1,
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 6,
-    alignItems: 'center',
-    ...theme.shadows.small,
-  },
-  balanceTitle: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginBottom: 8,
-  },
-  balanceAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  balanceNegative: {
-    color: theme.colors.error,
-  },
-  statsSection: {
-    marginBottom: 24,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    marginHorizontal: 6,
-    padding: 16,
-  },
-  statContent: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginVertical: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 12,
-  },
-  quickActionsSection: {
-    marginBottom: 24,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  actionItem: {
-    width: '48%',
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    alignItems: 'center',
-    ...theme.shadows.small,
-  },
-  actionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  transactionsSection: {
-    marginBottom: 16,
-  },
-  transactionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    marginRight: 4,
-  },
-  emptyTransactions: {
-    height: 150,
-    marginBottom: 16,
-  },
-  transactionCard: {
-    marginBottom: 8,
-    padding: 12,
-  },
-  transactionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  transactionIcon: {
-    marginRight: 12,
-  },
-  transactionInfo: {
-    flex: 1,
-  },
-  transactionType: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  transactionDate: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginTop: 2,
-  },
-  transactionAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+   marginTop: 16,
+   color: theme.colors.white,
+   fontSize: 16,
+ },
+ balanceSection: {
+   flexDirection: 'row',
+   justifyContent: 'space-between',
+   marginBottom: 20,
+ },
+ balanceCard: {
+   flex: 1,
+   backgroundColor: theme.colors.white,
+   borderRadius: 16,
+   padding: 16,
+   marginHorizontal: 6,
+   alignItems: 'center',
+   ...theme.shadows.small,
+ },
+ balanceTitle: {
+   fontSize: 14,
+   color: theme.colors.textLight,
+   marginBottom: 8,
+ },
+ balanceAmount: {
+   fontSize: 18,
+   fontWeight: 'bold',
+   color: theme.colors.text,
+ },
+ balanceNegative: {
+   color: theme.colors.error,
+ },
+ statsSection: {
+   marginBottom: 24,
+ },
+ statsRow: {
+   flexDirection: 'row',
+   justifyContent: 'space-between',
+   marginBottom: 12,
+ },
+ statCard: {
+   flex: 1,
+   marginHorizontal: 6,
+   padding: 16,
+ },
+ statContent: {
+   alignItems: 'center',
+ },
+ statValue: {
+   fontSize: 20,
+   fontWeight: 'bold',
+   color: theme.colors.text,
+   marginVertical: 8,
+ },
+ statLabel: {
+   fontSize: 12,
+   color: theme.colors.textLight,
+ },
+ sectionTitle: {
+   fontSize: 18,
+   fontWeight: 'bold',
+   color: theme.colors.text,
+   marginBottom: 12,
+ },
+ quickActionsSection: {
+   marginBottom: 24,
+ },
+ actionsGrid: {
+   flexDirection: 'row',
+   flexWrap: 'wrap',
+   justifyContent: 'space-between',
+ },
+ actionItem: {
+   width: '48%',
+   backgroundColor: theme.colors.white,
+   borderRadius: 16,
+   padding: 16,
+   marginBottom: 16,
+   alignItems: 'center',
+   ...theme.shadows.small,
+ },
+ actionIcon: {
+   width: 50,
+   height: 50,
+   borderRadius: 25,
+   justifyContent: 'center',
+   alignItems: 'center',
+   marginBottom: 12,
+ },
+ actionText: {
+   fontSize: 14,
+   fontWeight: '500',
+   color: theme.colors.text,
+   textAlign: 'center',
+ },
+ transactionsSection: {
+   marginBottom: 16,
+ },
+ transactionsHeader: {
+   flexDirection: 'row',
+   justifyContent: 'space-between',
+   alignItems: 'center',
+   marginBottom: 12,
+ },
+ viewAllButton: {
+   flexDirection: 'row',
+   alignItems: 'center',
+ },
+ viewAllText: {
+   fontSize: 14,
+   color: theme.colors.primary,
+   marginRight: 4,
+ },
+ emptyTransactions: {
+   height: 150,
+   marginBottom: 16,
+ },
+ transactionCard: {
+   marginBottom: 8,
+   padding: 12,
+ },
+ transactionRow: {
+   flexDirection: 'row',
+   alignItems: 'center',
+ },
+ transactionIcon: {
+   marginRight: 12,
+ },
+ transactionInfo: {
+   flex: 1,
+ },
+ transactionType: {
+   fontSize: 16,
+   fontWeight: '500',
+   color: theme.colors.text,
+ },
+ transactionDate: {
+   fontSize: 12,
+   color: theme.colors.textLight,
+   marginTop: 2,
+ },
+ transactionAmount: {
+   fontSize: 16,
+   fontWeight: 'bold',
+ },
 });
+
+export default DashboardScreen;

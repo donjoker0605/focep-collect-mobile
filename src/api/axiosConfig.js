@@ -1,22 +1,12 @@
-// src/api/axiosConfig.js
+// src/api/axiosConfig.js - VERSION CORRIGÉE
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
 
-// Codes d'erreur personnalisés
-export const ERROR_CODES = {
-  OFFLINE: 'ERR_NETWORK_OFFLINE',
-  TIMEOUT: 'ERR_NETWORK_TIMEOUT',
-  CANCELED: 'ERR_REQUEST_CANCELED',
-  ABORTED: 'ERR_REQUEST_ABORTED',
-  UNKNOWN: 'ERR_UNKNOWN',
-};
-
 // Instance Axios avec configuration
 const axiosInstance = axios.create({
-  // Utiliser l'adresse IP 10.0.2.2 pour l'émulateur Android qui pointe vers localhost
-  baseURL: API_CONFIG.baseURL, 
+  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.137.1:8080/api
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
@@ -27,6 +17,11 @@ const axiosInstance = axios.create({
 // Intercepteur pour ajouter le token JWT à chaque requête
 axiosInstance.interceptors.request.use(
   async (config) => {
+    // ✅ CORRECTION CRITIQUE : Nettoyer l'URL pour éviter /api/api/
+    if (config.url?.startsWith('/api/')) {
+      config.url = config.url.substring(4); // Supprimer /api/ du début
+    }
+    
     // Ajouter un identifiant unique à chaque requête pour le suivi
     config.metadata = { 
       startTime: new Date().getTime(),
@@ -34,7 +29,7 @@ axiosInstance.interceptors.request.use(
     };
     
     // Log de la requête pour débogage
-    console.log(`🚀 ${config.method?.toUpperCase()} ${config.url}`);
+    console.log(`🚀 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
     if (config.data) {
       console.log(`Data:`, config.data);
     }
@@ -45,7 +40,7 @@ axiosInstance.interceptors.request.use(
       if (!netInfo.isConnected) {
         console.error('❌ OFFLINE');
         return Promise.reject({
-          code: ERROR_CODES.OFFLINE,
+          code: 'ERR_NETWORK_OFFLINE',
           message: 'Appareil hors-ligne. Veuillez vérifier votre connexion internet.',
           offline: true,
         });
@@ -55,15 +50,16 @@ axiosInstance.interceptors.request.use(
     }
     
     // Ne pas ajouter de token pour les requêtes d'authentification
-    if (config.url?.includes('/auth/login') || config.url?.includes('/auth/register') || 
-        config.url?.includes('/auth/forgot-password') || config.url?.includes('/public/')) {
+    const publicRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password', '/public/'];
+    const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
+    
+    if (isPublicRoute) {
       console.log(`🔵 No token needed for ${config.url}`);
       return config;
     }
     
-    // Récupérer le token depuis le stockage avec la clé correcte
+    // Récupérer le token depuis le stockage
     try {
-      // Utiliser STORAGE_KEYS importé, pas API_CONFIG.STORAGE_KEYS
       const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -92,18 +88,22 @@ axiosInstance.interceptors.response.use(
       };
     }
     
-    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} (${response.status})`);
     return response;
   },
   async (error) => {
     // Enrichir l'erreur avec des métadonnées
     console.error(`❌ ${error.config?.method?.toUpperCase() || 'NETWORK'} ${error.config?.url || ''}`);
-    console.error('Error:', error.message || error);
+    console.error('Error details:', {
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data
+    });
     
     const enhancedError = {
       ...error,
       message: error.message || 'Une erreur est survenue',
-      code: error.code || ERROR_CODES.UNKNOWN,
+      code: error.code || 'ERR_UNKNOWN',
     };
     
     // Si la requête a des métadonnées, les ajouter à l'erreur
@@ -116,14 +116,14 @@ axiosInstance.interceptors.response.use(
     
     // Si la requête a été annulée délibérément, ne pas traiter comme une vraie erreur
     if (axios.isCancel(error)) {
-      enhancedError.code = ERROR_CODES.CANCELED;
+      enhancedError.code = 'ERR_REQUEST_CANCELED';
       enhancedError.message = 'Requête annulée';
       return Promise.reject(enhancedError);
     }
     
     // Erreurs de connexion
     if (error.code === 'ECONNABORTED') {
-      enhancedError.code = ERROR_CODES.TIMEOUT;
+      enhancedError.code = 'ERR_NETWORK_TIMEOUT';
       enhancedError.message = 'La requête a pris trop de temps à répondre';
     }
     
@@ -206,7 +206,7 @@ export const handleApiError = (error) => {
     status: error.status || 500,
     message: error.message || 'Une erreur est survenue',
     data: error.data || {},
-    code: error.code || ERROR_CODES.UNKNOWN,
+    code: error.code || 'ERR_UNKNOWN',
     offline: error.offline || false,
     authError: error.authError || false
   };

@@ -1,129 +1,181 @@
-// src/api/transaction.js - API TRANSACTIONS RÉELLE
+// src/api/transaction.js - STRUCTURE CORRIGÉE
 import apiService from '../services/api';
 
-// Enregistrer une épargne
 export const saveEpargne = async (data) => {
   try {
-    const response = await apiService.post('/mouvements/epargne', {
+    if (!data.clientId || !data.collecteurId || !data.montant) {
+      throw new Error('Données manquantes pour l\'épargne');
+    }
+
+    if (data.montant <= 0) {
+      throw new Error('Le montant doit être positif');
+    }
+
+    const requestData = {
       clientId: data.clientId,
       collecteurId: data.collecteurId,
-      montant: data.montant,
-      description: data.description,
-      journalId: data.journalId
-    });
-    return response.data || response;
+      montant: parseFloat(data.montant),
+      journalId: data.journalId || null
+    };
+
+    const response = await apiService.post('/mouvements/epargne', requestData);
+    
+    return {
+      data: response.data || response,
+      success: true,
+      message: 'Épargne enregistrée avec succès'
+    };
   } catch (error) {
-    console.error('Erreur lors de l\'enregistrement de l\'épargne:', error);
+    console.error('Erreur saveEpargne:', error);
     throw error;
   }
 };
 
-// Effectuer un retrait
 export const saveRetrait = async (data) => {
   try {
-    const response = await apiService.post('/mouvements/retrait', {
+    if (!data.clientId || !data.collecteurId || !data.montant) {
+      throw new Error('Données manquantes pour le retrait');
+    }
+
+    if (data.montant <= 0) {
+      throw new Error('Le montant doit être positif');
+    }
+
+    const requestData = {
       clientId: data.clientId,
       collecteurId: data.collecteurId,
-      montant: data.montant,
-      description: data.description,
-      journalId: data.journalId
-    });
-    return response.data || response;
+      montant: parseFloat(data.montant),
+      journalId: data.journalId || null
+    };
+
+    const response = await apiService.post('/mouvements/retrait', requestData);
+    
+    return {
+      data: response.data || response,
+      success: true,
+      message: 'Retrait effectué avec succès'
+    };
   } catch (error) {
-    console.error('Erreur lors de l\'enregistrement du retrait:', error);
+    console.error('Erreur saveRetrait:', error);
     throw error;
   }
 };
 
-// Sauvegarder une transaction (générique)
-export const saveTransaction = async (transactionData) => {
-  try {
-    if (transactionData.type === 'EPARGNE') {
-      return await saveEpargne(transactionData);
-    } else if (transactionData.type === 'RETRAIT') {
-      return await saveRetrait(transactionData);
-    } else {
-      throw new Error('Type de transaction invalide');
-    }
-  } catch (error) {
-    console.error('Erreur lors de la sauvegarde de la transaction:', error);
-    throw error;
-  }
-};
-
-// Récupérer les transactions d'un journal
-export const fetchJournalTransactions = async ({ collecteurId, date, page = 0, size = 20, sort = 'dateHeure,desc' }) => {
+export const fetchJournalTransactions = async ({ collecteurId, page = 0, size = 10, dateDebut, dateFin }) => {
   try {
     const params = { 
       page, 
-      size, 
-      sort,
-      date 
+      size,
+      sort: 'dateHeure,desc'
     };
     
+    if (dateDebut) params.dateDebut = dateDebut;
+    if (dateFin) params.dateFin = dateFin;
+    
     const response = await apiService.get(`/mouvements/collecteur/${collecteurId}`, params);
-    return response;
-  } catch (error) {
-    console.error('Erreur lors de la récupération des transactions du journal:', error);
-    throw error;
-  }
-};
-
-// Récupérer les transactions récentes d'un collecteur
-export const fetchRecentTransactions = async ({ collecteurId, page = 0, size = 5 }) => {
-  try {
-    const params = { page, size, sort: 'dateHeure,desc' };
-    const response = await apiService.get(`/mouvements/collecteur/${collecteurId}`, params);
-    return response;
-  } catch (error) {
-    console.error('Erreur lors de la récupération des transactions récentes:', error);
-    throw error;
-  }
-};
-
-// Vérifier le solde disponible pour un retrait
-export const verifyBalance = async ({ clientId, montant }) => {
-  try {
-    const response = await apiService.post('/mouvements/verify-balance', {
-      clientId,
-      montant
-    });
-    return response.data || response;
-  } catch (error) {
-    console.error('Erreur lors de la vérification du solde:', error);
-    throw error;
-  }
-};
-
-// Fermer un journal
-export const closeJournal = async ({ collecteurId, date }) => {
-  try {
-    const response = await apiService.post('/journaux/cloture', {
-      collecteurId,
-      date
-    });
-    return response.data || response;
-  } catch (error) {
-    console.error('Erreur lors de la fermeture du journal:', error);
-    throw error;
-  }
-};
-
-// Récupérer le résumé du dashboard
-export const getCollecteurDashboard = async (collecteurId) => {
-  try {
-    const response = await apiService.get(`/collecteurs/${collecteurId}/dashboard`);
-    return response.data || response;
-  } catch (error) {
-    console.error('Erreur lors de la récupération du dashboard:', error);
-    // Retourner des données par défaut en cas d'erreur
+    
     return {
-      soldeTotal: 0,
-      totalRetraits: 0,
-      totalClients: 0,
-      totalTransactions: 0,
-      totalEpargnes: 0,
-      unreadNotifications: 0
+      data: response.content || response.data || [],
+      totalElements: response.totalElements || 0,
+      totalPages: response.totalPages || 0,
+      success: true
+    };
+  } catch (error) {
+    console.error('Erreur fetchJournalTransactions:', error);
+    return {
+      data: [],
+      totalElements: 0,
+      totalPages: 0,
+      success: false,
+      error: error.message
     };
   }
 };
+
+export const getCollecteurDashboard = async (collecteurId) => {
+  try {
+    // Essayer l'endpoint dashboard spécialisé
+    try {
+      const response = await apiService.get(`/collecteurs/${collecteurId}/dashboard`);
+      return {
+        data: response.data || response,
+        success: true
+      };
+    } catch (dashboardError) {
+      console.warn('Endpoint dashboard non disponible, construction manuelle...');
+      
+      // Construire le dashboard depuis les APIs existantes
+      const [clientsResult, transactionsResult] = await Promise.allSettled([
+        apiService.get(`/clients/collecteur/${collecteurId}`, { page: 0, size: 1 }),
+        apiService.get(`/mouvements/collecteur/${collecteurId}`, { page: 0, size: 100 })
+      ]);
+
+      let dashboardData = {
+        totalClients: 0,
+        totalTransactions: 0,
+        totalEpargnes: 0,
+        totalRetraits: 0,
+        soldeTotal: 0,
+        unreadNotifications: 0
+      };
+
+      // Traiter les clients
+      if (clientsResult.status === 'fulfilled') {
+        const clientsResponse = clientsResult.value;
+        dashboardData.totalClients = clientsResponse.totalElements || 
+                                    (Array.isArray(clientsResponse.data) ? clientsResponse.data.length : 0) ||
+                                    (Array.isArray(clientsResponse.content) ? clientsResponse.content.length : 0);
+      }
+
+      // Traiter les transactions
+      if (transactionsResult.status === 'fulfilled') {
+        const transactionsResponse = transactionsResult.value;
+        const transactions = transactionsResponse.content || transactionsResponse.data || [];
+        
+        if (Array.isArray(transactions)) {
+          dashboardData.totalTransactions = transactions.length;
+          
+          transactions.forEach(t => {
+            const montant = t.montant || 0;
+            if (t.type === 'EPARGNE') {
+              dashboardData.totalEpargnes += montant;
+            } else if (t.type === 'RETRAIT') {
+              dashboardData.totalRetraits += montant;
+            }
+          });
+          
+          dashboardData.soldeTotal = dashboardData.totalEpargnes - dashboardData.totalRetraits;
+        }
+      }
+
+      return {
+        data: dashboardData,
+        success: true
+      };
+    }
+  } catch (error) {
+    console.error('Erreur getCollecteurDashboard:', error);
+    return {
+      data: {
+        totalClients: 0,
+        totalTransactions: 0,
+        totalEpargnes: 0,
+        totalRetraits: 0,
+        soldeTotal: 0,
+        unreadNotifications: 0
+      },
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// Export default
+const transactionAPI = {
+  saveEpargne,
+  saveRetrait,
+  fetchJournalTransactions,
+  getCollecteurDashboard
+};
+
+export default transactionAPI;

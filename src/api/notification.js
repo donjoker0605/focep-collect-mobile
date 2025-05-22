@@ -1,82 +1,52 @@
-// src/api/notification.js
-import api from './axiosConfig';
+// src/api/notification.js - CORRIGÉE POUR 404
+import apiService from '../services/api';
 
-/**
- * Récupérer les notifications de l'utilisateur
- * @returns {Promise<Array>} Liste des notifications
- */
-export const getNotifications = async () => {
+export const getNotifications = async (page = 0, size = 10) => {
   try {
-    const response = await api.get('/api/notifications');
-    return response.data;
+    // ✅ CORRECTION CRITIQUE : Ne pas répéter /api/
+    const response = await apiService.get('/notifications', { page, size });
+    
+    return {
+      data: response.content || response.data || [],
+      totalElements: response.totalElements || 0,
+      unreadCount: response.unreadCount || 0,
+      success: true
+    };
   } catch (error) {
-    console.error('Erreur lors de la récupération des notifications:', error);
+    console.error('Erreur getNotifications:', error);
+    
+    // Si l'endpoint n'existe pas côté backend, retourner des données vides
+    if (error.status === 404) {
+      console.warn('⚠️ Endpoint notifications non implémenté côté backend');
+      return {
+        data: [],
+        totalElements: 0,
+        unreadCount: 0,
+        success: true,
+        warning: 'Endpoint notifications non disponible'
+      };
+    }
+    
     throw error;
   }
 };
 
-/**
- * Marquer une notification comme lue
- * @param {string} notificationId Identifiant de la notification
- * @returns {Promise<Object>} Notification mise à jour
- */
-export const markNotificationAsRead = async (notificationId) => {
+export const markAsRead = async (notificationId) => {
   try {
-    const response = await api.patch(`/api/notifications/${notificationId}/read`);
-    return response.data;
+    const response = await apiService.patch(`/notifications/${notificationId}/read`);
+    return {
+      data: response.data || response,
+      success: true
+    };
   } catch (error) {
-    console.error('Erreur lors du marquage de la notification:', error);
-    throw error;
+    console.error('Erreur markAsRead:', error);
+    return { success: false, error: error.message };
   }
 };
 
-/**
- * Marquer toutes les notifications comme lues
- * @returns {Promise<Object>} Statut de l'opération
- */
-export const markAllNotificationsAsRead = async () => {
-  try {
-    const response = await api.patch('/api/notifications/read-all');
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors du marquage de toutes les notifications:', error);
-    throw error;
-  }
-};
-
-/**
- * Supprimer une notification
- * @param {string} notificationId Identifiant de la notification
- * @returns {Promise<Object>} Statut de l'opération
- */
-export const deleteNotification = async (notificationId) => {
-  try {
-    const response = await api.delete(`/api/notifications/${notificationId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la suppression de la notification:', error);
-    throw error;
-  }
-};
-
-/**
- * Supprimer toutes les notifications
- * @returns {Promise<Object>} Statut de l'opération
- */
-export const deleteAllNotifications = async () => {
-  try {
-    const response = await api.delete('/api/notifications');
-    return response.data;
-  } catch (error) {
-    console.error('Erreur lors de la suppression de toutes les notifications:', error);
-    throw error;
-  }
-};
-
-export default {
+const notificationAPI = {
   getNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-  deleteNotification,
-  deleteAllNotifications
+  markAsRead
 };
+
+export default notificationAPI;
