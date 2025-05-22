@@ -5,27 +5,18 @@ import { STORAGE_KEYS } from '../config/apiConfig';
 import { jwtDecode } from 'jwt-decode';
 
 export const authService = {
-  // Test de connectivité avec le backend
-  ping: async () => {
-    try {
-      const response = await axiosInstance.get('/public/ping');
-      return response.data;
-    } catch (error) {
-      console.error("Erreur ping:", error);
-      throw error;
-    }
-  },
-
-  // Connexion utilisateur
+  // Connexion utilisateur - FONCTION CORRIGÉE
   login: async (email, password) => {
     try {
-      console.log('🚀 Tentative de connexion:', { email, password });
+      console.log('🚀 Tentative de connexion:', { email });
       
-      // Créer une instance axios sans token pour le login
-      const response = await axiosInstance.post('/auth/login', { email, password });
-      console.log('🚀 Réponse du serveur:', response.data);
+      // Structure correcte pour le backend
+      const requestData = { email, password };
+      console.log('📤 Données envoyées:', requestData);
       
-      // Récupérer le token et extraire les informations utilisateur
+      const response = await axiosInstance.post('/auth/login', requestData);
+      console.log('📥 Réponse reçue:', response.data);
+      
       const { token, role } = response.data;
       
       if (!token) {
@@ -39,28 +30,24 @@ export const authService = {
         // Décoder le token pour extraire les informations utilisateur
         const decodedToken = jwtDecode(token);
         
-        // Construire un objet utilisateur à partir des données du token
+        // Construire un objet utilisateur cohérent
         const user = {
           id: decodedToken.userId || decodedToken.sub || 0,
-          email: email, // Utiliser l'email de connexion
+          email: email,
           role: role || decodedToken.role,
           agenceId: decodedToken.agenceId || 0,
           nom: decodedToken.nom || '',
           prenom: decodedToken.prenom || '',
         };
         
-        // Sauvegarder le token 
+        // Sauvegarder de manière sécurisée
         await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
         
-        // Sauvegarder le refresh token s'il existe
         if (response.data.refreshToken) {
           await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.data.refreshToken);
         }
         
-        // Sauvegarder les données utilisateur
-        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
-        
-        // Enregistrer le timestamp de la dernière connexion
         await AsyncStorage.setItem('lastLoginAt', new Date().toISOString());
         
         return { success: true, user, token };
@@ -72,10 +59,16 @@ export const authService = {
         };
       }
     } catch (error) {
-      console.error('❌ Erreur de connexion:', error);
+      console.error('❌ Erreur de connexion complète:', error);
+      console.error('❌ Détails de l\'erreur:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      
       return { 
         success: false, 
-        error: error.response?.data?.message || 'Erreur de connexion' 
+        error: error.response?.data?.message || error.message || 'Erreur de connexion' 
       };
     }
   },
@@ -100,13 +93,11 @@ export const authService = {
   // Déconnexion
   logout: async () => {
     try {
-      // Essayer de notifier le serveur de la déconnexion
       await axiosInstance.post('/auth/logout');
     } catch (error) {
       console.warn('Erreur lors de la déconnexion côté serveur:', error);
     }
     
-    // Supprimer les données locales quoi qu'il arrive
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.JWT_TOKEN,
       STORAGE_KEYS.USER_DATA,
@@ -119,33 +110,32 @@ export const authService = {
 
   // Vérifier si l'utilisateur est connecté
   isAuthenticated: async () => {
-  try {
-    const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
-    if (!token) return { token: null, userData: null }; // Format cohérent même si échoue
-    
-    // Vérifier si le token n'est pas expiré
     try {
-      const decodedToken = jwtDecode(token);
-      const currentTime = Date.now() / 1000;
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+      if (!token) return { token: null, userData: null };
       
-      if (decodedToken.exp && decodedToken.exp < currentTime) {
-        // Token expiré
-        console.log('Token expiré, tentative de déconnexion');
-        await authService.logout();
+      try {
+        const decodedToken = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
+        
+        if (decodedToken.exp && decodedToken.exp < currentTime) {
+          console.log('Token expiré, nettoyage...');
+          await this.logout();
+          return { token: null, userData: null };
+        }
+      } catch (decodeError) {
+        console.error('Erreur lors du décodage du token:', decodeError);
+        await this.logout();
         return { token: null, userData: null };
       }
-    } catch (decodeError) {
-      console.error('Erreur lors du décodage du token:', decodeError);
+      
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      return { token, userData: userData ? JSON.parse(userData) : null };
+    } catch (error) {
+      console.error('Erreur vérification authentification:', error);
       return { token: null, userData: null };
     }
-    
-    const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-    return { token, userData: userData ? JSON.parse(userData) : null };
-  } catch (error) {
-    console.error('Erreur vérification authentification:', error);
-    return { token: null, userData: null };
-  }
-},
+  },
   
   // Vérifier l'activité de la session
   checkSessionActivity: async (maxInactivityMinutes = 30) => {

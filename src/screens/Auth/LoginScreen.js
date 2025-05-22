@@ -1,4 +1,4 @@
-// src/screens/Auth/LoginScreen.js
+// src/screens/Auth/LoginScreen.js - VERSION FINALE SANS PRÉ-REMPLISSAGE
 import React, { useState } from 'react';
 import { View, Alert, StyleSheet } from 'react-native';
 import { Button, TextInput, Text } from 'react-native-paper';
@@ -6,8 +6,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { API_CONFIG } from '../../config/apiConfig';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(''); // Champ vide pour saisie manuelle
+  const [password, setPassword] = useState(''); // Champ vide pour saisie manuelle
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
@@ -18,46 +18,26 @@ export default function LoginScreen({ navigation }) {
     }
 
     setLoading(true);
-    console.log(`Tentative de connexion avec: ${email}`);
-    console.log(`URL d'authentification: ${API_CONFIG.baseURL}/auth/login`);
+    console.log('🔄 LoginScreen: Tentative de connexion avec:', email);
 
     try {
-      // Envoyer les identifiants pour se connecter
-      const result = await login({ email, password });
+      // CORRECTION : Passer email et password comme paramètres séparés
+      const result = await login(email, password);
       
-      console.log('Résultat de la connexion:', result);
+      console.log('📊 Résultat de la connexion:', result);
       
       if (result.success) {
-        console.log('Connexion réussie! Redirection en cours...');
-        navigateBasedOnRole(result.user);
+        console.log('✅ Connexion réussie! L\'AuthContext gère la redirection.');
+        // La redirection est gérée par AuthContext
       } else {
-        console.error('Échec de la connexion:', result.error);
+        console.error('❌ Échec de la connexion:', result.error);
         Alert.alert('Erreur', result.error || 'Identifiants invalides');
       }
     } catch (error) {
-      console.error('Exception pendant la connexion:', error);
+      console.error('💥 Exception pendant la connexion:', error);
       Alert.alert('Erreur', 'Erreur de connexion');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const navigateBasedOnRole = (userData) => {
-    if (!userData || !userData.role) {
-      Alert.alert('Erreur', 'Données utilisateur invalides');
-      return;
-    }
-
-    switch (userData.role) {
-      case 'SUPER_ADMIN':
-      case 'ADMIN':
-        navigation.replace('AdminTabs');
-        break;
-      case 'COLLECTEUR':
-        navigation.replace('CollecteurTabs');
-        break;
-      default:
-        Alert.alert('Erreur', `Rôle non reconnu: ${userData.role}`);
     }
   };
 
@@ -75,6 +55,7 @@ export default function LoginScreen({ navigation }) {
         style={styles.input}
         autoCapitalize="none"
         keyboardType="email-address"
+        placeholder="Entrez votre email"
       />
       
       <TextInput
@@ -84,12 +65,14 @@ export default function LoginScreen({ navigation }) {
         mode="outlined"
         secureTextEntry
         style={styles.input}
+        placeholder="Entrez votre mot de passe"
       />
       
       <Button
         mode="contained"
         onPress={handleLogin}
         loading={loading}
+        disabled={loading}
         style={styles.button}
       >
         Se connecter
@@ -97,7 +80,8 @@ export default function LoginScreen({ navigation }) {
       
       <Button
         mode="text"
-        onPress={() => navigation.navigate('ForgotPassword')}
+        onPress={() => navigation?.navigate?.('ForgotPassword')}
+        disabled={loading}
       >
         Mot de passe oublié ?
       </Button>
@@ -114,17 +98,22 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
     justifyContent: 'center',
+    backgroundColor: '#f5f5f5',
   },
   title: {
     textAlign: 'center',
     marginBottom: 40,
+    color: '#2196F3',
+    fontWeight: 'bold',
   },
   input: {
     marginBottom: 16,
+    backgroundColor: '#ffffff',
   },
   button: {
     marginTop: 16,
     marginBottom: 16,
+    paddingVertical: 8,
   },
   debugInfo: {
     position: 'absolute',
@@ -132,5 +121,8 @@ const styles = StyleSheet.create({
     right: 10,
     fontSize: 10,
     color: '#999',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    padding: 4,
+    borderRadius: 4,
   }
 });

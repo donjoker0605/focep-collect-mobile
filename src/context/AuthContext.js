@@ -1,15 +1,8 @@
-// src/context/AuthContext.js
+// src/context/AuthContext.js - VERSION SIMPLIFIÉE ET CORRIGÉE
 import React, { createContext, useState, useEffect } from 'react';
-import authService from '../services/authService';
+import authService from '../api/authService';
 import { useRouter } from 'expo-router';
-import { SecureStorage } from '../services/secureStorage';
-import { EventEmitter } from 'events';
-import * as LocalAuthentication from 'expo-local-authentication';
-
-// Créer un émetteur d'événements global pour l'authentification
-if (!global.authEventEmitter) {
-  global.authEventEmitter = new EventEmitter();
-}
+import { SECURE_KEYS } from '../services/secureStorage';
 
 export const AuthContext = createContext();
 
@@ -20,75 +13,22 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const router = useRouter();
 
-  // Gestionnaire de session expirée
-  useEffect(() => {
-    const handleSessionExpired = () => {
-      setUser(null);
-      setIsAuthenticated(false);
-      router.replace('/auth');
-      setError('Votre session a expiré. Veuillez vous reconnecter.');
-    };
-
-    // S'abonner à l'événement de session expirée
-    global.authEventEmitter.on('SESSION_EXPIRED', handleSessionExpired);
-
-    // Nettoyage
-    return () => {
-      global.authEventEmitter.off('SESSION_EXPIRED', handleSessionExpired);
-    };
-  }, [router]);
-
-  // Vérification périodique de la session
-  useEffect(() => {
-    let sessionCheckInterval;
-
-    if (isAuthenticated) {
-      // Vérifier la session toutes les 5 minutes
-      sessionCheckInterval = setInterval(async () => {
-        const sessionActive = await authService.checkSessionActivity(30); // 30 minutes max
-        if (!sessionActive) {
-          global.authEventEmitter.emit('SESSION_EXPIRED');
-        }
-      }, 5 * 60 * 1000); // 5 minutes
-    }
-
-    return () => {
-      if (sessionCheckInterval) {
-        clearInterval(sessionCheckInterval);
-      }
-    };
-  }, [isAuthenticated]);
-
   // Vérifier l'état d'authentification au démarrage
   useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
       
-      // Vérifier si le token est valide
       const authResult = await authService.isAuthenticated();
       
-      // Gérer différents formats de retour possibles
-      if (authResult && typeof authResult === 'object' && authResult.token) {
-        // Format { token, userData }
-        const userData = authResult.userData;
-        
-        setUser(userData);
+      if (authResult && authResult.token && authResult.userData) {
+        setUser(authResult.userData);
         setIsAuthenticated(true);
-        
-        console.log('Session restaurée:', { role: userData?.role });
-      } else if (authResult === true) {
-        // Format booléen (ancienne implémentation)
-        const userData = await authService.getCurrentUser();
-        
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        console.log('Session restaurée (boolean):', { role: userData?.role });
+        console.log('Session restaurée:', { role: authResult.userData?.role });
       } else {
-        // Token invalide ou format incorrect
-        await SecureStorage.clearAuthData();
-        
         setUser(null);
         setIsAuthenticated(false);
       }
@@ -101,46 +41,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  checkAuthStatus();
-}, []);
-
-  // Fonction de connexion avec authentification biométrique optionnelle
-  const login = async (email, password, useBiometrics = false) => {
+  // Fonction de connexion CORRIGÉE
+  const login = async (email, password) => {
     setError(null);
     setIsLoading(true);
 
     try {
-      // Vérifier si l'authentification biométrique est disponible et activée
-      if (useBiometrics) {
-        const biometricAuth = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Authentification pour FOCEP Collect',
-          fallbackLabel: 'Utiliser le mot de passe',
-        });
-        
-        if (!biometricAuth.success) {
-          setIsLoading(false);
-          return { success: false, error: 'Authentification biométrique échouée' };
-        }
-      }
+      console.log('🔐 AuthContext: Tentative de connexion pour', email);
       
       const result = await authService.login(email, password);
       
       if (result.success) {
         setUser(result.user);
         setIsAuthenticated(true);
-
-        // Rediriger selon le rôle
+        
+        console.log('✅ Connexion réussie, redirection selon le rôle:', result.user.role);
         redirectBasedOnRole(result.user.role);
         
-        return { success: true };
+        return { success: true, user: result.user };
       } else {
         setError(result.error);
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error('Erreur de connexion:', error);
-      setError(error.message || 'Identifiants invalides');
-      return { success: false, error: error.message || 'Identifiants invalides' };
+      console.error('Erreur de connexion dans AuthContext:', error);
+      const errorMessage = error.message || 'Identifiants invalides';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +86,6 @@ export const AuthProvider = ({ children }) => {
       router.replace('/auth');
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
-      // Même en cas d'erreur, on réinitialise l'état
       setUser(null);
       setIsAuthenticated(false);
       router.replace('/auth');
@@ -170,40 +96,32 @@ export const AuthProvider = ({ children }) => {
 
   // Fonction pour rediriger selon le rôle
   const redirectBasedOnRole = (role) => {
-    if (!role) return;
+    if (!role) {
+      console.error('Aucun rôle fourni pour la redirection');
+      return;
+    }
+    
+    console.log('🔀 Redirection basée sur le rôle:', role);
     
     switch (role) {
+      case 'ROLE_ADMIN':
       case 'ADMIN':
         router.replace('/admin');
         break;
+      case 'ROLE_SUPER_ADMIN':
       case 'SUPER_ADMIN':
         router.replace('/super-admin');
         break;
+      case 'ROLE_COLLECTEUR':
       case 'COLLECTEUR':
-      default:
         router.replace('/(tabs)');
         break;
+      default:
+        console.error('Rôle non reconnu:', role);
+        setError(`Rôle non reconnu: ${role}`);
     }
   };
 
-  // Fonction pour mettre à jour l'utilisateur
-  const updateUserInfo = async (updatedInfo) => {
-    try {
-      if (!user) {
-        return { success: false, error: 'Utilisateur non connecté' };
-      }
-      
-      const updatedUser = { ...user, ...updatedInfo };
-      await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, updatedUser);
-      setUser(updatedUser);
-      return { success: true };
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour des informations utilisateur:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Exposer le contexte
   const authContext = {
     isAuthenticated,
     isLoading,
@@ -211,25 +129,8 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     logout,
-    updateUserInfo,
-    setError,
-    checkAuthStatus: async () => {
-      setIsLoading(true);
-      try {
-        const isValid = await authService.isAuthenticated();
-        const userData = isValid ? await authService.getCurrentUser() : null;
-        
-        setUser(userData);
-        setIsAuthenticated(isValid);
-        
-        return isValid;
-      } catch (error) {
-        console.error('Erreur lors de la vérification du statut d\'authentification:', error);
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    }
+    checkAuthStatus,
+    setError
   };
 
   return (

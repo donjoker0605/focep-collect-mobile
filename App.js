@@ -18,6 +18,7 @@ import AppWrapper from './src/components/AppWrapper';
 
 // Configuration
 import { APP_CONFIG } from './src/config/appConfig';
+import { debugApiConfig } from './src/config/apiConfig';
 
 // Services
 import errorService from './src/services/errorService';
@@ -111,6 +112,10 @@ export default function App() {
       // Supprimer les écouteurs d'événements si nécessaire
     };
   }, []);
+  
+  useEffect(() => {
+  debugApiConfig();
+}, []);
   
   // Afficher un message spécial en mode développement
   if (__DEV__ && APP_CONFIG.environment === 'development') {

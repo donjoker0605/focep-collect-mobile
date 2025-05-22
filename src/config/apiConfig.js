@@ -1,26 +1,29 @@
-﻿// src/config/apiConfig.js
+﻿// src/config/apiConfig.js - VERSION CORRIGÉE AVEC VOTRE IP ACTUELLE
 import Constants from 'expo-constants';
-import { Platform } from 'react-native'; // Import manquant ajouté
+import { Platform } from 'react-native';
 
 const PROD_API_URL = 'https://api.votredomaine.com';
 
 // Fonction utilitaire pour obtenir l'URL de base de manière sécurisée
 const getBaseApiUrl = () => {
   try {
-    if (__DEV__) { // Correction de **DEV** en __DEV__
+    if (__DEV__) {
       // En développement
       if (Platform.OS === 'android') {
-        return 'http://10.0.2.2:8080/api';
+        // CORRECTION : Utiliser votre IP actuelle des logs au lieu de 10.0.2.2
+        return 'http://192.168.88.187:8080/api';
       } else {
-        return 'http://localhost:8080/api';
+        // Pour iOS simulator et Expo Go
+        return 'http://192.168.88.187:8080/api';
       }
     } else {
-      // En production ou en cas d'erreur
-      return 'http://192.168.111.57:8080/api';
+      // En production
+      return PROD_API_URL;
     }
   } catch (error) {
     console.warn('Erreur lors de la détermination de l\'URL de base:', error);
-    return 'http://192.168.111.57:8080/api'; // URL par défaut en cas d'erreur
+    // URL par défaut en cas d'erreur - CORRIGÉE avec votre IP
+    return 'http://192.168.88.187:8080/api';
   }
 };
 
@@ -30,7 +33,6 @@ export const API_CONFIG = {
   retryAttempts: 3,
   retryDelay: 1000,
 };
-
 
 export const STORAGE_KEYS = {
   JWT_TOKEN: 'focep_jwt_token',
@@ -79,4 +81,19 @@ export const ENDPOINTS = {
   // Reports
   REPORTS_COLLECTEUR_MONTHLY: '/reports/collecteur/{id}/monthly',
   REPORTS_AGENCE: '/reports/agence/{id}',
+};
+
+// Utilitaire pour construire les URLs complètes
+export const buildApiUrl = (endpoint) => {
+  return `${API_CONFIG.baseURL}${endpoint}`;
+};
+
+// Fonction de débogage pour afficher la configuration
+export const debugApiConfig = () => {
+  console.log('🔧 Configuration API:', {
+    baseURL: API_CONFIG.baseURL,
+    platform: Platform.OS,
+    isDev: __DEV__,
+    timeout: API_CONFIG.timeout
+  });
 };
