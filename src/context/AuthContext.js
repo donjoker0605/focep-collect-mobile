@@ -19,27 +19,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkAuthStatus = async () => {
-    try {
-      setIsLoading(true);
+  try {
+    setIsLoading(true);
+    
+    const authResult = await authService.isAuthenticated();
+    
+    if (authResult && authResult.token && authResult.userData) {
+      setUser(authResult.userData);
+      setIsAuthenticated(true);
+      console.log('Session restaurée:', { role: authResult.userData?.role });
       
-      const authResult = await authService.isAuthenticated();
-      
-      if (authResult && authResult.token && authResult.userData) {
-        setUser(authResult.userData);
-        setIsAuthenticated(true);
-        console.log('Session restaurée:', { role: authResult.userData?.role });
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-    } catch (error) {
-      console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
+      // NE PAS rediriger ici - laisser le routing automatique faire son travail
+    } else {
       setUser(null);
       setIsAuthenticated(false);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
+    setUser(null);
+    setIsAuthenticated(false);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Fonction de connexion CORRIGÉE
   const login = async (email, password) => {

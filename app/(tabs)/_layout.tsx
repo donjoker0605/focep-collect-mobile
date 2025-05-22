@@ -1,15 +1,28 @@
-// app/(tabs)/_layout.tsx
+// app/(tabs)/_layout.tsx - VERSION CORRIGÉE
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/hooks/useAuth';
+import { View, ActivityIndicator } from 'react-native';
 import theme from '../../src/theme';
 
 export default function TabLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  
+  // Attendre que l'authentification soit complètement chargée
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+  
+  // Normaliser le rôle pour la vérification
+  const normalizedRole = user?.role?.replace('ROLE_', '');
   
   // Vérifier que l'utilisateur est un collecteur
-  if (user?.role !== 'COLLECTEUR') {
-    return null;
+  if (normalizedRole !== 'COLLECTEUR') {
+    return null; // Cela déclenchera une redirection via index.tsx
   }
   
   return (

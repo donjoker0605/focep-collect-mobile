@@ -1,4 +1,4 @@
-// src/screens/Collecteur/DashboardScreen.js
+// src/screens/Collecteur/DashboardScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
@@ -18,21 +17,13 @@ import { fr } from 'date-fns/locale';
 
 // Components
 import { 
-  BalanceCard, 
-  StatsCard, 
-  EnhancedTransactionItem,
+  Card, 
   EmptyState,
-  ProgressIndicator
 } from '../../components';
 
 // Services et hooks
 import { useAuth } from '../../hooks/useAuth';
-import { useOfflineSync } from '../../hooks/useOfflineSync';
-import { 
-  getCollecteurDashboard, 
-  fetchRecentTransactions, 
-  getCommissionsSummary 
-} from '../../api/dashboard';
+import apiService from '../../services/api';
 
 // Theme et utilitaires
 import theme from '../../theme';
@@ -42,15 +33,19 @@ const DashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { syncStatus, pendingCount, syncNow } = useOfflineSync();
   
   // États
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dashboard, setDashboard] = useState(null);
+  const [dashboard, setDashboard] = useState({
+    soldeTotal: 0,
+    totalRetraits: 0,
+    totalClients: 0,
+    totalTransactions: 0,
+    totalEpargnes: 0,
+    unreadNotifications: 0
+  });
   const [transactions, setTransactions] = useState([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(true);
-  const [commissionsSummary, setCommissionsSummary] = useState(null);
   const [error, setError] = useState(null);
   
   // Fonction pour charger les données du tableau de bord
@@ -64,23 +59,45 @@ const DashboardScreen = ({ navigation }) => {
       
       setError(null);
       
-      // Charger les données du tableau de bord
-      const dashboardData = await getCollecteurDashboard(user.id);
-      setDashboard(dashboardData);
+      // Charger les données en parallèle
+      const [clientsResult, transactionsResult] = await Promise.allSettled([
+        apiService.get(`/clients/collecteur/${user.id}`),
+        apiService.get(`/mouvements/collecteur/${user.id}`, { page: 0, size: 5 })
+      ]);
       
-      // Charger les transactions récentes
-      setTransactionsLoading(true);
-      const transactionsData = await fetchRecentTransactions({ 
-        collecteurId: user.id, 
-        page: 0, 
-        size: 5 
-      });
-      setTransactions(transactionsData.content || []);
-      setTransactionsLoading(false);
+      // Traiter les clients
+      if (clientsResult.status === 'fulfilled') {
+        const clients = clientsResult.value || [];
+        setDashboard(prev => ({
+          ...prev,
+          totalClients: clients.length
+        }));
+      }
       
-      // Charger le résumé des commissions
-      const commissionsData = await getCommissionsSummary({ collecteurId: user.id });
-      setCommissionsSummary(commissionsData);
+      // Traiter les transactions
+      if (transactionsResult.status === 'fulfilled') {
+        const transactionsData = transactionsResult.value?.content || [];
+        setTransactions(transactionsData);
+        
+        // Calculer les totaux
+        const totals = transactionsData.reduce((acc, t) => {
+          if (t.type === 'EPARGNE') {
+            acc.totalEpargnes += t.montant;
+            acc.soldeTotal += t.montant;
+          } else if (t.type === 'RETRAIT') {
+            acc.totalRetraits += t.montant;
+            acc.soldeTotal -= t.montant;
+          }
+          return acc;
+        }, { totalEpargnes: 0, totalRetraits: 0, soldeTotal: 0 });
+        
+        setDashboard(prev => ({
+          ...prev,
+          ...totals,
+          totalTransactions: transactionsData.length
+        }));
+      }
+      
     } catch (err) {
       console.error('Erreur lors du chargement du tableau de bord:', err);
       setError(err.message || 'Erreur lors du chargement des données');
@@ -108,7 +125,9 @@ const DashboardScreen = ({ navigation }) => {
       <View style={styles.profileSection}>
         <View style={styles.welcomeContainer}>
           <Text style={styles.greeting}>Bonjour,</Text>
-          <Text style={styles.userName}>{user.prenom} {user.nom}</Text>
+          <Text style={styles.userName}>
+            {user?.prenom || 'Collecteur'} {user?.nom || ''}
+          </Text>
         </View>
         
         <TouchableOpacity 
@@ -116,7 +135,6 @@ const DashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Notifications')}
         >
           <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-          {/* Badge de notification si nécessaire */}
           {dashboard?.unreadNotifications > 0 && (
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>
@@ -133,222 +151,65 @@ const DashboardScreen = ({ navigation }) => {
     </View>
   );
   
-  // Modifier la fonction renderBalances pour afficher comme votre référence
-const renderBalances = () => (
-  <View style={styles.balanceSection}>
-    <View style={styles.balanceCard}>
-      <Text style={styles.balanceTitle}>Total Collecté</Text>
-      <Text style={styles.balanceAmount}>
-        {formatCurrency(dashboard?.soldeTotal || 0, true, 2).replace(' FCFA', '')}
-      </Text>
+  // Rendre la section des soldes
+  const renderBalances = () => (
+    <View style={styles.balanceSection}>
+      <View style={styles.balanceCard}>
+        <Text style={styles.balanceTitle}>Total Collecté</Text>
+        <Text style={styles.balanceAmount}>
+          {formatCurrency(dashboard?.soldeTotal || 0)} FCFA
+        </Text>
+      </View>
+      
+      <View style={styles.balanceCard}>
+        <Text style={styles.balanceTitle}>Total Retrait</Text>
+        <Text style={[styles.balanceAmount, styles.balanceNegative]}>
+          -{formatCurrency(dashboard?.totalRetraits || 0)} FCFA
+        </Text>
+      </View>
     </View>
-    
-    <View style={styles.balanceCard}>
-      <Text style={styles.balanceTitle}>Total Retrait</Text>
-      <Text style={[styles.balanceAmount, styles.balanceNegative]}>
-        -{formatCurrency(dashboard?.totalRetraits || 0, true, 2).replace(' FCFA', '')}
-      </Text>
-    </View>
-  </View>
-);
-
-// Ajouter une barre de progression après le renderBalances
-const renderProgressBar = () => (
-  <View style={styles.progressBarContainer}>
-    <View style={styles.progressBar}>
-      <View 
-        style={[
-          styles.progressBarFill, 
-          { width: `${dashboard?.progressionObjectif || 0}%` }
-        ]} 
-      />
-    </View>
-    <Text style={styles.progressBarText}>
-      {dashboard?.progressionObjectif || 0}% de {formatCurrency(dashboard?.objectifMensuel || 0)}
-    </Text>
-  </View>
-);
+  );
   
   // Rendre la section des statistiques
   const renderStats = () => (
     <View style={styles.statsSection}>
       <View style={styles.statsRow}>
-        <StatsCard
-          title="Clients"
-          value={dashboard?.totalClients?.toString() || "0"}
-          icon="people"
-          iconColor={theme.colors.info}
-          variant="minimal"
-          style={styles.statCard}
-          showPercentChange={dashboard?.clientsPercentChange !== undefined}
-          percentChange={dashboard?.clientsPercentChange || 0}
-          compareLabel="vs mois dernier"
-          onPress={() => navigation.navigate('Clients')}
-        />
+        <Card style={styles.statCard}>
+          <View style={styles.statContent}>
+            <Ionicons name="people" size={24} color={theme.colors.info} />
+            <Text style={styles.statValue}>{dashboard?.totalClients || 0}</Text>
+            <Text style={styles.statLabel}>Clients</Text>
+          </View>
+        </Card>
        
-        <StatsCard
-          title="Opérations"
-          value={dashboard?.totalTransactions?.toString() || "0"}
-          icon="swap-horizontal"
-          iconColor={theme.colors.primary}
-          variant="minimal"
-          style={styles.statCard}
-          showPercentChange={dashboard?.transactionsPercentChange !== undefined}
-          percentChange={dashboard?.transactionsPercentChange || 0}
-          compareLabel="vs mois dernier"
-          onPress={() => navigation.navigate('Journal')}
-        />
+        <Card style={styles.statCard}>
+          <View style={styles.statContent}>
+            <Ionicons name="swap-horizontal" size={24} color={theme.colors.primary} />
+            <Text style={styles.statValue}>{dashboard?.totalTransactions || 0}</Text>
+            <Text style={styles.statLabel}>Opérations</Text>
+          </View>
+        </Card>
       </View>
-     
-      {/* Afficher les opérations en attente de synchronisation s'il y en a */}
-      {renderSyncStats()}
       
       <View style={styles.statsRow}>
-        <StatsCard
-          title="Épargnes"
-          value={formatCurrency(dashboard?.totalEpargnes || 0)}
-          unit="FCFA"
-          icon="arrow-down"
-          iconColor={theme.colors.success}
-          variant="minimal"
-          style={styles.statCard}
-          showPercentChange={dashboard?.epargnesPercentChange !== undefined}
-          percentChange={dashboard?.epargnesPercentChange || 0}
-          compareLabel="vs mois dernier"
-          onPress={() => navigation.navigate('Collecte', { selectedTab: 'epargne' })}
-        />
+        <Card style={styles.statCard}>
+          <View style={styles.statContent}>
+            <Ionicons name="arrow-down" size={24} color={theme.colors.success} />
+            <Text style={styles.statValue}>{formatCurrency(dashboard?.totalEpargnes || 0)}</Text>
+            <Text style={styles.statLabel}>Épargnes</Text>
+          </View>
+        </Card>
        
-        <StatsCard
-          title="Retraits"
-          value={formatCurrency(dashboard?.totalRetraits || 0)}
-          unit="FCFA"
-          icon="arrow-up"
-          iconColor={theme.colors.error}
-          variant="minimal"
-          style={styles.statCard}
-          showPercentChange={dashboard?.retraitsPercentChange !== undefined}
-          percentChange={dashboard?.retraitsPercentChange || 0}
-          compareLabel="vs mois dernier"
-          onPress={() => navigation.navigate('Collecte', { selectedTab: 'retrait' })}
-        />
+        <Card style={styles.statCard}>
+          <View style={styles.statContent}>
+            <Ionicons name="arrow-up" size={24} color={theme.colors.error} />
+            <Text style={styles.statValue}>{formatCurrency(dashboard?.totalRetraits || 0)}</Text>
+            <Text style={styles.statLabel}>Retraits</Text>
+          </View>
+        </Card>
       </View>
     </View>
   );
-  
-  // Fonction pour afficher les opérations en attente de synchronisation
-  const renderSyncStats = () => {
-    if (pendingCount > 0) {
-      return (
-        <View style={styles.statsRow}>
-          <StatsCard
-            title="Opérations en attente"
-            value={pendingCount.toString()}
-            icon="cloud-upload"
-            iconColor={theme.colors.warning}
-            onPress={syncNow}
-            variant="minimal"
-            style={[styles.statCard, styles.syncStatsCard]}
-          />
-        </View>
-      );
-    }
-    return null;
-  };
-  
-  // Rendre la section des objectifs
-  const renderCommissions = () => {
-    if (!commissionsSummary) return null;
-    
-    const percentComplete = commissionsSummary.objectifMensuel > 0 
-      ? (commissionsSummary.montantCollecte / commissionsSummary.objectifMensuel) * 100
-      : 0;
-    
-    return (
-      <View style={styles.objectiveSection}>
-        <Text style={styles.sectionTitle}>Commissions & rémunération</Text>
-        
-        <View style={styles.objectiveCard}>
-          <View style={styles.objectiveHeader}>
-            <Text style={styles.objectiveTitle}>Objectif mensuel</Text>
-            <Text style={styles.objectiveAmount}>
-              {formatCurrency(commissionsSummary.montantCollecte)} / {formatCurrency(commissionsSummary.objectifMensuel)} FCFA
-            </Text>
-          </View>
-          
-          <ProgressIndicator 
-            progress={Math.min(percentComplete / 100, 1)}
-            progressColor={theme.colors.primary}
-            height={12}
-            percentagePosition="right"
-          />
-          
-          <View style={styles.commissionInfo}>
-            <View style={styles.commissionItem}>
-              <Text style={styles.commissionLabel}>Commission du mois</Text>
-              <Text style={styles.commissionValue}>
-                {formatCurrency(commissionsSummary.commissionActuelle)} FCFA
-              </Text>
-            </View>
-            
-            <View style={styles.commissionItem}>
-              <Text style={styles.commissionLabel}>Rémunération estimée</Text>
-              <Text style={styles.commissionValue}>
-                {formatCurrency(commissionsSummary.remunerationEstimee)} FCFA
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  };
-  
-  // Rendre la section des transactions récentes
-  const renderTransactions = () => (
-    <View style={styles.transactionsSection}>
-      <View style={styles.transactionsHeader}>
-        <Text style={styles.sectionTitle}>Transactions récentes</Text>
-        
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => navigation.navigate('Journal')}
-        >
-          <Text style={styles.viewAllText}>Voir tout</Text>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
-      
-      {transactionsLoading ? (
-        <View style={styles.loadingTransactions}>
-          <ActivityIndicator size="small" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Chargement des transactions...</Text>
-        </View>
-      ) : transactions.length === 0 ? (
-        <EmptyState
-          type="empty"
-          title="Aucune transaction"
-          message="Vous n'avez pas encore effectué de transactions."
-          containerStyle={styles.emptyTransactions}
-        />
-      ) : (
-        transactions.map((transaction, index) => (
-          <EnhancedTransactionItem
-            key={transaction.id || index}
-            type={transaction.type}
-            date={format(new Date(transaction.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr })}
-            amount={transaction.montant}
-            isIncome={transaction.type === 'Épargne'}
-            status={transaction.status}
-            clientInfo={transaction.client}
-            reference={transaction.reference}
-            showClient
-            onPress={() => navigation.navigate('CollecteDetail', { transaction })}
-          />
-        ))
-      )}
-    </View>
-  );
-
-  
   
   // Rendu des actions rapides
   const renderQuickActions = () => (
@@ -399,6 +260,58 @@ const renderProgressBar = () => (
     </View>
   );
   
+  // Rendre la section des transactions récentes
+  const renderTransactions = () => (
+    <View style={styles.transactionsSection}>
+      <View style={styles.transactionsHeader}>
+        <Text style={styles.sectionTitle}>Transactions récentes</Text>
+        
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => navigation.navigate('Journal')}
+        >
+          <Text style={styles.viewAllText}>Voir tout</Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
+        </TouchableOpacity>
+      </View>
+      
+      {transactions.length === 0 ? (
+        <EmptyState
+          type="empty"
+          title="Aucune transaction"
+          message="Vous n'avez pas encore effectué de transactions."
+          containerStyle={styles.emptyTransactions}
+        />
+      ) : (
+        transactions.map((transaction, index) => (
+          <Card key={transaction.id || index} style={styles.transactionCard}>
+            <View style={styles.transactionRow}>
+              <View style={styles.transactionIcon}>
+                <Ionicons 
+                  name={transaction.type === 'EPARGNE' ? 'arrow-down-circle' : 'arrow-up-circle'} 
+                  size={24} 
+                  color={transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error} 
+                />
+              </View>
+              <View style={styles.transactionInfo}>
+                <Text style={styles.transactionType}>{transaction.type}</Text>
+                <Text style={styles.transactionDate}>
+                  {format(new Date(transaction.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr })}
+                </Text>
+              </View>
+              <Text style={[
+                styles.transactionAmount,
+                { color: transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
+              ]}>
+                {transaction.type === 'EPARGNE' ? '+' : '-'}{formatCurrency(transaction.montant)} FCFA
+              </Text>
+            </View>
+          </Card>
+        ))
+      )}
+    </View>
+  );
+  
   // Rendu principal
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -437,10 +350,9 @@ const renderProgressBar = () => (
           {renderBalances()}
           {renderStats()}
           {renderQuickActions()}
-          {renderCommissions()}
           {renderTransactions()}
           
-          <View style={{ height: 20 }} /> {/* Espace en bas */}
+          <View style={{ height: 20 }} />
         </ScrollView>
       )}
     </View>
@@ -515,27 +427,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 30,
   },
-  progressBarContainer: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  progressBar: {
-    height: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 6,
-    overflow: 'hidden',
-    marginBottom: 5,
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: theme.colors.white,
-    borderRadius: 6,
-  },
-  progressBarText: {
-    fontSize: 12,
-    color: theme.colors.white,
-    textAlign: 'right',
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -547,7 +438,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   balanceSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
+  },
+  balanceCard: {
+    flex: 1,
+    backgroundColor: theme.colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 6,
+    alignItems: 'center',
+    ...theme.shadows.small,
+  },
+  balanceTitle: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 8,
+  },
+  balanceAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  balanceNegative: {
+    color: theme.colors.error,
   },
   statsSection: {
     marginBottom: 24,
@@ -560,11 +475,20 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     marginHorizontal: 6,
+    padding: 16,
   },
-  syncStatsCard: {
-    backgroundColor: `${theme.colors.warning}10`,
-    borderLeftWidth: 2,
-    borderLeftColor: theme.colors.warning,
+  statContent: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginVertical: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
   },
   sectionTitle: {
     fontSize: 18,
@@ -603,50 +527,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     textAlign: 'center',
   },
-  objectiveSection: {
-    marginBottom: 24,
-  },
-  objectiveCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: 16,
-    padding: 16,
-    ...theme.shadows.small,
-  },
-  objectiveHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  objectiveTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  objectiveAmount: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  commissionInfo: {
-    marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  commissionItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  commissionLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  commissionValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
   transactionsSection: {
     marginBottom: 16,
   },
@@ -665,15 +545,36 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     marginRight: 4,
   },
-  loadingTransactions: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
   emptyTransactions: {
     height: 150,
     marginBottom: 16,
   },
+  transactionCard: {
+    marginBottom: 8,
+    padding: 12,
+  },
+  transactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  transactionIcon: {
+    marginRight: 12,
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionType: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
-
-export default DashboardScreen;
