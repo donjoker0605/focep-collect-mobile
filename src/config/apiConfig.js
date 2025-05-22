@@ -11,10 +11,10 @@ const getBaseApiUrl = () => {
       // En développement
       if (Platform.OS === 'android') {
         // CORRECTION : Utiliser votre IP actuelle des logs au lieu de 10.0.2.2
-        return 'http://192.168.137.1:8080/api';
+        return 'http://192.168.88.229:8080/api';
       } else {
         // Pour iOS simulator et Expo Go
-        return 'http://192.168.137.1:8080/api';
+        return 'http://192.168.88.229:8080/api';
       }
     } else {
       // En production
@@ -23,7 +23,7 @@ const getBaseApiUrl = () => {
   } catch (error) {
     console.warn('Erreur lors de la détermination de l\'URL de base:', error);
     // URL par défaut en cas d'erreur - CORRIGÉE avec votre IP
-    return 'http://192.168.137.1:8080/api';
+    return 'http://192.168.88.229:8080/api';
   }
 };
 
