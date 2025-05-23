@@ -1,6 +1,6 @@
 // src/hooks/useClients.js
 import { useState, useEffect, useCallback } from 'react';
-import ClientService from '../services/clientService';
+import { clientService } from '../../services';
 import { useErrorHandler } from './useErrorHandler';
 
 export const useClients = (collecteurId = null) => {

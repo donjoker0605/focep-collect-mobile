@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
+import { collecteurService } from '../../services';
 
 const CollecteurManagementScreen = ({ navigation }) => {
   const [collecteurs, setCollecteurs] = useState(mockCollecteurs);

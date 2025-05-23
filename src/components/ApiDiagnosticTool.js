@@ -1,11 +1,11 @@
 // src/components/ApiDiagnosticTool.js
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
-import { authService } from '../api/auth';
 import { API_CONFIG } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
 import useSyncStatus from '../hooks/useSyncStatus';
 import AsyncStorage from '../utils/storage';
+import { authService } from '../../services';
 
 export default function ApiDiagnosticTool() {
   const [connectionStatus, setConnectionStatus] = useState('checking');

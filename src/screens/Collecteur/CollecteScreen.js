@@ -15,8 +15,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import transactionService from '../../services/transactionService';
-import ApiService from '../../services/apiService';
+
+// ✅ IMPORTS CORRIGÉS - Plus de duplication
+import { 
+  transactionService,
+  clientService 
+} from '../../services'; // Import depuis l'index
 
 // Components
 import { 
@@ -29,28 +33,26 @@ import {
   Input
 } from '../../components';
 
-// Hooks et services
+// Hooks
 import { useAuth } from '../../hooks/useAuth';
-import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 // Theme et utils
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 
-// Fonction utilitaire pour les haptics qui vérifie la plateforme
+// Fonction utilitaire pour les haptics
 const triggerHaptic = (type) => {
-    if (Platform.OS !== 'web') {
-      // Uniquement exécuter sur les appareils natifs, pas sur le web
-      if (type === 'impact') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } else if (type === 'success') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else if (type === 'error') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
+  if (Platform.OS !== 'web') {
+    if (type === 'impact') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } else if (type === 'success') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else if (type === 'error') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
- };
+  }
+};
 
 const CollecteScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
@@ -73,95 +75,85 @@ const CollecteScreen = ({ navigation, route }) => {
   
   // Charger la liste des clients
   const loadClients = useCallback(async () => {
-  try {
-    setClientsLoading(true);
-    setError(null);
-    
-    const clientsData = await clientService.getClientsByCollecteur(user.id);
-    const clientsList = Array.isArray(clientsData) ? clientsData : [];
-    
-    // Formater pour le SelectInput
-    const clientOptions = clientsList.map(client => ({
-      label: `${client.prenom} ${client.nom} ${client.numeroCni ? `(${client.numeroCni})` : ''}`,
-      value: client.id,
-      data: client
-    }));
-    
-    setClients(clientOptions);
-  } catch (err) {
-    console.error('Erreur chargement clients:', err);
-    setError(err.message);
-  } finally {
-    setClientsLoading(false);
-  }
-}, [user.id]);
-  
-  // Charger les clients au démarrage
-  useEffect(() => {
-    loadClients();
-  }, [loadClients]);
-  
+    try {
+      setClientsLoading(true);
+      setError(null);
+      
+      // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
+      const clientsData = await clientService.getClientsByCollecteur(user.id);
+      const clientsList = Array.isArray(clientsData) ? clientsData : [];
+      
+      // Formater pour le SelectInput
+      const clientOptions = clientsList.map(client => ({
+        label: `${client.prenom} ${client.nom} ${client.numeroCni ? `(${client.numeroCni})` : ''}`,
+        value: client.id,
+        data: client
+      }));
+      
+      setClients(clientOptions);
+    } catch (err) {
+      console.error('Erreur chargement clients:', err);
+      setError(err.message);
+    } finally {
+      setClientsLoading(false);
+    }
+  }, [user.id]);
+
   // Réinitialiser le formulaire
   const resetForm = () => {
     setAmount('');
     setDescription('');
     setError(null);
   };
-  
+
   // Changement d'onglet
   const handleTabChange = (tab) => {
     if (tab !== activeTab) {
       setActiveTab(tab);
       resetForm();
-      
-      // Vibration
       triggerHaptic('impact');
     }
   };
-  
+
   // Sélection d'un client
   const handleClientChange = (clientId) => {
     setSelectedClient(clientId);
-    
-    // Récupérer les informations du client sélectionné
     const selectedClientInfo = clients.find(client => client.value === clientId)?.data;
     setClientInfo(selectedClientInfo);
   };
-  
-  // Vérifier le solde disponible pour le retrait
-const checkBalance = async () => {
+
+  // Vérifier le solde pour retrait
+  const checkBalance = async () => {
     if (!selectedClient || !amount || parseFloat(amount) <= 0) return false;
     
     try {
       setBalanceChecking(true);
       setError(null);
       
-      // Note: cette fonction pourrait aussi être implémentée dans useOfflineSync
-      // mais comme elle est uniquement pour la vérification, on peut continuer à utiliser l'API directe
-      const response = await verifyBalance({
+      // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
+      const response = await transactionService.verifyBalance({
         clientId: selectedClient,
         montant: parseFloat(amount)
       });
       
-      if (!response.sufficient) {
-        setError(`Solde insuffisant. Solde disponible: ${formatCurrency(response.soldeDisponible)} FCFA`);
+      if (!response.data.sufficient) {
+        setError(`Solde insuffisant. Solde disponible: ${formatCurrency(response.data.soldeDisponible)} FCFA`);
         return false;
       }
       
       return true;
     } catch (err) {
       console.error('Erreur lors de la vérification du solde:', err);
-      setError(err.message || 'Erreur lors de la vérification du solde');
+      setError(err.error || 'Erreur lors de la vérification du solde');
       return false;
     } finally {
       setBalanceChecking(false);
     }
   };
-  
+
   // Soumettre le formulaire
   const handleSubmit = async () => {
     try {
-      // Valider les champs requis
       if (!selectedClient) {
         setError('Veuillez sélectionner un client');
         return;
@@ -172,13 +164,11 @@ const checkBalance = async () => {
         return;
       }
       
-      // Pour les retraits, vérifier le solde disponible
       if (activeTab === 'retrait') {
         const balanceOk = await checkBalance();
         if (!balanceOk) return;
       }
       
-      // Confirmer l'opération
       const operationType = activeTab === 'epargne' ? 'épargne' : 'retrait';
       
       Alert.alert(
@@ -200,45 +190,50 @@ const checkBalance = async () => {
       setError(err.message || 'Erreur lors de la soumission du formulaire');
     }
   };
-  
+
   // Traiter la transaction
-const processTransaction = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    
-    const transactionData = {
-      clientId: selectedClient,
-      collecteurId: user.id,
-      montant: parseFloat(amount),
-      journalId: 3 // TODO: Récupérer le journal actif
-    };
-    
-    let result;
-    if (activeTab === 'epargne') {
-      result = await transactionService.enregistrerEpargne(transactionData);
-    } else {
-      result = await transactionService.effectuerRetrait(transactionData);
+  const processTransaction = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const transactionData = {
+        clientId: selectedClient,
+        collecteurId: user.id,
+        montant: parseFloat(amount),
+        journalId: 3 // TODO: Récupérer le journal actif
+      };
+      
+      let result;
+      if (activeTab === 'epargne') {
+        // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
+        result = await transactionService.enregistrerEpargne(transactionData);
+      } else {
+        result = await transactionService.effectuerRetrait(transactionData);
+      }
+      
+      resetForm();
+      
+      Alert.alert(
+        'Succès',
+        result.message || `${activeTab === 'epargne' ? 'Épargne' : 'Retrait'} effectué avec succès`,
+        [
+          { text: 'OK', onPress: () => navigation.navigate('Journal') }
+        ]
+      );
+      
+    } catch (err) {
+      console.error('Erreur transaction:', err);
+      setError(err.error || err.message);
+    } finally {
+      setLoading(false);
     }
-    
-    // Réinitialiser le formulaire
-    resetForm();
-    
-    Alert.alert(
-      'Succès',
-      `${activeTab === 'epargne' ? 'Épargne' : 'Retrait'} effectué avec succès`,
-      [
-        { text: 'OK', onPress: () => navigation.navigate('Journal') }
-      ]
-    );
-    
-  } catch (err) {
-    console.error('Erreur transaction:', err);
-    setError(err.response?.data?.message || err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
+  // Charger les clients au démarrage
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
   
   // Rendu des onglets
   const renderTabs = () => (

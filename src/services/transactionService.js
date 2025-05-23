@@ -1,55 +1,59 @@
-import axiosInstance from '../api/axiosConfig';
+import BaseApiService from './base/BaseApiService';
 
-class TransactionService {
-  // Enregistrer une épargne
+class TransactionService extends BaseApiService {
+  constructor() {
+    super();
+  }
+
+  // GARDER TOUTES VOS MÉTHODES EXISTANTES + AJOUTER NOUVELLES
   async enregistrerEpargne(data) {
     try {
-      console.log('📱 Appel API: POST /mouvements/epargne', data);
-      const response = await axiosInstance.post('/mouvements/epargne', data);
-      console.log('✅ Épargne enregistrée:', response.data);
-      return response.data;
+      console.log('📱 API: POST /mouvements/epargne', data);
+      const response = await this.axios.post('/mouvements/epargne', data);
+      return this.formatResponse(response, 'Épargne enregistrée avec succès');
     } catch (error) {
-      console.error('❌ Erreur épargne:', error.response || error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de l\'enregistrement de l\'épargne');
     }
   }
 
-  // Effectuer un retrait
   async effectuerRetrait(data) {
     try {
-      console.log('📱 Appel API: POST /mouvements/retrait', data);
-      const response = await axiosInstance.post('/mouvements/retrait', data);
-      console.log('✅ Retrait effectué:', response.data);
-      return response.data;
+      console.log('📱 API: POST /mouvements/retrait', data);
+      const response = await this.axios.post('/mouvements/retrait', data);
+      return this.formatResponse(response, 'Retrait effectué avec succès');
     } catch (error) {
-      console.error('❌ Erreur retrait:', error.response || error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors du retrait');
     }
   }
 
-  // Récupérer les mouvements d'un journal
   async getMouvementsByJournal(journalId) {
     try {
-      console.log('📱 Appel API: GET /mouvements/journal/', journalId);
-      const response = await axiosInstance.get(`/mouvements/journal/${journalId}`);
-      console.log('✅ Mouvements récupérés:', response.data);
-      return response.data;
+      console.log('📱 API: GET /mouvements/journal/', journalId);
+      const response = await this.axios.get(`/mouvements/journal/${journalId}`);
+      return this.formatResponse(response, 'Mouvements récupérés');
     } catch (error) {
-      console.error('❌ Erreur mouvements:', error.response || error);
-      throw error;
+      return this.handleError(error, 'Erreur lors de la récupération des mouvements');
     }
   }
 
-  // Récupérer les transactions du collecteur
   async getTransactionsByCollecteur(collecteurId) {
     try {
-      console.log('📱 Appel API: GET /mouvements/collecteur/', collecteurId);
-      const response = await axiosInstance.get(`/mouvements/collecteur/${collecteurId}`);
-      console.log('✅ Transactions collecteur:', response.data);
-      return response.data;
+      console.log('📱 API: GET /mouvements/collecteur/', collecteurId);
+      const response = await this.axios.get(`/mouvements/collecteur/${collecteurId}`);
+      return this.formatResponse(response, 'Transactions collecteur récupérées');
     } catch (error) {
-      console.error('❌ Erreur transactions:', error.response || error);
-      throw error;
+      return this.handleError(error, 'Erreur lors de la récupération des transactions');
+    }
+  }
+
+  // NOUVELLE MÉTHODE POUR VÉRIFIER LE SOLDE
+  async verifyBalance(data) {
+    try {
+      console.log('📱 API: POST /mouvements/verify-balance', data);
+      const response = await this.axios.post('/mouvements/verify-balance', data);
+      return this.formatResponse(response, 'Solde vérifié');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la vérification du solde');
     }
   }
 }

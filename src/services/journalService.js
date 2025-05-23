@@ -1,62 +1,66 @@
-import ApiService from './api';
+import BaseApiService from './base/BaseApiService';
 
-class JournalService {
-  // Créer un nouveau journal
+class JournalService extends BaseApiService {
+  constructor() {
+    super();
+  }
+
+  // GARDER TOUTES VOS MÉTHODES EXISTANTES + UTILISER LES NOUVELLES MÉTHODES DE BASE
   async createJournal(data) {
     try {
-      return await ApiService.post('/journaux', {
+      const response = await this.axios.post('/journaux', {
         dateDebut: data.dateDebut,
         dateFin: data.dateFin,
         collecteurId: data.collecteurId,
       });
+      return this.formatResponse(response, 'Journal créé avec succès');
     } catch (error) {
       console.error('Error creating journal:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la création du journal');
     }
   }
 
-  // Consulter les journaux d'un collecteur
   async getJournauxByCollecteur(collecteurId, dateDebut, dateFin) {
     try {
-      const params = {
-        dateDebut,
-        dateFin,
-      };
+      const params = {};
+      if (dateDebut) params.dateDebut = dateDebut;
+      if (dateFin) params.dateFin = dateFin;
       
-      return await ApiService.get(`/journaux/collecteur/${collecteurId}`, params);
+      const response = await this.axios.get(`/journaux/collecteur/${collecteurId}`, { params });
+      return this.formatResponse(response, 'Journaux récupérés');
     } catch (error) {
       console.error('Error fetching journaux:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la récupération des journaux');
     }
   }
 
-  // Obtenir le détail d'un journal
   async getJournalById(journalId) {
     try {
-      return await ApiService.get(`/journaux/${journalId}`);
+      const response = await this.axios.get(`/journaux/${journalId}`);
+      return this.formatResponse(response, 'Journal récupéré');
     } catch (error) {
       console.error('Error fetching journal details:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la récupération du journal');
     }
   }
 
-  // Clôturer un journal
   async cloturerJournal(journalId) {
     try {
-      return await ApiService.post(`/journaux/cloture?journalId=${journalId}`);
+      const response = await this.axios.post(`/journaux/cloture?journalId=${journalId}`);
+      return this.formatResponse(response, 'Journal clôturé avec succès');
     } catch (error) {
       console.error('Error closing journal:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la clôture du journal');
     }
   }
 
-  // Obtenir le journal actif d'un collecteur
   async getJournalActif(collecteurId) {
     try {
-      return await ApiService.get(`/journaux/collecteur/${collecteurId}/actif`);
+      const response = await this.axios.get(`/journaux/collecteur/${collecteurId}/actif`);
+      return this.formatResponse(response, 'Journal actif récupéré');
     } catch (error) {
       console.error('Error fetching journal actif:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la récupération du journal actif');
     }
   }
 }

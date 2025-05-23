@@ -1,6 +1,6 @@
 // src/hooks/useTransactions.js
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import TransactionService from '../services/transactionService';
+import { transactionService } from '../../services';
 import { useErrorHandler } from './useErrorHandler';
 import { useNetInfo } from '@react-native-community/netinfo';
 

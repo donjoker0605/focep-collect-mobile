@@ -1,6 +1,6 @@
 // src/hooks/useCollecteurs.js
 import { useState, useEffect, useCallback } from 'react';
-import CollecteurService from '../services/collecteurService';
+import { collecteurService } from '../../services';
 import { useErrorHandler } from './useErrorHandler'; // Nouveau hook de gestion d'erreurs
 
 export const useCollecteurs = () => {

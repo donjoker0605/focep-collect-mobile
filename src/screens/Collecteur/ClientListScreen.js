@@ -20,7 +20,7 @@ import Button from '../../components/Button/Button';
 import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
-import clientService from '../../services/clientService';
+import { clientService } from '../../services';
 
 
 const ClientListScreen = ({ navigation }) => {

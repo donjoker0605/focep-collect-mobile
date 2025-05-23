@@ -26,7 +26,7 @@ import {
 } from '../../components';
 
 // Services
-import { fetchJournalTransactions, closeJournal } from '../../api/transaction';
+import { journalService } from '../../services';
 
 // Hooks
 import { useAuth } from '../../hooks/useAuth';

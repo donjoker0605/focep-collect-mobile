@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as HapticsCompat from '../../utils/haptics';
+import { transferService } from '../../services';
 
 // Components
 import {

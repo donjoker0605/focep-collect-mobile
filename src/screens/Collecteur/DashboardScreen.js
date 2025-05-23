@@ -23,7 +23,7 @@ import {
 } from '../../components';
 
 // Services et Hooks
-import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
+import { collecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
 
