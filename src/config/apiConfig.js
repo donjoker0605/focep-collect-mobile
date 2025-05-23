@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export const API_CONFIG = {
-  baseURL: __DEV__ ? 'http://192.168.88.74:8080' : 'https://api.votredomaine.com',
+  baseURL: __DEV__ ? 'http://192.168.88.115:8080' : 'https://api.votredomaine.com',
   timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,

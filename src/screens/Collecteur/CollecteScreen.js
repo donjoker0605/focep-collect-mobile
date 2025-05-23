@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import transactionService from '../../services/transactionService';
-import clientService from '../../services/clientService';
+import ApiService from '../../services/apiService';
 
 // Components
 import { 

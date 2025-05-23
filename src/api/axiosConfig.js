@@ -6,7 +6,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 // Instance Axios avec configuration
 const axiosInstance = axios.create({
-  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.88.74:8080/api
+  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.88.115:8080/api
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
