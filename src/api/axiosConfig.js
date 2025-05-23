@@ -6,7 +6,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 // Instance Axios avec configuration
 const axiosInstance = axios.create({
-  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.88.229:8080/api
+  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.88.74:8080/api
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
@@ -17,9 +17,9 @@ const axiosInstance = axios.create({
 // Intercepteur pour ajouter le token JWT à chaque requête
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // ✅ CORRECTION CRITIQUE : Nettoyer l'URL pour éviter /api/api/
+    // CORRECTION : Nettoyer l'URL
     if (config.url?.startsWith('/api/')) {
-      config.url = config.url.substring(4); // Supprimer /api/ du début
+      config.url = config.url.substring(4);
     }
     
     // Ajouter un identifiant unique à chaque requête pour le suivi
@@ -35,6 +35,7 @@ axiosInstance.interceptors.request.use(
     }
     
     // Vérifier la connexion internet
+	/*
     try {
       const netInfo = await NetInfo.fetch();
       if (!netInfo.isConnected) {
@@ -48,32 +49,23 @@ axiosInstance.interceptors.request.use(
     } catch (error) {
       console.warn('Erreur lors de la vérification de la connexion:', error);
     }
+	*/
     
     // Ne pas ajouter de token pour les requêtes d'authentification
-    const publicRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password', '/public/'];
+     const publicRoutes = ['/auth/login', '/auth/register', '/public/'];
     const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
     
-    if (isPublicRoute) {
-      console.log(`🔵 No token needed for ${config.url}`);
-      return config;
-    }
-    
-    // Récupérer le token depuis le stockage
-    try {
+    if (!isPublicRoute) {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('✅ Token ajouté pour:', config.url);
       }
-    } catch (error) {
-      console.warn('Erreur lors de la récupération du token:', error);
     }
     
     return config;
   },
-  (error) => {
-    console.error('❌ REQUEST', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Intercepteur pour gérer les erreurs et le rafraîchissement de tokens

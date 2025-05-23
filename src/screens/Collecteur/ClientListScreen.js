@@ -20,74 +20,21 @@ import Button from '../../components/Button/Button';
 import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
+import clientService from '../../services/clientService';
 
-// Données fictives pour la démo
-const mockClients = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Marie',
-    numeroCni: 'CM12345678',
-    numeroCompte: '37305D0100015254',
-    telephone: '+237 655 123 456',
-    solde: 124500.0,
-    status: 'active', // active, inactive
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Jean',
-    numeroCni: 'CM23456789',
-    numeroCompte: '37305D0100015255',
-    telephone: '+237 677 234 567',
-    solde: 56700.0,
-    status: 'active',
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Sophie',
-    numeroCni: 'CM34567890',
-    numeroCompte: '37305D0100015256',
-    telephone: '+237 698 345 678',
-    solde: 83200.0,
-    status: 'inactive',
-  },
-  {
-    id: 4,
-    nom: 'Bernard',
-    prenom: 'Michel',
-    numeroCni: 'CM45678901',
-    numeroCompte: '37305D0100015257',
-    telephone: '+237 651 456 789',
-    solde: 42100.0,
-    status: 'active',
-  },
-  {
-    id: 5,
-    nom: 'Thomas',
-    prenom: 'Laura',
-    numeroCni: 'CM56789012',
-    numeroCompte: '37305D0100015258',
-    telephone: '+237 677 567 890',
-    solde: 95000.0,
-    status: 'active',
-  },
-];
 
 const ClientListScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const { isOnline } = useOfflineSync();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [clients, setClients] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, active, inactive
+  const [filter, setFilter] = useState('all');
   const [error, setError] = useState(null);
 
-  // Fonction de chargement des clients - DÉFINIE AVANT UTILISATION
+  // Charger les VRAIS clients depuis l'API
   const loadClients = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) {
@@ -98,33 +45,53 @@ const ClientListScreen = ({ navigation }) => {
       
       setError(null);
       
-      // Pour l'instant, utilisons les données mockées
-      const clientsData = mockClients;
+      // Appel API réel
+      console.log('🔄 Chargement des clients pour collecteur:', user.id);
+      const clientsData = await clientService.getClientsByCollecteur(user.id);
       
-      // Gérer le cas hors ligne
-      if (!isOnline) {
-        setError('Mode hors ligne. Affichage des données en cache.');
-      }
+      // S'assurer que c'est un tableau
+      const clientsList = Array.isArray(clientsData) ? clientsData : [];
+      console.log(`✅ ${clientsList.length} clients chargés`);
       
-      setClients(clientsData);
+      setClients(clientsList);
       
     } catch (err) {
-      console.error('Erreur lors du chargement des clients:', err);
-      setError('Erreur lors du chargement des clients: ' + (err.message || 'Erreur inconnue'));
+      console.error('❌ Erreur chargement clients:', err);
+      setError(err.message || 'Erreur lors du chargement des clients');
+      setClients([]); // Tableau vide en cas d'erreur
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [isOnline]);
+  }, [user.id]);
 
   // Charger les clients au montage du composant et à chaque changement de statut de connexion
   useEffect(() => {
-    loadClients();
-  }, [loadClients]);
+    if (user?.id) {
+      loadClients();
+    }
+  }, [user?.id, loadClients]);
 
   // Filtrer les clients lorsque les filtres ou la recherche changent
   useEffect(() => {
-    filterClients();
+    let filtered = clients;
+
+    if (filter !== 'all') {
+      filtered = filtered.filter(client => 
+        filter === 'active' ? client.valide : !client.valide
+      );
+    }
+
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(client =>
+        client.nom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        client.prenom?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        client.numeroCni?.includes(searchQuery) ||
+        client.telephone?.includes(searchQuery)
+      );
+    }
+
+    setFilteredClients(filtered);
   }, [searchQuery, filter, clients]);
 
   // Fonction de filtrage des clients
@@ -232,14 +199,16 @@ const ClientListScreen = ({ navigation }) => {
       <View style={styles.clientHeader}>
         <View style={styles.clientInfo}>
           <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
-          <Text style={styles.clientAccount}>{item.numeroCompte}</Text>
+          <Text style={styles.clientAccount}>
+            {item.numeroCompte || `Client #${item.id}`}
+          </Text>
         </View>
         <View style={[
           styles.statusBadge, 
-          item.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+          item.valide ? styles.activeBadge : styles.inactiveBadge
         ]}>
           <Text style={styles.statusText}>
-            {item.status === 'active' ? 'Actif' : 'Inactif'}
+            {item.valide ? 'Actif' : 'Inactif'}
           </Text>
         </View>
       </View>
@@ -249,16 +218,12 @@ const ClientListScreen = ({ navigation }) => {
           <Ionicons name="id-card-outline" size={16} color={theme.colors.textLight} />
           <Text style={styles.detailText}>{item.numeroCni}</Text>
         </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.telephone}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="wallet-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>
-            Solde: <Text style={styles.soldeText}>{item.solde.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')} FCFA</Text>
-          </Text>
-        </View>
+        {item.telephone && (
+          <View style={styles.detailItem}>
+            <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
+            <Text style={styles.detailText}>{item.telephone}</Text>
+          </View>
+        )}
       </View>
       
       <View style={styles.actionButtons}>
@@ -268,33 +233,6 @@ const ClientListScreen = ({ navigation }) => {
         >
           <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.actionButtonText}>Voir</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleEditClient(item)}
-        >
-          <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Modifier</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleToggleStatus(item)}
-        >
-          <Ionicons 
-            name={item.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"} 
-            size={18} 
-            color={item.status === 'active' ? theme.colors.error : theme.colors.success} 
-          />
-          <Text 
-            style={[
-              styles.actionButtonText, 
-              { color: item.status === 'active' ? theme.colors.error : theme.colors.success }
-            ]}
-          >
-            {item.status === 'active' ? 'Désactiver' : 'Activer'}
-          </Text>
         </TouchableOpacity>
       </View>
     </Card>

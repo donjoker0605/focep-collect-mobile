@@ -15,6 +15,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import transactionService from '../../services/transactionService';
+import clientService from '../../services/clientService';
 
 // Components
 import { 
@@ -72,36 +74,28 @@ const CollecteScreen = ({ navigation, route }) => {
   
   // Charger la liste des clients
   const loadClients = useCallback(async () => {
-    try {
-      setClientsLoading(true);
-      setError(null);
-      
-      const response = await getClients({ collecteurId: user.id });
-      
-      // Formater les options des clients pour le sélecteur
-      const clientOptions = response.map(client => ({
-        label: `${client.prenom} ${client.nom} (${client.numerCompte})`,
-        value: client.id,
-        data: client
-      }));
-      
-      setClients(clientOptions);
-      
-      // Si un client est présélectionné, le trouver dans la liste
-      if (preSelectedClient) {
-        const foundClient = clientOptions.find(client => client.value === preSelectedClient.id);
-        if (foundClient) {
-          setSelectedClient(foundClient.value);
-          setClientInfo(foundClient.data);
-        }
-      }
-    } catch (err) {
-      console.error('Erreur lors du chargement des clients:', err);
-      setError(err.message || 'Erreur lors du chargement des clients');
-    } finally {
-      setClientsLoading(false);
-    }
-  }, [user.id, preSelectedClient]);
+  try {
+    setClientsLoading(true);
+    setError(null);
+    
+    const clientsData = await clientService.getClientsByCollecteur(user.id);
+    const clientsList = Array.isArray(clientsData) ? clientsData : [];
+    
+    // Formater pour le SelectInput
+    const clientOptions = clientsList.map(client => ({
+      label: `${client.prenom} ${client.nom} ${client.numeroCni ? `(${client.numeroCni})` : ''}`,
+      value: client.id,
+      data: client
+    }));
+    
+    setClients(clientOptions);
+  } catch (err) {
+    console.error('Erreur chargement clients:', err);
+    setError(err.message);
+  } finally {
+    setClientsLoading(false);
+  }
+}, [user.id]);
   
   // Charger les clients au démarrage
   useEffect(() => {
@@ -210,58 +204,42 @@ const checkBalance = async () => {
   
   // Traiter la transaction
 const processTransaction = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const transaction = {
-        clientId: selectedClient,
-        collecteurId: user.id,
-        montant: parseFloat(amount),
-        type: activeTab === 'epargne' ? 'EPARGNE' : 'RETRAIT',
-        description: description || undefined
-      };
-      
-      // Utilisation de la méthode du hook useOfflineSync
-      const result = await saveTransaction(transaction);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Erreur lors de l\'enregistrement de la transaction');
-      }
-      
-      const response = result.data;
-      
-      // Réinitialiser le formulaire
-      resetForm();
-      
-      // Afficher un message de succès
-      const operationType = activeTab === 'epargne' ? 'épargne' : 'retrait';
-      Alert.alert(
-        'Succès',
-        `L'opération de ${operationType} a été effectuée avec succès.`,
-        [
-          {
-            text: 'Voir le détail',
-            onPress: () => navigation.navigate('CollecteDetail', { transaction: response })
-          },
-          {
-            text: 'OK'
-          }
-        ]
-      );
-      
-      // Vibration de succès sécurisée pour le web
-      triggerHaptic('success');
-    } catch (err) {
-      console.error('Erreur lors du traitement de la transaction:', err);
-      setError(err.message || 'Erreur lors du traitement de la transaction');
-      
-      // Vibration d'erreur sécurisée pour le web
-      triggerHaptic('error');
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    setError(null);
+    
+    const transactionData = {
+      clientId: selectedClient,
+      collecteurId: user.id,
+      montant: parseFloat(amount),
+      journalId: 3 // TODO: Récupérer le journal actif
+    };
+    
+    let result;
+    if (activeTab === 'epargne') {
+      result = await transactionService.enregistrerEpargne(transactionData);
+    } else {
+      result = await transactionService.effectuerRetrait(transactionData);
     }
-  };
+    
+    // Réinitialiser le formulaire
+    resetForm();
+    
+    Alert.alert(
+      'Succès',
+      `${activeTab === 'epargne' ? 'Épargne' : 'Retrait'} effectué avec succès`,
+      [
+        { text: 'OK', onPress: () => navigation.navigate('Journal') }
+      ]
+    );
+    
+  } catch (err) {
+    console.error('Erreur transaction:', err);
+    setError(err.response?.data?.message || err.message);
+  } finally {
+    setLoading(false);
+  }
+};
   
   // Rendu des onglets
   const renderTabs = () => (

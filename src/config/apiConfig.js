@@ -2,37 +2,13 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const PROD_API_URL = 'https://api.votredomaine.com';
-
-// Fonction utilitaire pour obtenir l'URL de base de manière sécurisée
-const getBaseApiUrl = () => {
-  try {
-    if (__DEV__) {
-      // En développement
-      if (Platform.OS === 'android') {
-        // CORRECTION : Utiliser votre IP actuelle des logs au lieu de 10.0.2.2
-        return 'http://192.168.88.229:8080/api';
-      } else {
-        // Pour iOS simulator et Expo Go
-        return 'http://192.168.88.229:8080/api';
-      }
-    } else {
-      // En production
-      return PROD_API_URL;
-    }
-  } catch (error) {
-    console.warn('Erreur lors de la détermination de l\'URL de base:', error);
-    // URL par défaut en cas d'erreur - CORRIGÉE avec votre IP
-    return 'http://192.168.88.229:8080/api';
-  }
-};
-
 export const API_CONFIG = {
-  baseURL: Constants.expoConfig?.extra?.apiUrl || getBaseApiUrl(),
-  timeout: 25000,
+  baseURL: __DEV__ ? 'http://192.168.88.74:8080' : 'https://api.votredomaine.com',
+  timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,
 };
+
 
 export const STORAGE_KEYS = {
   JWT_TOKEN: 'focep_jwt_token',
