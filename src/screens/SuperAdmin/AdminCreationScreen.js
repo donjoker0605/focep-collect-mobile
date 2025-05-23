@@ -49,13 +49,6 @@ const adminSchema = yup.object().shape({
     .required('La confirmation du mot de passe est requise'),
 });
 
-// Données fictives pour la démo
-const agences = [
-  { id: 1, nomAgence: 'Agence Centrale' },
-  { id: 2, nomAgence: 'Agence Nord' },
-  { id: 3, nomAgence: 'Agence Sud' },
-  { id: 4, nomAgence: 'Agence Est' },
-];
 
 const AdminCreationScreen = ({ navigation, route }) => {
   const isEditMode = route.params?.mode === 'edit';
@@ -105,25 +98,6 @@ const AdminCreationScreen = ({ navigation, route }) => {
 
   const onSubmit = (data) => {
     setLoading(true);
-    
-    // Simuler un appel API
-    setTimeout(() => {
-      setLoading(false);
-      
-      if (isEditMode) {
-        Alert.alert(
-          "Succès",
-          `L'administrateur ${data.prenom} ${data.nom} a été mis à jour avec succès.`,
-          [{ text: "OK", onPress: () => navigation.goBack() }]
-        );
-      } else {
-        Alert.alert(
-          "Succès",
-          `L'administrateur ${data.prenom} ${data.nom} a été créé avec succès.`,
-          [{ text: "OK", onPress: () => navigation.goBack() }]
-        );
-      }
-    }, 1500);
   };
 
   const handleSelectAgence = (agence) => {

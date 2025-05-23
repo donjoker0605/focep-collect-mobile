@@ -23,7 +23,7 @@ import {
 
 // Hooks et API
 import { useAuth } from '../../hooks/useAuth';
-import { getTransactionDetails } from '../../api/transaction';
+import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 
 // Utils et Theme
 import theme from '../../theme';

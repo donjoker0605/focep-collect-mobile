@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { Card, Title, Paragraph, Button } from 'react-native-paper';
-import { collecteurService } from '../../api/collecteurService';
+import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
 
 export default function CollecteurHomeScreen({ navigation }) {

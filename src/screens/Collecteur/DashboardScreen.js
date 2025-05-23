@@ -1,470 +1,331 @@
-// src/screens/Collecteur/DashboardScreen.js - IMPORTS CORRIGÉS
+// src/screens/Collecteur/DashboardScreen.js - VERSION UNIFIÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
+  Alert,
+  TouchableOpacity
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-
-// ✅ IMPORTS CORRIGÉS - Named imports
-import { getClients } from '../../api/client';
-import { fetchJournalTransactions, getCollecteurDashboard } from '../../api/transaction';
-import { getNotifications } from '../../api/notification';
 
 // Components
-import { Card, EmptyState } from '../../components';
+import {
+  Header,
+  Card,
+  StatCard,
+  TransactionItem,
+  LoadingSpinner,
+  EmptyState
+} from '../../components';
 
-// Services et hooks
+// Services et Hooks
+import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
-import { formatCurrency } from '../../utils/formatters';
 
 const DashboardScreen = ({ navigation }) => {
-  const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const isFocused = useIsFocused();
+  const { user } = useAuth();
   
   // États
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dashboard, setDashboard] = useState({
-    soldeTotal: 0,
-    totalRetraits: 0,
-    totalClients: 0,
-    totalTransactions: 0,
-    totalEpargnes: 0,
-    unreadNotifications: 0
-  });
-  const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState(null);
-  
-  // Fonction pour charger les données du tableau de bord
-  const loadDashboard = useCallback(async (isRefreshing = false) => {
+
+  // Charger les données du dashboard
+  const loadDashboard = useCallback(async () => {
+    if (!user?.id) {
+      setError('Utilisateur non authentifié');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (isRefreshing) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      
       setError(null);
       
-      // Vérifier que l'utilisateur existe
-      if (!user?.id) {
-        throw new Error('Utilisateur non trouvé');
-      }
+      // ✅ UTILISATION DU SERVICE UNIFIÉ
+      const response = await ApiService.getCollecteurDashboard(user.id);
       
-      console.log('🔄 Chargement dashboard pour collecteur:', user.id);
-      
-      // ✅ APPELS API CORRIGÉS
-      const [dashboardResult, clientsResult, transactionsResult, notificationsResult] = await Promise.allSettled([
-        getCollecteurDashboard(user.id),
-        getClients({ collecteurId: user.id, page: 0, size: 1 }),
-        fetchJournalTransactions({ collecteurId: user.id, page: 0, size: 5 }),
-        getNotifications(0, 1)
-      ]);
-      
-      // Log des résultats pour debugging
-      console.log('📊 Résultats API:', {
-        dashboard: dashboardResult.status,
-        clients: clientsResult.status,
-        transactions: transactionsResult.status,
-        notifications: notificationsResult.status
-      });
-      
-      // Traiter les résultats avec fallbacks
-      let dashboardData = {
-        soldeTotal: 0,
-        totalRetraits: 0,
-        totalClients: 0,
-        totalTransactions: 0,
-        totalEpargnes: 0,
-        unreadNotifications: 0
-      };
-      
-      // Dashboard
-      if (dashboardResult.status === 'fulfilled' && dashboardResult.value.success) {
-        dashboardData = { ...dashboardData, ...dashboardResult.value.data };
-        console.log('✅ Dashboard chargé:', dashboardResult.value.data);
-      } else {
-        console.warn('⚠️ Dashboard non disponible:', dashboardResult.reason?.message || 'Erreur inconnue');
-      }
-      
-      // Clients
-      if (clientsResult.status === 'fulfilled' && clientsResult.value.success) {
-        dashboardData.totalClients = clientsResult.value.totalElements || 0;
-        console.log('✅ Clients chargés:', clientsResult.value.totalElements);
-      } else {
-        console.warn('⚠️ Clients non disponibles:', clientsResult.reason?.message || 'Erreur inconnue');
-      }
-      
-      // Transactions récentes
-      if (transactionsResult.status === 'fulfilled' && transactionsResult.value.success) {
-        const transactionsData = transactionsResult.value.data || [];
-        setTransactions(transactionsData);
-        console.log('✅ Transactions chargées:', transactionsData.length);
+      if (response.success) {
+        setDashboard(response.data);
         
-        // Si pas de dashboard dédié, calculer depuis les transactions
-        if (dashboardResult.status === 'rejected') {
-          const totals = transactionsData.reduce((acc, t) => {
-            if (t.type === 'EPARGNE') {
-              acc.totalEpargnes += t.montant || 0;
-            } else if (t.type === 'RETRAIT') {
-              acc.totalRetraits += t.montant || 0;
-            }
-            return acc;
-          }, { totalEpargnes: 0, totalRetraits: 0 });
-          
-          dashboardData.totalEpargnes = totals.totalEpargnes;
-          dashboardData.totalRetraits = totals.totalRetraits;
-          dashboardData.soldeTotal = totals.totalEpargnes - totals.totalRetraits;
-          dashboardData.totalTransactions = transactionsData.length;
+        // Afficher un avertissement si des données par défaut sont utilisées
+        if (response.warning) {
+          console.warn('Dashboard:', response.warning);
         }
       } else {
-        console.warn('⚠️ Transactions non disponibles:', transactionsResult.reason?.message || 'Erreur inconnue');
+        setError(response.error || 'Erreur lors du chargement du dashboard');
       }
-      
-      // Notifications
-      if (notificationsResult.status === 'fulfilled') {
-        dashboardData.unreadNotifications = notificationsResult.value.unreadCount || 0;
-        console.log('✅ Notifications chargées:', notificationsResult.value.unreadCount);
-      } else {
-        console.warn('⚠️ Notifications non disponibles:', notificationsResult.reason?.message || 'Erreur inconnue');
-      }
-      
-      setDashboard(dashboardData);
-      console.log('📈 Dashboard final:', dashboardData);
-      
     } catch (err) {
-      console.error('❌ Erreur lors du chargement du tableau de bord:', err);
-      setError(err.message || 'Erreur lors du chargement des données');
+      console.error('Erreur dashboard:', err);
+      setError(err.message || 'Erreur lors du chargement du dashboard');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [user?.id]);
-  
-  // Charger les données au premier chargement et à chaque focus
+
+  // Rafraîchir les données
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
+  }, [loadDashboard]);
+
+  // Charger les données au montage
   useEffect(() => {
-    if (isFocused && user?.id) {
-      loadDashboard();
-    }
-  }, [isFocused, loadDashboard, user?.id]);
-  
-  // Fonction pour rafraîchir les données
-  const handleRefresh = () => {
-    loadDashboard(true);
+    loadDashboard();
+  }, [loadDashboard]);
+
+  // Naviguer vers un écran spécifique
+  const navigateToScreen = (screenName, params = {}) => {
+    navigation.navigate(screenName, params);
   };
-  
-  // Rendre l'en-tête du tableau de bord
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.profileSection}>
+
+  // Affichage de l'état de chargement
+  if (loading) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Header
+          title="Tableau de bord"
+          showNotificationButton={true}
+          onNotificationPress={() => navigateToScreen('Notifications')}
+        />
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size="large" />
+          <Text style={styles.loadingText}>Chargement du dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Affichage de l'erreur
+  if (error) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Header
+          title="Tableau de bord"
+          showNotificationButton={true}
+          onNotificationPress={() => navigateToScreen('Notifications')}
+        />
+        <View style={styles.errorContainer}>
+          <EmptyState
+            type="error"
+            title="Erreur"
+            message={error}
+            buttonText="Réessayer"
+            onButtonPress={loadDashboard}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <Header
+        title="Tableau de bord"
+        showNotificationButton={true}
+        onNotificationPress={() => navigateToScreen('Notifications')}
+      />
+      
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Message de bienvenue */}
         <View style={styles.welcomeContainer}>
-          <Text style={styles.greeting}>Bonjour,</Text>
-          <Text style={styles.userName}>
-            {user?.prenom || 'Collecteur'} {user?.nom || ''}
+          <Text style={styles.welcomeText}>
+            Bonjour, {user?.prenom || user?.nom || 'Collecteur'}
+          </Text>
+          <Text style={styles.welcomeSubtext}>
+            Voici votre résumé d'activité
           </Text>
         </View>
-        
-        <TouchableOpacity 
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-          {dashboard?.unreadNotifications > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {dashboard.unreadNotifications > 9 ? '9+' : dashboard.unreadNotifications.toString()}
+
+        {/* Statistiques principales */}
+        <View style={styles.statsContainer}>
+          <StatCard
+            title="Total Clients"
+            value={dashboard?.totalClients || 0}
+            icon="people"
+            color={theme.colors.primary}
+            onPress={() => navigateToScreen('Clients')}
+          />
+          
+          <StatCard
+            title="Épargne Totale"
+            value={`${(dashboard?.totalEpargne || 0).toLocaleString()} FCFA`}
+            icon="wallet"
+            color={theme.colors.success}
+            onPress={() => navigateToScreen('Collecte', { selectedTab: 'epargne' })}
+          />
+          
+          <StatCard
+            title="Retraits Totaux"
+            value={`${(dashboard?.totalRetraits || 0).toLocaleString()} FCFA`}
+            icon="cash"
+            color={theme.colors.warning}
+            onPress={() => navigateToScreen('Collecte', { selectedTab: 'retrait' })}
+          />
+          
+          <StatCard
+            title="Solde Total"
+            value={`${(dashboard?.soldeTotal || 0).toLocaleString()} FCFA`}
+            icon="analytics"
+            color={theme.colors.info}
+            onPress={() => navigateToScreen('Journal')}
+          />
+        </View>
+
+        {/* Statistiques du jour */}
+        <Card style={styles.todayStatsCard}>
+          <Text style={styles.cardTitle}>Activité du jour</Text>
+          
+          <View style={styles.todayStatsRow}>
+            <View style={styles.todayStatItem}>
+              <Text style={styles.todayStatValue}>
+                {dashboard?.transactionsAujourdhui || 0}
               </Text>
+              <Text style={styles.todayStatLabel}>Transactions</Text>
             </View>
-          )}
-        </TouchableOpacity>
-      </View>
-      
-      <Text style={styles.date}>
-        {format(new Date(), 'EEEE d MMMM yyyy', { locale: fr })}
-      </Text>
-    </View>
-  );
-  
-  // Rendre la section des soldes
-  const renderBalances = () => (
-    <View style={styles.balanceSection}>
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceTitle}>Total Collecté</Text>
-        <Text style={styles.balanceAmount}>
-          {formatCurrency(dashboard?.soldeTotal || 0)} FCFA
-        </Text>
-      </View>
-      
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceTitle}>Total Retrait</Text>
-        <Text style={[styles.balanceAmount, styles.balanceNegative]}>
-          -{formatCurrency(dashboard?.totalRetraits || 0)} FCFA
-        </Text>
-      </View>
-    </View>
-  );
-  
-  // Rendre la section des statistiques
-  const renderStats = () => (
-    <View style={styles.statsSection}>
-      <View style={styles.statsRow}>
-        <Card style={styles.statCard}>
-          <View style={styles.statContent}>
-            <Ionicons name="people" size={24} color={theme.colors.info} />
-            <Text style={styles.statValue}>{dashboard?.totalClients || 0}</Text>
-            <Text style={styles.statLabel}>Clients</Text>
+            
+            <View style={styles.todayStatItem}>
+              <Text style={styles.todayStatValue}>
+                {(dashboard?.montantEpargneAujourdhui || 0).toLocaleString()}
+              </Text>
+              <Text style={styles.todayStatLabel}>Épargne (FCFA)</Text>
+            </View>
+            
+            <View style={styles.todayStatItem}>
+              <Text style={styles.todayStatValue}>
+                {(dashboard?.montantRetraitAujourdhui || 0).toLocaleString()}
+              </Text>
+              <Text style={styles.todayStatLabel}>Retraits (FCFA)</Text>
+            </View>
           </View>
         </Card>
-       
-        <Card style={styles.statCard}>
-          <View style={styles.statContent}>
-            <Ionicons name="swap-horizontal" size={24} color={theme.colors.primary} />
-            <Text style={styles.statValue}>{dashboard?.totalTransactions || 0}</Text>
-            <Text style={styles.statLabel}>Opérations</Text>
-          </View>
-        </Card>
-      </View>
-      
-      <View style={styles.statsRow}>
-        <Card style={styles.statCard}>
-          <View style={styles.statContent}>
-            <Ionicons name="arrow-down" size={24} color={theme.colors.success} />
-            <Text style={styles.statValue}>{formatCurrency(dashboard?.totalEpargnes || 0)}</Text>
-            <Text style={styles.statLabel}>Épargnes</Text>
-          </View>
-        </Card>
-       
-        <Card style={styles.statCard}>
-          <View style={styles.statContent}>
-            <Ionicons name="arrow-up" size={24} color={theme.colors.error} />
-            <Text style={styles.statValue}>{formatCurrency(dashboard?.totalRetraits || 0)}</Text>
-            <Text style={styles.statLabel}>Retraits</Text>
-          </View>
-        </Card>
-      </View>
-    </View>
-  );
-  
-  // Rendu des actions rapides
-  const renderQuickActions = () => (
-    <View style={styles.quickActionsSection}>
-      <Text style={styles.sectionTitle}>Actions rapides</Text>
-      
-      <View style={styles.actionsGrid}>
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => navigation.navigate('Collecte', { selectedTab: 'epargne' })}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: `${theme.colors.success}20` }]}>
-            <Ionicons name="arrow-down" size={24} color={theme.colors.success} />
-          </View>
-          <Text style={styles.actionText}>Nouvelle épargne</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => navigation.navigate('Collecte', { selectedTab: 'retrait' })}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: `${theme.colors.error}20` }]}>
-            <Ionicons name="arrow-up" size={24} color={theme.colors.error} />
-          </View>
-          <Text style={styles.actionText}>Nouveau retrait</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => navigation.navigate('Clients')}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: `${theme.colors.info}20` }]}>
-            <Ionicons name="people" size={24} color={theme.colors.info} />
-          </View>
-          <Text style={styles.actionText}>Mes clients</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionItem}
-          onPress={() => navigation.navigate('Journal')}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: `${theme.colors.primary}20` }]}>
-            <Ionicons name="document-text" size={24} color={theme.colors.primary} />
-          </View>
-          <Text style={styles.actionText}>Journal</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-  
-  // Rendre la section des transactions récentes
-  const renderTransactions = () => (
-    <View style={styles.transactionsSection}>
-      <View style={styles.transactionsHeader}>
-        <Text style={styles.sectionTitle}>Transactions récentes</Text>
-        
-        <TouchableOpacity 
-          style={styles.viewAllButton}
-          onPress={() => navigation.navigate('Journal')}
-        >
-          <Text style={styles.viewAllText}>Voir tout</Text>
-          <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
-      
-      {transactions.length === 0 ? (
-        <EmptyState
-          type="empty"
-          title="Aucune transaction"
-          message="Vous n'avez pas encore effectué de transactions."
-          containerStyle={styles.emptyTransactions}
-        />
-      ) : (
-        transactions.map((transaction, index) => (
-          <Card key={transaction.id || index} style={styles.transactionCard}>
-            <View style={styles.transactionRow}>
-              <View style={styles.transactionIcon}>
-                <Ionicons 
-                  name={transaction.type === 'EPARGNE' ? 'arrow-down-circle' : 'arrow-up-circle'} 
-                  size={24} 
-                  color={transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error} 
-                />
-              </View>
-              <View style={styles.transactionInfo}>
-                <Text style={styles.transactionType}>{transaction.type}</Text>
-                <Text style={styles.transactionDate}>
-                  {transaction.dateHeure ? 
-                    format(new Date(transaction.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr }) :
-                    'Date inconnue'
-                  }
-                </Text>
-              </View>
-              <Text style={[
-                styles.transactionAmount,
-                { color: transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
-              ]}>
-                {transaction.type === 'EPARGNE' ? '+' : '-'}{formatCurrency(transaction.montant || 0)} FCFA
+
+        {/* Journal actuel */}
+        {dashboard?.journalActuel && (
+          <Card style={styles.journalCard}>
+            <View style={styles.journalHeader}>
+              <Text style={styles.cardTitle}>Journal actuel</Text>
+              <TouchableOpacity 
+                onPress={() => navigateToScreen('Journal')}
+                style={styles.journalViewButton}
+              >
+                <Text style={styles.journalViewButtonText}>Voir détails</Text>
+                <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.journalInfo}>
+              <Text style={styles.journalStatus}>
+                Statut: {dashboard.journalActuel.statut}
+              </Text>
+              <Text style={styles.journalDate}>
+                Du {new Date(dashboard.journalActuel.dateDebut).toLocaleDateString()} 
+                au {new Date(dashboard.journalActuel.dateFin).toLocaleDateString()}
+              </Text>
+              <Text style={styles.journalBalance}>
+                Solde: {(dashboard.journalActuel.soldeActuel || 0).toLocaleString()} FCFA
               </Text>
             </View>
           </Card>
-        ))
-      )}
-    </View>
-  );
-  
-  // Rendu principal
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {renderHeader()}
-      
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.white} />
-          <Text style={styles.loadingText}>Chargement du tableau de bord...</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.content}>
-          <EmptyState
-            type="error"
-            title="Erreur de chargement"
-            message={error}
-            actionButton
-            actionButtonTitle="Réessayer"
-            onActionButtonPress={handleRefresh}
-          />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[theme.colors.primary]}
-              tintColor={theme.colors.primary}
-            />
-          }
-        >
-          {renderBalances()}
-          {renderStats()}
-          {renderQuickActions()}
-          {renderTransactions()}
+        )}
+
+        {/* Transactions récentes */}
+        <Card style={styles.transactionsCard}>
+          <View style={styles.transactionsHeader}>
+            <Text style={styles.cardTitle}>Transactions récentes</Text>
+            <TouchableOpacity 
+              onPress={() => navigateToScreen('Journal')}
+              style={styles.viewAllButton}
+            >
+              <Text style={styles.viewAllButtonText}>Voir tout</Text>
+            </TouchableOpacity>
+          </View>
           
-          <View style={{ height: 20 }} />
-        </ScrollView>
-      )}
+          {dashboard?.transactionsRecentes?.length > 0 ? (
+            dashboard.transactionsRecentes.slice(0, 5).map((transaction, index) => (
+              <TransactionItem
+                key={transaction.id || index}
+                transaction={transaction}
+                onPress={() => navigateToScreen('TransactionDetail', { transactionId: transaction.id })}
+              />
+            ))
+          ) : (
+            <EmptyState
+              type="no-data"
+              title="Aucune transaction"
+              message="Aucune transaction récente à afficher"
+              icon="swap-horizontal-outline"
+              compact={true}
+            />
+          )}
+        </Card>
+
+        {/* Actions rapides */}
+        <Card style={styles.quickActionsCard}>
+          <Text style={styles.cardTitle}>Actions rapides</Text>
+          
+          <View style={styles.quickActionsGrid}>
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateToScreen('Collecte', { selectedTab: 'epargne' })}
+            >
+              <Ionicons name="add-circle" size={24} color={theme.colors.success} />
+              <Text style={styles.quickActionText}>Épargne</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateToScreen('Collecte', { selectedTab: 'retrait' })}
+            >
+              <Ionicons name="remove-circle" size={24} color={theme.colors.warning} />
+              <Text style={styles.quickActionText}>Retrait</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateToScreen('ClientAddEdit', { mode: 'add' })}
+            >
+              <Ionicons name="person-add" size={24} color={theme.colors.primary} />
+              <Text style={styles.quickActionText}>Nouveau client</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.quickActionButton}
+              onPress={() => navigateToScreen('Journal')}
+            >
+              <Ionicons name="document-text" size={24} color={theme.colors.info} />
+              <Text style={styles.quickActionText}>Journal</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+      </ScrollView>
     </View>
   );
 };
 
-// Styles (gardez vos styles existants)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  profileSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  welcomeContainer: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 14,
-    color: theme.colors.white,
-    opacity: 0.8,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.white,
-  },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: theme.colors.error,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBadgeText: {
-    color: 'white',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  date: {
-    fontSize: 14,
-    color: theme.colors.white,
-    opacity: 0.9,
   },
   content: {
     flex: 1,
@@ -473,160 +334,153 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
+    padding: 16,
+    paddingBottom: 100,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
   },
   loadingText: {
-   marginTop: 16,
-   color: theme.colors.white,
-   fontSize: 16,
- },
- balanceSection: {
-   flexDirection: 'row',
-   justifyContent: 'space-between',
-   marginBottom: 20,
- },
- balanceCard: {
-   flex: 1,
-   backgroundColor: theme.colors.white,
-   borderRadius: 16,
-   padding: 16,
-   marginHorizontal: 6,
-   alignItems: 'center',
-   ...theme.shadows.small,
- },
- balanceTitle: {
-   fontSize: 14,
-   color: theme.colors.textLight,
-   marginBottom: 8,
- },
- balanceAmount: {
-   fontSize: 18,
-   fontWeight: 'bold',
-   color: theme.colors.text,
- },
- balanceNegative: {
-   color: theme.colors.error,
- },
- statsSection: {
-   marginBottom: 24,
- },
- statsRow: {
-   flexDirection: 'row',
-   justifyContent: 'space-between',
-   marginBottom: 12,
- },
- statCard: {
-   flex: 1,
-   marginHorizontal: 6,
-   padding: 16,
- },
- statContent: {
-   alignItems: 'center',
- },
- statValue: {
-   fontSize: 20,
-   fontWeight: 'bold',
-   color: theme.colors.text,
-   marginVertical: 8,
- },
- statLabel: {
-   fontSize: 12,
-   color: theme.colors.textLight,
- },
- sectionTitle: {
-   fontSize: 18,
-   fontWeight: 'bold',
-   color: theme.colors.text,
-   marginBottom: 12,
- },
- quickActionsSection: {
-   marginBottom: 24,
- },
- actionsGrid: {
-   flexDirection: 'row',
-   flexWrap: 'wrap',
-   justifyContent: 'space-between',
- },
- actionItem: {
-   width: '48%',
-   backgroundColor: theme.colors.white,
-   borderRadius: 16,
-   padding: 16,
-   marginBottom: 16,
-   alignItems: 'center',
-   ...theme.shadows.small,
- },
- actionIcon: {
-   width: 50,
-   height: 50,
-   borderRadius: 25,
-   justifyContent: 'center',
-   alignItems: 'center',
-   marginBottom: 12,
- },
- actionText: {
-   fontSize: 14,
-   fontWeight: '500',
-   color: theme.colors.text,
-   textAlign: 'center',
- },
- transactionsSection: {
-   marginBottom: 16,
- },
- transactionsHeader: {
-   flexDirection: 'row',
-   justifyContent: 'space-between',
-   alignItems: 'center',
-   marginBottom: 12,
- },
- viewAllButton: {
-   flexDirection: 'row',
-   alignItems: 'center',
- },
- viewAllText: {
-   fontSize: 14,
-   color: theme.colors.primary,
-   marginRight: 4,
- },
- emptyTransactions: {
-   height: 150,
-   marginBottom: 16,
- },
- transactionCard: {
-   marginBottom: 8,
-   padding: 12,
- },
- transactionRow: {
-   flexDirection: 'row',
-   alignItems: 'center',
- },
- transactionIcon: {
-   marginRight: 12,
- },
- transactionInfo: {
-   flex: 1,
- },
- transactionType: {
-   fontSize: 16,
-   fontWeight: '500',
-   color: theme.colors.text,
- },
- transactionDate: {
-   fontSize: 12,
-   color: theme.colors.textLight,
-   marginTop: 2,
- },
- transactionAmount: {
-   fontSize: 16,
-   fontWeight: 'bold',
- },
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.textLight,
+  },
+  errorContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 16,
+  },
+  welcomeContainer: {
+    marginBottom: 24,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    color: theme.colors.textLight,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  todayStatsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  todayStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  todayStatItem: {
+    alignItems: 'center',
+  },
+  todayStatValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    marginBottom: 4,
+  },
+  todayStatLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+  },
+  journalCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  journalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  journalViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  journalViewButtonText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    marginRight: 4,
+  },
+  journalInfo: {
+    gap: 8,
+  },
+  journalStatus: {
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  journalDate: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+  },
+  journalBalance: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.success,
+  },
+  transactionsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  transactionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewAllButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  viewAllButtonText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+  },
+  quickActionsCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickActionButton: {
+    width: '48%',
+    backgroundColor: theme.colors.white,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    ...theme.shadows.small,
+  },
+  quickActionText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
 });
 
 export default DashboardScreen;

@@ -60,33 +60,6 @@ const CommissionParametersScreen = ({ navigation, route }) => {
         return;
       }
       
-      // Simuler des paramètres existants (pour la démo)
-      const mockParams = {
-        id: 123,
-        type: ['FIXED', 'PERCENTAGE', 'TIER'][Math.floor(Math.random() * 3)],
-        value: Math.random() > 0.5 ? 5000 : 5, // Pour FIXED ou PERCENTAGE
-        tiers: [
-          { id: 1, min: 0, max: 50000, rate: 5 },
-          { id: 2, min: 50001, max: 100000, rate: 4 },
-          { id: 3, min: 100001, max: 999999999, rate: 3 },
-        ],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      setCommissionParams(mockParams);
-      setCommissionType(mockParams.type);
-      
-      if (mockParams.type === 'FIXED') {
-        setFixedAmount(mockParams.value.toString());
-      } else if (mockParams.type === 'PERCENTAGE') {
-        setPercentageValue(mockParams.value.toString());
-      } else if (mockParams.type === 'TIER') {
-        setTiers(mockParams.tiers);
-      }
-      
-      setIsActive(mockParams.isActive);
       setIsEditing(true);
       setLoadingData(false);
     }, 1000);

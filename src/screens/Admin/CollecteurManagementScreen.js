@@ -17,52 +17,6 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 
-// Données fictives pour la démo
-const mockCollecteurs = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Jean',
-    adresseMail: 'jean.dupont@example.com',
-    telephone: '+237 655 123 456',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-    montantMaxRetrait: 150000,
-    status: 'active',
-    totalClients: 45,
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Sophie',
-    adresseMail: 'sophie.martin@example.com',
-    telephone: '+237 677 234 567',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-    montantMaxRetrait: 150000,
-    status: 'active',
-    totalClients: 32,
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Pierre',
-    adresseMail: 'pierre.dubois@example.com',
-    telephone: '+237 698 345 678',
-    agence: {
-      id: 2,
-      nomAgence: 'Agence Nord'
-    },
-    montantMaxRetrait: 100000,
-    status: 'inactive',
-    totalClients: 0,
-  },
-];
-
 const CollecteurManagementScreen = ({ navigation }) => {
   const [collecteurs, setCollecteurs] = useState(mockCollecteurs);
   const [filteredCollecteurs, setFilteredCollecteurs] = useState(mockCollecteurs);

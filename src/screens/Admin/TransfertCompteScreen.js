@@ -1,4 +1,4 @@
-// src/screens/Admin/TransfertCompteScreen.js
+// src/screens/Admin/TransfertCompteScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -24,11 +24,9 @@ import {
   Input
 } from '../../components';
 
-// Hooks, API et Utils
+// Services et Hooks - ✅ UTILISATION DU SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
-import { getCollecteurs } from '../../api/collecteur';
-import { getClients } from '../../api/client';
-import { transferComptes } from '../../api/compte';
+import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import theme from '../../theme';
 
 const TransfertCompteScreen = ({ navigation, route }) => {
@@ -51,41 +49,43 @@ const TransfertCompteScreen = ({ navigation, route }) => {
   
   // Paramètres initiaux de la route
   useEffect(() => {
-    // Si un collecteur source est spécifié dans les paramètres
     if (route.params?.sourceCollecteurId) {
       setSelectedSourceCollecteur(route.params.sourceCollecteurId);
     }
     
-    // Si des clients sont pré-sélectionnés
     if (route.params?.selectedClientIds) {
       setSelectedClients(route.params.selectedClientIds);
     }
   }, [route.params]);
   
-  // Charger la liste des collecteurs
+  // ✅ CHARGER LA LISTE DES COLLECTEURS AVEC LE SERVICE UNIFIÉ
   const loadCollecteurs = useCallback(async () => {
     try {
       setLoadingCollecteurs(true);
       setError(null);
       
-      const response = await getCollecteurs();
+      const response = await ApiService.getCollecteurs();
       
-      // Formater les options des collecteurs pour le sélecteur
-      const collecteurOptions = response.map(collecteur => ({
-        label: `${collecteur.prenom} ${collecteur.nom}`,
-        value: collecteur.id,
-        data: collecteur
-      }));
-      
-      setCollecteurs(collecteurOptions);
-      
-      // Si un collecteur source est spécifié, le sélectionner et charger ses clients
-      if (route.params?.sourceCollecteurId) {
-        const sourceId = route.params.sourceCollecteurId;
-        if (collecteurOptions.some(c => c.value === sourceId)) {
-          setSelectedSourceCollecteur(sourceId);
-          loadClients(sourceId);
+      if (response.success) {
+        // Formater les options des collecteurs pour le sélecteur
+        const collecteurOptions = response.data.map(collecteur => ({
+          label: `${collecteur.prenom} ${collecteur.nom}`,
+          value: collecteur.id,
+          data: collecteur
+        }));
+        
+        setCollecteurs(collecteurOptions);
+        
+        // Si un collecteur source est spécifié, le sélectionner et charger ses clients
+        if (route.params?.sourceCollecteurId) {
+          const sourceId = route.params.sourceCollecteurId;
+          if (collecteurOptions.some(c => c.value === sourceId)) {
+            setSelectedSourceCollecteur(sourceId);
+            loadClients(sourceId);
+          }
         }
+      } else {
+        setError(response.error || 'Erreur lors du chargement des collecteurs');
       }
     } catch (err) {
       console.error('Erreur lors du chargement des collecteurs:', err);
@@ -95,7 +95,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
     }
   }, [route.params?.sourceCollecteurId]);
   
-  // Charger les clients d'un collecteur
+  // ✅ CHARGER LES CLIENTS AVEC LE SERVICE UNIFIÉ
   const loadClients = async (collecteurId) => {
     if (!collecteurId) return;
     
@@ -104,18 +104,23 @@ const TransfertCompteScreen = ({ navigation, route }) => {
       setError(null);
       setClients([]);
       
-      const response = await getClients({ collecteurId });
-      setClients(response);
+      const response = await ApiService.getClients({ collecteurId });
       
-      // Si des clients sont pré-sélectionnés, les filtrer
-      if (route.params?.selectedClientIds && route.params.selectedClientIds.length > 0) {
-        const validClientIds = response
-          .filter(client => route.params.selectedClientIds.includes(client.id))
-          .map(client => client.id);
+      if (response.success) {
+        setClients(response.data);
         
-        setSelectedClients(validClientIds);
+        // Si des clients sont pré-sélectionnés, les filtrer
+        if (route.params?.selectedClientIds && route.params.selectedClientIds.length > 0) {
+          const validClientIds = response.data
+            .filter(client => route.params.selectedClientIds.includes(client.id))
+            .map(client => client.id);
+          
+          setSelectedClients(validClientIds);
+        } else {
+          setSelectedClients([]);
+        }
       } else {
-        setSelectedClients([]);
+        setError(response.error || 'Erreur lors du chargement des clients');
       }
     } catch (err) {
       console.error('Erreur lors du chargement des clients:', err);
@@ -172,11 +177,11 @@ const TransfertCompteScreen = ({ navigation, route }) => {
   const filteredClients = searchQuery 
     ? clients.filter(client => 
         `${client.prenom} ${client.nom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (client.numerCompte && client.numerCompte.toLowerCase().includes(searchQuery.toLowerCase()))
+        (client.numeroCni && client.numeroCni.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : clients;
   
-  // Exécuter le transfert
+  // ✅ EXÉCUTER LE TRANSFERT AVEC LE SERVICE UNIFIÉ
   const handleTransfer = () => {
     if (!selectedSourceCollecteur || !selectedDestCollecteur || selectedClients.length === 0) {
       setError('Veuillez sélectionner un collecteur source, un collecteur destination et au moins un client');
@@ -205,7 +210,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
     );
   };
   
-  // Exécuter le transfert
+  // ✅ EXÉCUTER LE TRANSFERT
   const executeTransfer = async () => {
     try {
       setTransferring(true);
@@ -217,23 +222,28 @@ const TransfertCompteScreen = ({ navigation, route }) => {
         clientIds: selectedClients
       };
       
-      await transferComptes(transferData);
+      const response = await ApiService.transferComptes(transferData);
       
-      // Réinitialiser la sélection
-      setSelectedClients([]);
-      
-      // Recharger les clients
-      loadClients(selectedSourceCollecteur);
-      
-      // Afficher un message de succès
-      Alert.alert(
-        'Succès',
-        'Les clients ont été transférés avec succès.',
-        [{ text: 'OK' }]
-      );
-      
-      // Vibration de succès
-      HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Success);
+      if (response.success) {
+        // Réinitialiser la sélection
+        setSelectedClients([]);
+        
+        // Recharger les clients
+        loadClients(selectedSourceCollecteur);
+        
+        // Afficher un message de succès
+        Alert.alert(
+          'Succès',
+          response.message || 'Les clients ont été transférés avec succès.',
+          [{ text: 'OK' }]
+        );
+        
+        // Vibration de succès
+        HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Success);
+      } else {
+        setError(response.error || 'Erreur lors du transfert des clients');
+        HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Error);
+      }
     } catch (err) {
       console.error('Erreur lors du transfert des clients:', err);
       setError(err.message || 'Erreur lors du transfert des clients');
@@ -256,7 +266,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
     >
       <View style={styles.clientInfo}>
         <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
-        <Text style={styles.clientNumber}>{item.numerCompte || 'Sans numéro'}</Text>
+        <Text style={styles.clientNumber}>{item.numeroCni || 'Sans numéro CNI'}</Text>
       </View>
       
       <Ionicons

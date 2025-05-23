@@ -31,8 +31,7 @@ import {
 
 // Hooks et services
 import { useAuth } from '../../hooks/useAuth';
-import { getClients } from '../../api/client';
-import { saveTransaction, verifyBalance } from '../../api/transaction';
+import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 // Theme et utils

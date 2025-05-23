@@ -16,16 +16,6 @@ import theme from '../../theme';
 
 const AdminDashboardScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
-  const [stats, setStats] = useState({
-    totalCollecteurs: 12,
-    totalClients: 245,
-    totalEpargne: 8750000,
-    totalRetrait: 2150000,
-    collecteursActifs: 10,
-    collecteursInactifs: 2,
-    clientsActifs: 220,
-    clientsInactifs: 25,
-  });
 
   const onRefresh = () => {
     setRefreshing(true);
