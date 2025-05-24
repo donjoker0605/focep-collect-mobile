@@ -1,7 +1,6 @@
 // src/hooks/useOfflineSync.js
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
-import SyncService, { SYNC_STATUS } from '../services/SyncService';
 
 export const useOfflineSync = () => {
   // États initiaux

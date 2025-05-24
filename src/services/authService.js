@@ -1,7 +1,6 @@
 // src/services/authService.js
 import { SecureStorage, SECURE_KEYS } from './secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ApiService from './api';
 import { jwtDecode } from 'jwt-decode';
 import { STORAGE_KEYS } from '../config/apiConfig';
 
