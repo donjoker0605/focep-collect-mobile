@@ -1,47 +1,57 @@
 // src/services/mouvementService.js
-import ApiService from './api';
+import BaseApiService from './base/BaseApiService';
 
-class MouvementService {
+class MouvementService extends BaseApiService {
+  constructor() {
+    super();
+  }
+
   // Enregistrer une épargne avec gestion hors ligne
   async enregistrerEpargne(data) {
     try {
-      return await ApiService.post('/mouvements/epargne', {
+      const response = await this.axios.post('/mouvements/epargne', {
         clientId: data.clientId,
         collecteurId: data.collecteurId,
         montant: data.montant,
         journalId: data.journalId,
       }, { canQueue: true }); // Permet la mise en file d'attente si hors ligne
+      
+      return this.formatResponse(response, 'Épargne enregistrée avec succès');
     } catch (error) {
       console.error('Erreur lors de l\'enregistrement de l\'épargne:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de l\'enregistrement de l\'épargne');
     }
   }
 
   // Effectuer un retrait avec gestion hors ligne
   async effectuerRetrait(data) {
     try {
-      return await ApiService.post('/mouvements/retrait', {
+      const response = await this.axios.post('/mouvements/retrait', {
         clientId: data.clientId,
         collecteurId: data.collecteurId,
         montant: data.montant,
         journalId: data.journalId,
       }, { canQueue: true }); // Permet la mise en file d'attente si hors ligne
+      
+      return this.formatResponse(response, 'Retrait effectué avec succès');
     } catch (error) {
       console.error('Erreur lors de l\'effectuation du retrait:', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors du retrait');
     }
   }
 
   // Consulter les mouvements d'un journal avec mise en cache
   async getMouvementsByJournal(journalId) {
     try {
-      return await ApiService.get(`/mouvements/journal/${journalId}`, {}, {
+      const response = await this.axios.get(`/mouvements/journal/${journalId}`, {}, {
         useCache: true,
         maxAge: 30 * 60 * 1000 // 30 minutes
       });
+      
+      return this.formatResponse(response, 'Mouvements récupérés');
     } catch (error) {
       console.error('Erreur lors de la récupération des mouvements:', error);
-      throw error;
+      return this.handleError(error, 'Erreur lors de la récupération des mouvements');
     }
   }
 
@@ -52,13 +62,15 @@ class MouvementService {
       if (dateDebut) params.dateDebut = dateDebut;
       if (dateFin) params.dateFin = dateFin;
       
-      return await ApiService.get(`/mouvements/client/${clientId}`, params, {
+      const response = await this.axios.get(`/mouvements/client/${clientId}`, { params }, {
         useCache: true,
         maxAge: 30 * 60 * 1000 // 30 minutes
       });
+      
+      return this.formatResponse(response, 'Mouvements client récupérés');
     } catch (error) {
       console.error('Erreur lors de la récupération des mouvements client:', error);
-      throw error;
+      return this.handleError(error, 'Erreur lors de la récupération des mouvements client');
     }
   }
 }

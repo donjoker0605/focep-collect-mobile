@@ -48,8 +48,7 @@ const DashboardScreen = ({ navigation }) => {
     try {
       setError(null);
       
-      // ✅ UTILISATION DU SERVICE UNIFIÉ
-      const response = await ApiService.getCollecteurDashboard(user.id);
+      const response = await collecteurService.getCollecteurDashboard(user.id);
       
       if (response.success) {
         setDashboard(response.data);

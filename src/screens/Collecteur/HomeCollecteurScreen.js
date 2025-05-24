@@ -20,9 +20,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { useClientStore } from '../../store/clientStore';
-import ClientService from '../../services/clientService';
-import CollecteurService from '../../services/collecteurService';
-import JournalService from '../../services/journalService';
+import { clientService, collecteurService, journalService } from '../../services';
 import { theme } from '../../theme/theme';
 
 export const HomeCollecteurScreen = ({ navigation }) => {
@@ -63,7 +61,7 @@ export const HomeCollecteurScreen = ({ navigation }) => {
   const loadClients = async () => {
     try {
       if (user?.id) {
-        const clientsData = await ClientService.getClientsByCollecteur(user.id);
+        const clientsData = await clientService.getClientsByCollecteur(user.id);
         setStats(prev => ({
           ...prev,
           totalClients: clientsData.length,
@@ -78,7 +76,7 @@ export const HomeCollecteurScreen = ({ navigation }) => {
   const loadJournalActif = async () => {
     try {
       if (user?.id) {
-        const journal = await JournalService.getJournalActif(user.id);
+        const journal = await journalService.getJournalActif(user.id);
         setJournalActif(journal);
       }
     } catch (error) {
@@ -90,7 +88,7 @@ export const HomeCollecteurScreen = ({ navigation }) => {
   const loadComptesCollecteur = async () => {
     try {
       if (user?.id) {
-        const comptes = await CollecteurService.getComptesCollecteur(user.id);
+        const comptes = await collecteurService.getComptesCollecteur(user.id);
         setComptesCollecteur(comptes);
       }
     } catch (error) {
@@ -109,7 +107,7 @@ export const HomeCollecteurScreen = ({ navigation }) => {
   const createNewJournal = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      await JournalService.createJournal({
+      await journalService.createJournal({
         dateDebut: today,
         dateFin: today,
         collecteurId: user.id,

@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as HapticsCompat from '../../utils/haptics';
-import { transferService } from '../../services';
+import { transferService, collecteurService, clientService } from '../../services';
 
 // Components
 import {
@@ -27,7 +27,6 @@ import {
 
 // Services et Hooks - ✅ UTILISATION DU SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
-import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import theme from '../../theme';
 
 const TransfertCompteScreen = ({ navigation, route }) => {
@@ -65,7 +64,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
       setLoadingCollecteurs(true);
       setError(null);
       
-      const response = await ApiService.getCollecteurs();
+      const response = await collecteurService.getCollecteurs();
       
       if (response.success) {
         // Formater les options des collecteurs pour le sélecteur
@@ -105,7 +104,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
       setError(null);
       setClients([]);
       
-      const response = await ApiService.getClients({ collecteurId });
+      const response = await clientService.getClients({ collecteurId });
       
       if (response.success) {
         setClients(response.data);
@@ -223,7 +222,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
         clientIds: selectedClients
       };
       
-      const response = await ApiService.transferComptes(transferData);
+      const response = await transferService.transferComptes(transferData);
       
       if (response.success) {
         // Réinitialiser la sélection

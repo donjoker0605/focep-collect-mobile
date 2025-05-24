@@ -1,12 +1,16 @@
-import ApiService from './api';
-import AuthService from './authService';
+import BaseApiService from './base/BaseApiService';
+import { authService } from './index';
 
-class TestService {
+class TestService extends BaseApiService {
+  constructor() {
+    super();
+  }
+
   // Test de connectivité avec le backend
   async testConnectivity() {
     try {
       console.log('Testing backend connectivity...');
-      const response = await ApiService.ping();
+      const response = await this.ping();
       console.log('Connectivity test success:', response);
       return { success: true, data: response };
     } catch (error) {
@@ -33,14 +37,14 @@ class TestService {
     for (const [role, credentials] of Object.entries(testCredentials)) {
       try {
         console.log(`Testing ${role} authentication...`);
-        const result = await AuthService.login(credentials.email, credentials.password);
+        const result = await authService.login(credentials.email, credentials.password);
         
         if (result.success) {
           console.log(`${role} authentication success`);
           results[role] = { success: true, user: result.user };
           
           // Déconnexion immédiate après test
-          await AuthService.logout();
+          await authService.logout();
         } else {
           console.error(`${role} authentication failed:`, result.error);
           results[role] = { success: false, error: result.error };

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ApiService from '../services/api';
+import { authService } from '../services';
 
 export const useAuthStore = create((set, get) => ({
   // State
@@ -15,34 +15,21 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      const response = await ApiService.post('/auth/login', {
-        email,
-        password,
-      }, false); // false = pas de token requis pour login
-
-      if (response.token) {
-        // Stocker le token
-        await AsyncStorage.setItem('authToken', response.token);
-        
-        // Pour l'instant, on simule les infos utilisateur
-        const userInfo = {
-          email,
-          role: 'ROLE_COLLECTEUR', // À adapter selon la réponse
-        };
-        
-        await AsyncStorage.setItem('userInfo', JSON.stringify(userInfo));
-        
+      // ✅ UTILISATION DU SERVICE UNIFIÉ
+      const result = await authService.login(email, password);
+      
+      if (result.success) {
         set({
           isAuthenticated: true,
-          user: userInfo,
-          token: response.token,
+          user: result.user,
+          token: result.token,
           isLoading: false,
         });
         return { success: true };
       }
       
-      set({ error: 'Token non reçu', isLoading: false });
-      return { success: false, error: 'Token non reçu' };
+      set({ error: result.error, isLoading: false });
+      return { success: false, error: result.error };
     } catch (error) {
       console.error('Login error:', error);
       set({ error: error.message, isLoading: false });
@@ -54,7 +41,9 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      await AsyncStorage.multiRemove(['authToken', 'userInfo']);
+      // ✅ UTILISATION DU SERVICE UNIFIÉ
+      await authService.logout();
+      
       set({
         isAuthenticated: false,
         user: null,
@@ -72,14 +61,14 @@ export const useAuthStore = create((set, get) => ({
     set({ isLoading: true });
     
     try {
-      const token = await AsyncStorage.getItem('authToken');
-      const userInfo = await AsyncStorage.getItem('userInfo');
+      // ✅ UTILISATION DU SERVICE UNIFIÉ
+      const authResult = await authService.isAuthenticated();
       
-      if (token && userInfo) {
+      if (authResult.token && authResult.userData) {
         set({
           isAuthenticated: true,
-          user: JSON.parse(userInfo),
-          token,
+          user: authResult.userData,
+          token: authResult.token,
           isLoading: false,
         });
       } else {

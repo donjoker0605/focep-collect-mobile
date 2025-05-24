@@ -5,3 +5,6 @@ export { default as clientService } from './clientService';
 export { default as transactionService } from './transactionService';
 export { default as compteService } from './compteService';
 export { default as transferService } from './transferService';
+export { default as mouvementService } from './mouvementService';
+export { default as testService } from './testService';
+export { default as notificationService } from '../api/notification';
