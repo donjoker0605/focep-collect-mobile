@@ -25,7 +25,7 @@ import { clientService } from '../../services';
 
 const ClientListScreen = ({ navigation }) => {
   const { user } = useAuth();
-  
+  const { isOnline } = useOfflineSync();
   const [searchQuery, setSearchQuery] = useState('');
   const [clients, setClients] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);

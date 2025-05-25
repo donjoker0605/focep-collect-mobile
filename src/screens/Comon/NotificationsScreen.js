@@ -436,4 +436,3 @@ const styles = StyleSheet.create({
 });
 
 export default NotificationsScreen;
-export default NotificationsScreen;

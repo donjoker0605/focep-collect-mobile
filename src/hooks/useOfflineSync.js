@@ -2,6 +2,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
 
+export const SYNC_STATUS = {
+  IDLE: 'idle',
+  SYNCING: 'syncing',
+  SUCCESS: 'success',
+  ERROR: 'error',
+  OFFLINE: 'offline'
+};
+
 export const useOfflineSync = () => {
   // États initiaux
   const [isOnline, setIsOnline] = useState(true);

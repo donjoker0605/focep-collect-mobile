@@ -1,5 +1,5 @@
 import BaseApiService from './base/BaseApiService';
-import { authService } from './index';
+import authService from './authService';
 
 class TestService extends BaseApiService {
   constructor() {
