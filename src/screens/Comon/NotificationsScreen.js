@@ -1,4 +1,4 @@
-// src/screens/Common/NotificationsScreen.js
+// src/screens/Comon/NotificationsScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert, // Ajout de l'import manquant d'Alert
+  Alert,
   Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,18 +21,17 @@ import {
   EmptyState
 } from '../../components';
 
-// Hooks et API
+// Hooks et Services - CORRECTION CRITIQUE
 import { useAuth } from '../../hooks/useAuth';
-import { getNotifications, markNotificationAsRead } from '../../api/notification';
+import { notificationService } from '../../services'; // Utiliser le service correct
 
 // Utils et Theme
 import theme from '../../theme';
 import { formatRelativeTime } from '../../utils/dateUtils';
 
-// Fonction utilitaire pour les haptics qui vérifie la plateforme (comme pour CollecteScreen)
+// Fonction utilitaire pour les haptics qui vérifie la plateforme
 const triggerHaptic = (type) => {
   if (Platform.OS !== 'web') {
-    // Uniquement exécuter sur les appareils natifs, pas sur le web
     if (type === 'impact') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } else if (type === 'success') {
@@ -53,7 +52,7 @@ const NotificationsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
-  // Charger les notifications
+  // Charger les notifications - MÉTHODE CORRIGÉE
   const loadNotifications = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) {
@@ -63,11 +62,21 @@ const NotificationsScreen = ({ navigation }) => {
       }
       setError(null);
       
-      const response = await getNotifications();
-      setNotifications(response);
+      // CORRECTION : Utiliser le service correct avec gestion d'erreur
+      const response = await notificationService.getNotifications(0, 20);
+      
+      // Gérer les réponses vides ou les endpoints non disponibles
+      if (response.warning) {
+        console.warn(response.warning);
+        setNotifications([]); // Tableau vide si endpoint non disponible
+      } else {
+        setNotifications(response.data || []);
+      }
+      
     } catch (err) {
       console.error('Erreur lors du chargement des notifications:', err);
       setError(err.message || 'Erreur lors du chargement des notifications');
+      setNotifications([]); // Assurer un tableau vide en cas d'erreur
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -84,7 +93,7 @@ const NotificationsScreen = ({ navigation }) => {
     loadNotifications(true);
   };
   
-  // Marquer une notification comme lue
+  // Marquer une notification comme lue - MÉTHODE CORRIGÉE
   const handleMarkAsRead = async (notificationId) => {
     try {
       // Mise à jour optimiste
@@ -96,8 +105,8 @@ const NotificationsScreen = ({ navigation }) => {
         )
       );
       
-      // Appel API
-      await markNotificationAsRead(notificationId);
+      // CORRECTION : Utiliser le service correct
+      await notificationService.markAsRead(notificationId);
       
       // Vibration de feedback sécurisée
       triggerHaptic('impact');
@@ -270,14 +279,17 @@ const NotificationsScreen = ({ navigation }) => {
                     text: 'Confirmer',
                     onPress: async () => {
                       try {
+                        // CORRECTION : Utiliser le service correct
                         await Promise.all(
                           notifications
                             .filter(n => !n.read)
-                            .map(n => markNotificationAsRead(n.id))
+                            .map(n => notificationService.markAsRead(n.id))
                         );
                         loadNotifications(true);
+                        triggerHaptic('success');
                       } catch (err) {
                         console.error('Erreur:', err);
+                        triggerHaptic('error');
                       }
                     }
                   }
@@ -423,4 +435,5 @@ const styles = StyleSheet.create({
   },
 });
 
+export default NotificationsScreen;
 export default NotificationsScreen;

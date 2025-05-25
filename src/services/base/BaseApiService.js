@@ -1,4 +1,4 @@
-// CRÉER : src/services/base/BaseApiService.js
+// src/services/base/BaseApiService.js
 import axiosInstance from '../../api/axiosConfig';
 
 class BaseApiService {
@@ -17,16 +17,16 @@ class BaseApiService {
     };
   }
 
+  // CORRECTION CRITIQUE : Lance une erreur au lieu de retourner un objet
   handleError(error, defaultMessage = 'Une erreur est survenue') {
     console.error('❌', defaultMessage, error);
     
-    return {
-      data: [],
-      totalElements: 0,
-      totalPages: 0,
-      success: false,
-      error: error.response?.data?.message || error.message || defaultMessage
-    };
+    const errorObj = new Error(error.response?.data?.message || error.message || defaultMessage);
+    errorObj.status = error.response?.status;
+    errorObj.data = error.response?.data;
+    errorObj.originalError = error;
+    
+    throw errorObj; // LANCE l'erreur au lieu de la retourner
   }
 
   async ping() {
@@ -35,7 +35,7 @@ class BaseApiService {
       const response = await this.axios.get('/public/ping');
       return { success: true, data: response };
     } catch (error) {
-      return { success: false, error: error.message };
+      this.handleError(error, 'Erreur de connectivité');
     }
   }
 }

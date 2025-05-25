@@ -1,5 +1,5 @@
-// src/api/notification.js - CORRIGÉE POUR 404
-import { compteService } from '../services';
+// src/services/notificationService.js
+import BaseApiService from './base/BaseApiService';
 
 class NotificationService extends BaseApiService {
   constructor() {
@@ -8,8 +8,9 @@ class NotificationService extends BaseApiService {
 
   async getNotifications(page = 0, size = 10) {
     try {
-      // ✅ CORRECTION CRITIQUE : Ne pas répéter /api/
-      const response = await this.axios.get('/notifications', { params: { page, size } });
+      const response = await this.axios.get('/notifications', { 
+        params: { page, size } 
+      });
       
       return this.formatResponse(response, 'Notifications récupérées');
     } catch (error) {
@@ -27,7 +28,7 @@ class NotificationService extends BaseApiService {
         };
       }
       
-      return this.handleError(error, 'Erreur lors de la récupération des notifications');
+      this.handleError(error, 'Erreur lors de la récupération des notifications');
     }
   }
 
@@ -36,15 +37,9 @@ class NotificationService extends BaseApiService {
       const response = await this.axios.patch(`/notifications/${notificationId}/read`);
       return this.formatResponse(response, 'Notification marquée comme lue');
     } catch (error) {
-      console.error('Erreur markAsRead:', error);
-      return this.handleError(error, 'Erreur lors du marquage comme lu');
+      this.handleError(error, 'Erreur lors du marquage comme lu');
     }
   }
 }
 
-const notificationService = new NotificationService();
-
-export const getNotifications = notificationService.getNotifications.bind(notificationService);
-export const markAsRead = notificationService.markAsRead.bind(notificationService);
-
-export default notificationService;
+export default new NotificationService();
