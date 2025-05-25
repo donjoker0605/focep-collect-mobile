@@ -12,10 +12,9 @@ const colors = {
   secondaryDark: '#c65800',
   
   // Couleurs fonctionnelles
-  info: '#0088cc',
-  success: '#34c759',
-  warning: '#ffcc00',
-  error: '#ff3b30',
+  success: '#34C759',
+  warning: '#FF9500',
+  error: '#FF3B30',
   
   // Nuances de gris
   white: '#ffffff',

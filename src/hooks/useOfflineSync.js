@@ -1,14 +1,9 @@
 // src/hooks/useOfflineSync.js
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
+import SyncService, { SYNC_STATUS } from '../services/SyncService';
 
-export const SYNC_STATUS = {
-  IDLE: 'idle',
-  SYNCING: 'syncing',
-  SUCCESS: 'success',
-  ERROR: 'error',
-  OFFLINE: 'offline'
-};
+export { SYNC_STATUS };
 
 export const useOfflineSync = () => {
   // États initiaux
@@ -22,13 +17,11 @@ export const useOfflineSync = () => {
 
   // Surveillance de la connexion
   useEffect(() => {
-    // Ne pas exécuter en SSR
     if (isSSR) return;
     
     let netInfoUnsubscribe = () => {};
     
     const setupNetworkListener = async () => {
-      // Utiliser uniquement sur les plateformes natives ou web avec window
       if (Platform.OS !== 'web' || (typeof window !== 'undefined')) {
         try {
           const NetInfo = (await import('@react-native-community/netinfo')).default;
@@ -43,6 +36,7 @@ export const useOfflineSync = () => {
           });
         } catch (error) {
           console.warn('NetInfo non disponible:', error);
+          setIsOnline(true); // Par défaut en ligne
         }
       }
     };
@@ -56,13 +50,12 @@ export const useOfflineSync = () => {
   
   // Surveillance de l'état de synchronisation
   useEffect(() => {
-    // Ne pas exécuter en SSR
     if (isSSR) return;
     
     // Vérifier si SyncService est correctement initialisé
     if (!SyncService.statusChange || !SyncService.pendingCountChange) {
       console.warn('SyncService n\'est pas correctement initialisé');
-      return () => {}; // Retourner une fonction de nettoyage vide
+      return () => {};
     }
     
     const statusSubscription = SyncService.statusChange.subscribe(status => {
@@ -72,6 +65,12 @@ export const useOfflineSync = () => {
     const pendingSubscription = SyncService.pendingCountChange.subscribe(count => {
       setPendingCount(count);
     });
+    
+    // Obtenir l'état initial
+    const initialStatus = SyncService.getStatus();
+    setSyncStatus(initialStatus.status);
+    setPendingCount(initialStatus.pendingCount);
+    setLastSyncDate(initialStatus.lastSync);
     
     return () => {
       if (statusSubscription && typeof statusSubscription.unsubscribe === 'function') {

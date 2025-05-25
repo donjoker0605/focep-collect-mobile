@@ -1,4 +1,4 @@
-// src/api/authService.js
+// src/api/authService.js - VERSION CORRIGÉE
 import axiosInstance from './axiosConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/apiConfig';
@@ -10,7 +10,6 @@ export const authService = {
     try {
       console.log('🚀 Tentative de connexion:', { email });
       
-      // Structure correcte pour le backend
       const requestData = { email, password };
       console.log('📤 Données envoyées:', requestData);
       
@@ -76,39 +75,58 @@ export const authService = {
   // Récupération mot de passe
   forgotPassword: async (email) => {
     try {
-      await axiosInstance.post('/auth/forgot-password', { email });
+      const response = await axiosInstance.post('/auth/forgot-password', { email });
+      console.log('Réponse brute du serveur:', JSON.stringify(response));
+      console.log('Données de la réponse:', JSON.stringify(response.data));
       return { success: true };
-	  console.log('Réponse brute du serveur:', JSON.stringify(response));
-    console.log('Données de la réponse:', JSON.stringify(response.data));
     } catch (error) {
-		console.error('Détails complets de l\'erreur:', JSON.stringify(error, null, 2));
+      console.error('Détails complets de l\'erreur:', JSON.stringify(error, null, 2));
       return { 
         success: false, 
         error: error.response?.data?.message || 'Erreur' 
       };
     }
   },
- 
 
-  // Déconnexion
+  // Déconnexion - MÉTHODE CORRIGÉE
   logout: async () => {
     try {
-      await axiosInstance.post('/auth/logout');
+      // Tenter d'appeler l'endpoint de logout
+      try {
+        await axiosInstance.post('/auth/logout');
+      } catch (error) {
+        console.warn('Erreur lors de la déconnexion côté serveur:', error);
+      }
+      
+      // Nettoyage des données locales
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.JWT_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.REFRESH_TOKEN,
+        'lastLoginAt'
+      ]);
+      
+      return { success: true };
     } catch (error) {
-      console.warn('Erreur lors de la déconnexion côté serveur:', error);
+      console.error('Erreur lors de la déconnexion:', error);
+      
+      // Même en cas d'erreur, essayer de nettoyer les données locales
+      try {
+        await AsyncStorage.multiRemove([
+          STORAGE_KEYS.JWT_TOKEN,
+          STORAGE_KEYS.USER_DATA,
+          STORAGE_KEYS.REFRESH_TOKEN,
+          'lastLoginAt'
+        ]);
+      } catch (cleanupError) {
+        console.error('Erreur lors du nettoyage:', cleanupError);
+      }
+      
+      return { success: false, error: error.message };
     }
-    
-    await AsyncStorage.multiRemove([
-      STORAGE_KEYS.JWT_TOKEN,
-      STORAGE_KEYS.USER_DATA,
-      STORAGE_KEYS.REFRESH_TOKEN,
-      'lastLoginAt'
-    ]);
-    
-    return { success: true };
   },
 
-  // Vérifier si l'utilisateur est connecté
+  // Vérifier si l'utilisateur est connecté - MÉTHODE CORRIGÉE
   isAuthenticated: async () => {
     try {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
@@ -120,12 +138,13 @@ export const authService = {
         
         if (decodedToken.exp && decodedToken.exp < currentTime) {
           console.log('Token expiré, nettoyage...');
-          await this.logout();
+          // Utiliser la méthode logout de manière sécurisée
+          await authService.logout();
           return { token: null, userData: null };
         }
       } catch (decodeError) {
         console.error('Erreur lors du décodage du token:', decodeError);
-        await this.logout();
+        await authService.logout();
         return { token: null, userData: null };
       }
       

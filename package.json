@@ -43,10 +43,12 @@
     "babel-plugin-dotenv-import": "^3.0.1",
     "date-fns": "^4.1.0",
     "expo": "~52.0.42",
+    "expo-application": "~6.0.2",
     "expo-blur": "~14.0.3",
     "expo-build-properties": "~0.13.3",
     "expo-constants": "~17.0.8",
     "expo-crypto": "~14.0.2",
+    "expo-device": "~7.0.3",
     "expo-document-picker": "~13.0.3",
     "expo-file-system": "^18.0.12",
     "expo-font": "~13.0.4",
@@ -87,9 +89,7 @@
     "react-query": "^3.39.3",
     "rxjs": "^7.8.2",
     "yup": "^1.6.1",
-    "zustand": "^5.0.3",
-    "expo-application": "~6.0.2",
-    "expo-device": "~7.0.3"
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -8,7 +8,5 @@ export { default as compteService } from './compteService';
 export { default as transferService } from './transferService';
 export { default as mouvementService } from './mouvementService';
 export { default as testService } from './testService';
-
-// CORRECTION : Créer un vrai notificationService dans services/
-// au lieu d'importer depuis api/
 export { default as notificationService } from './notificationService';
+export { default as SyncService } from './SyncService'; 

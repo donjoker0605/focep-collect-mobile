@@ -1,197 +1,111 @@
 // src/components/SyncStatusIndicator/SyncStatusIndicator.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as HapticsCompat from '../../utils/haptics';
-import NetInfo from '@react-native-community/netinfo';
-
-// Utils et theme
+import { SYNC_STATUS } from '../../hooks/useOfflineSync';
 import theme from '../../theme';
 
-// Constantes d'état de synchronisation
-export const SYNC_STATUS = {
-  SYNCED: 'synced',         // Tout est synchronisé
-  PENDING: 'pending',       // Modifications locales en attente de synchronisation
-  SYNCING: 'syncing',       // Synchronisation en cours
-  ERROR: 'error',           // Erreur de synchronisation
-  OFFLINE: 'offline'        // Mode hors ligne
-};
-
 const SyncStatusIndicator = ({ 
-  style, 
-  position = 'bottom-right', // 'top-left', 'top-right', 'bottom-left', 'bottom-right'
-  showLabel = true,
-  size = 'medium',           // 'small', 'medium', 'large'
-  syncStatus = SYNC_STATUS.SYNCED,
-  isOnline = true,
-  pendingCount = 0,
-  onPress
+  position = 'bottom-right', 
+  syncStatus, 
+  isOnline, 
+  pendingCount, 
+  onPress 
 }) => {
-  // Animation pour l'icône de synchronisation
-  const rotateAnim = new Animated.Value(0);
-  const rotation = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
-  });
   
-  // Démarrer l'animation de rotation pour l'état "syncing"
-  useEffect(() => {
-    if (syncStatus === SYNC_STATUS.SYNCING) {
-      Animated.loop(
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      ).start();
-    } else {
-      rotateAnim.setValue(0);
-    }
-  }, [syncStatus]);
-  
-  // Gérer l'appui sur l'indicateur
-  const handlePress = async () => {
-    if (onPress) {
-      onPress(syncStatus);
-      
-      // Feedback haptique
-      await HapticsCompat.impactAsync(HapticsCompat.ImpactFeedbackStyle.Light);
-    }
-  };
-  
-  // Déterminer l'icône et la couleur en fonction du statut
-  const getIconConfig = () => {
-    if (!isOnline) {
-      return {
-        name: 'cloud-offline',
-        color: theme.colors.warning,
-        text: 'Hors ligne'
-      };
-    }
-    
+  const getStatusIcon = () => {
     switch (syncStatus) {
-      case SYNC_STATUS.SYNCED:
-        return {
-          name: 'checkmark-circle',
-          color: theme.colors.success,
-          text: 'Synchronisé'
-        };
-      case SYNC_STATUS.PENDING:
-        return {
-          name: 'cloud-upload',
-          color: theme.colors.info,
-          text: `En attente (${pendingCount})`
-        };
       case SYNC_STATUS.SYNCING:
-        return {
-          name: 'sync',
-          color: theme.colors.primary,
-          text: 'Synchronisation...'
-        };
+        return 'sync';
+      case SYNC_STATUS.SUCCESS:
+        return 'checkmark-circle';
       case SYNC_STATUS.ERROR:
-        return {
-          name: 'alert-circle',
-          color: theme.colors.error,
-          text: 'Erreur de sync'
-        };
+        return 'alert-circle';
+      case SYNC_STATUS.OFFLINE:
+        return 'cloud-offline';
       default:
-        return {
-          name: 'cloud',
-          color: theme.colors.gray,
-          text: 'Inconnu'
-        };
+        return 'cloud-outline';
     }
   };
-  
-  // Déterminer la taille en fonction du paramètre
-  const getSize = () => {
-    switch (size) {
-      case 'small':
-        return { icon: 16, indicator: 30, label: 10 };
-      case 'large':
-        return { icon: 24, indicator: 48, label: 14 };
-      case 'medium':
+
+  const getStatusColor = () => {
+    switch (syncStatus) {
+      case SYNC_STATUS.SYNCING:
+        return theme.colors.primary;
+      case SYNC_STATUS.SUCCESS:
+        return theme.colors.success;
+      case SYNC_STATUS.ERROR:
+        return theme.colors.error;
+      case SYNC_STATUS.OFFLINE:
+        return theme.colors.gray;
       default:
-        return { icon: 20, indicator: 40, label: 12 };
+        return theme.colors.textLight;
     }
   };
-  
-  // Obtenir la configuration
-  const iconConfig = getIconConfig();
-  const sizeConfig = getSize();
-  
-  // Déterminer le positionnement
-  const positionStyle = {};
-  if (position.includes('top')) {
-    positionStyle.top = 16;
-  } else {
-    positionStyle.bottom = 16;
-  }
-  
-  if (position.includes('left')) {
-    positionStyle.left = 16;
-  } else {
-    positionStyle.right = 16;
-  }
-  
-  // Rendu de l'indicateur
+
+  const positionStyle = position === 'bottom-left' 
+    ? { bottom: 20, left: 20 }
+    : { bottom: 20, right: 20 };
+
   return (
-    <View style={[
-      styles.container, 
-      positionStyle,
-      showLabel && styles.containerWithLabel,
-      style
-    ]}>
-      <TouchableOpacity
-        style={[
-          styles.indicator,
-          { 
-            backgroundColor: `${iconConfig.color}20`,
-            width: sizeConfig.indicator,
-            height: sizeConfig.indicator,
-            borderRadius: sizeConfig.indicator / 2
-          }
-        ]}
-        onPress={handlePress}
-      >
-        <Animated.View style={syncStatus === SYNC_STATUS.SYNCING ? { transform: [{ rotate: rotation }] } : {}}>
-          <Ionicons name={iconConfig.name} size={sizeConfig.icon} color={iconConfig.color} />
-        </Animated.View>
-      </TouchableOpacity>
-      
-      {showLabel && (
-        <Text style={[
-          styles.label,
-          { fontSize: sizeConfig.label, color: iconConfig.color }
-        ]}>
-          {iconConfig.text}
-        </Text>
-      )}
-    </View>
+    <TouchableOpacity
+      style={[styles.container, positionStyle]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.indicator, { backgroundColor: getStatusColor() }]}>
+        <Ionicons 
+          name={getStatusIcon()} 
+          size={20} 
+          color={theme.colors.white} 
+        />
+        {pendingCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{pendingCount}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    alignItems: 'center',
-  },
-  containerWithLabel: {
-    minWidth: 100,
+    zIndex: 1000,
   },
   indicator: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  label: {
-    marginTop: 4,
-    fontWeight: '500',
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: theme.colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.white,
+  },
+  badgeText: {
+    color: theme.colors.white,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });
 
