@@ -1,4 +1,4 @@
-// src/screens/Collecteur/JournalScreen.js
+// src/screens/Collecteur/JournalScreen.js - VERSION SANS MOCKS
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -7,7 +7,8 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,23 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// Components
-import { 
-  Header, 
-  Card,
-  EmptyState, 
-  EnhancedTransactionItem,
-  Button,
-  SelectInput 
-} from '../../components';
-
 // Services
-import { journalService } from '../../services';
+import { transactionService } from '../../services';
 
 // Hooks
 import { useAuth } from '../../hooks/useAuth';
 
-// Styles and utils
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -52,12 +42,10 @@ const JournalScreen = ({ navigation }) => {
     totalDeposits: 0,
     totalWithdrawals: 0,
     balance: 0,
-    lastOperation: null,
-    journalStatus: 'OPEN' // OPEN, CLOSED, PENDING_APPROVAL
+    transactionCount: 0
   });
-  const [closingJournal, setClosingJournal] = useState(false);
 
-  // Charger les transactions
+  // ✅ CORRECTION: Vraie fonction API (plus de mock)
   const loadTransactions = useCallback(async (pageNum = 0, refresh = false) => {
     try {
       if (refresh) {
@@ -68,11 +56,10 @@ const JournalScreen = ({ navigation }) => {
 
       setError(null);
 
-      // Format the date to YYYY-MM-DD
       const formattedDate = format(selectedDate, 'yyyy-MM-dd');
       
-      // Fetch transactions from API
-      const response = await fetchJournalTransactions({
+      // ✅ APPEL API RÉEL
+      const response = await transactionService.fetchJournalTransactions({
         collecteurId: user.id,
         date: formattedDate,
         page: pageNum,
@@ -80,149 +67,170 @@ const JournalScreen = ({ navigation }) => {
         sort: 'dateHeure,desc'
       });
 
-      // Update state with received data
-      if (response && response.content) {
+      if (response.success && response.data) {
+        const { content, totalElements, totalPages, number, last } = response.data;
+        
         if (pageNum === 0 || refresh) {
-          setTransactions(response.content);
+          setTransactions(content || []);
         } else {
-          setTransactions(prev => [...prev, ...response.content]);
+          setTransactions(prev => [...prev, ...(content || [])]);
         }
         
-        setHasMore(!response.last);
-        setPage(response.number);
+        setHasMore(!last);
+        setPage(number || 0);
         
-        // Update summary
-        if (response.summary) {
-          setSummary({
-            totalDeposits: response.summary.totalDeposits || 0,
-            totalWithdrawals: response.summary.totalWithdrawals || 0,
-            balance: response.summary.balance || 0,
-            lastOperation: response.summary.lastOperation,
-            journalStatus: response.summary.journalStatus || 'OPEN'
-          });
-        }
+        // ✅ CALCUL RÉEL DES STATISTIQUES (plus de données fictives)
+        calculateSummary(content || []);
       }
     } catch (err) {
       console.error('Error loading transactions:', err);
       setError(err.message || 'Erreur lors du chargement des transactions');
+      
+      // ✅ En cas d'erreur, vider les données (plus de fallback fictif)
+      setTransactions([]);
+      setSummary({ totalDeposits: 0, totalWithdrawals: 0, balance: 0, transactionCount: 0 });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [user.id, selectedDate]);
 
-  // Charge les transactions initiales et à chaque changement de date
+  // ✅ CALCUL RÉEL DES STATISTIQUES
+  const calculateSummary = (transactionList) => {
+    const summary = transactionList.reduce((acc, transaction) => {
+      if (transaction.type === 'EPARGNE') {
+        acc.totalDeposits += transaction.montant;
+      } else if (transaction.type === 'RETRAIT') {
+        acc.totalWithdrawals += transaction.montant;
+      }
+      acc.transactionCount++;
+      return acc;
+    }, { totalDeposits: 0, totalWithdrawals: 0, transactionCount: 0 });
+
+    summary.balance = summary.totalDeposits - summary.totalWithdrawals;
+    setSummary(summary);
+  };
+
   useEffect(() => {
-    if (isFocused) {
+    if (isFocused && user?.id) {
       loadTransactions(0);
     }
   }, [isFocused, loadTransactions, selectedDate]);
 
-  // Fonction pour rafraîchir les données
   const handleRefresh = () => {
     loadTransactions(0, true);
   };
 
-  // Fonction pour charger plus de transactions
   const handleLoadMore = () => {
     if (hasMore && !loading && !refreshing) {
       loadTransactions(page + 1);
     }
   };
 
-  // Fonction pour changer de date
-  const handleDateChange = (date) => {
-    setSelectedDate(date);
-  };
+  // ✅ COMPOSANTS SIMPLICIFIÉS TEMPORAIRES
+  const Header = ({ title, rightComponent }) => (
+    <View style={styles.headerContainer}>
+      <Text style={styles.headerTitle}>{title}</Text>
+      {rightComponent}
+    </View>
+  );
 
-  // Fonction pour fermer le journal
-  const handleCloseJournal = async () => {
-    try {
-      setClosingJournal(true);
-      
-      // Format the date to YYYY-MM-DD
-      const formattedDate = format(selectedDate, 'yyyy-MM-dd');
-      
-      // Call API to close journal
-      await closeJournal({
-        collecteurId: user.id,
-        date: formattedDate
-      });
-      
-      // Refresh data
-      loadTransactions(0, true);
-    } catch (err) {
-      console.error('Error closing journal:', err);
-      setError(err.message || 'Erreur lors de la fermeture du journal');
-    } finally {
-      setClosingJournal(false);
-    }
-  };
+  const Card = ({ children, style }) => (
+    <View style={[styles.card, style]}>
+      {children}
+    </View>
+  );
 
-  // Rendu des cartes de résumé
+  const EmptyState = ({ title, message, onActionButtonPress }) => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="document-text-outline" size={64} color={theme.colors.gray} />
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyMessage}>{message}</Text>
+      {onActionButtonPress && (
+        <TouchableOpacity style={styles.retryButton} onPress={onActionButtonPress}>
+          <Text style={styles.retryButtonText}>Réessayer</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  // Rendu des cartes de résumé avec données réelles
   const renderSummaryCards = () => (
     <View style={styles.summaryContainer}>
       <Card style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Entrées</Text>
-        <Text style={styles.summaryValue}>{formatCurrency(summary.totalDeposits)} FCFA</Text>
+        <Text style={styles.summaryValue}>
+          {formatCurrency(summary.totalDeposits)} FCFA
+        </Text>
       </Card>
       
       <Card style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Sorties</Text>
-        <Text style={styles.summaryValue}>{formatCurrency(summary.totalWithdrawals)} FCFA</Text>
+        <Text style={styles.summaryValue}>
+          {formatCurrency(summary.totalWithdrawals)} FCFA
+        </Text>
       </Card>
       
       <Card style={[styles.summaryCard, styles.balanceCard]}>
         <Text style={styles.summaryLabel}>Solde</Text>
-        <Text style={styles.balanceValue}>{formatCurrency(summary.balance)} FCFA</Text>
+        <Text style={styles.balanceValue}>
+          {formatCurrency(summary.balance)} FCFA
+        </Text>
+        <Text style={styles.transactionCount}>
+          {summary.transactionCount} opération{summary.transactionCount > 1 ? 's' : ''}
+        </Text>
       </Card>
     </View>
   );
 
-  // Rendu d'un élément de la liste
+  // ✅ RENDU D'ITEM SANS DONNÉES FICTIVES
   const renderItem = ({ item }) => (
-    <EnhancedTransactionItem
-      type={item.type}
-      date={format(new Date(item.dateHeure), 'dd MMM yyyy à HH:mm', { locale: fr })}
-      amount={item.montant}
-      isIncome={item.type === 'Épargne'}
-      status={item.status}
-      clientInfo={item.client}
-      description={item.description}
-      reference={item.reference}
-      showClient={true}
+    <TouchableOpacity 
+      style={styles.transactionItem}
       onPress={() => navigation.navigate('CollecteDetail', { transaction: item })}
-    />
+    >
+      <View style={styles.transactionLeft}>
+        <Ionicons 
+          name={item.type === 'EPARGNE' ? 'arrow-down-circle' : 'arrow-up-circle'} 
+          size={24} 
+          color={item.type === 'EPARGNE' ? theme.colors.success : theme.colors.error} 
+        />
+        <View style={styles.transactionInfo}>
+          <Text style={styles.transactionType}>
+            {item.type === 'EPARGNE' ? 'Épargne' : 'Retrait'}
+          </Text>
+          <Text style={styles.transactionClient}>
+            {item.client?.prenom} {item.client?.nom}
+          </Text>
+          <Text style={styles.transactionDate}>
+            {format(new Date(item.dateHeure || item.dateCreation), 'dd/MM/yyyy à HH:mm')}
+          </Text>
+        </View>
+      </View>
+      <Text style={[
+        styles.transactionAmount,
+        { color: item.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
+      ]}>
+        {item.type === 'EPARGNE' ? '+' : '-'}{formatCurrency(item.montant)} FCFA
+      </Text>
+    </TouchableOpacity>
   );
 
-  // Rendu du footer de la liste (indicateur de chargement)
   const renderFooter = () => {
-    if (!hasMore) return null;
-    
+    if (!hasMore || !loading) return null;
     return (
       <View style={styles.footer}>
-        {loading && <ActivityIndicator size="small" color={theme.colors.primary} />}
+        <ActivityIndicator size="small" color={theme.colors.primary} />
       </View>
     );
   };
 
-  // Rendu principal
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Header
         title="Journal des opérations"
-        showBackButton={false}
         rightComponent={
-          <TouchableOpacity 
-            style={styles.calendarButton}
-            onPress={() => {
-              // Ouvrir un sélecteur de date ici
-              // Pour l'instant, on change simplement à une date fixe pour test
-              const yesterday = new Date();
-              yesterday.setDate(yesterday.getDate() - 1);
-              handleDateChange(yesterday);
-            }}
-          >
+          <TouchableOpacity style={styles.calendarButton}>
             <Ionicons name="calendar" size={24} color={theme.colors.white} />
           </TouchableOpacity>
         }
@@ -234,44 +242,11 @@ const JournalScreen = ({ navigation }) => {
           <Text style={styles.dateValue}>
             {format(selectedDate, 'dd MMMM yyyy', { locale: fr })}
           </Text>
-          
-          <View style={styles.statusContainer}>
-            <View style={[
-              styles.statusIndicator, 
-              { backgroundColor: summary.journalStatus === 'OPEN' 
-                ? theme.colors.success 
-                : summary.journalStatus === 'PENDING_APPROVAL' 
-                  ? theme.colors.warning 
-                  : theme.colors.gray
-              }
-            ]} />
-            <Text style={styles.statusText}>
-              {summary.journalStatus === 'OPEN' 
-                ? 'Ouvert' 
-                : summary.journalStatus === 'PENDING_APPROVAL' 
-                  ? 'En attente' 
-                  : 'Fermé'
-              }
-            </Text>
-          </View>
         </View>
         
         {renderSummaryCards()}
         
-        <View style={styles.transactionsHeaderContainer}>
-          <Text style={styles.transactionsTitle}>Transactions du jour</Text>
-          
-          {summary.journalStatus === 'OPEN' && (
-            <Button
-              title="Clôturer le journal"
-              variant="outlined"
-              size="small"
-              loading={closingJournal}
-              onPress={handleCloseJournal}
-              style={styles.closeJournalButton}
-            />
-          )}
-        </View>
+        <Text style={styles.transactionsTitle}>Transactions du jour</Text>
         
         {loading && page === 0 ? (
           <View style={styles.loadingContainer}>
@@ -280,25 +255,20 @@ const JournalScreen = ({ navigation }) => {
           </View>
         ) : error ? (
           <EmptyState
-            type="error"
             title="Erreur de chargement"
             message={error}
-            actionButton
-            actionButtonTitle="Réessayer"
             onActionButtonPress={handleRefresh}
           />
         ) : transactions.length === 0 ? (
           <EmptyState
-            type="empty"
             title="Aucune transaction"
             message="Aucune transaction n'a été effectuée à cette date."
-            icon="document-text-outline"
           />
         ) : (
           <FlatList
             data={transactions}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContainer}
             refreshControl={
@@ -331,6 +301,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
   calendarButton: {
     padding: 8,
   },
@@ -338,7 +320,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    flexWrap: 'wrap',
   },
   dateLabel: {
     fontSize: 16,
@@ -349,30 +330,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: theme.colors.text,
-    marginRight: 16,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  statusText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
   },
   summaryContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   summaryCard: {
     flex: 1,
-    padding: 12,
     marginHorizontal: 4,
     alignItems: 'center',
   },
@@ -394,22 +369,62 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: theme.colors.white,
   },
-  transactionsHeaderContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  transactionCount: {
+    fontSize: 10,
+    color: theme.colors.white,
+    opacity: 0.8,
+    marginTop: 2,
   },
   transactionsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
-  },
-  closeJournalButton: {
-    paddingHorizontal: 12,
+    marginBottom: 16,
   },
   listContainer: {
     paddingBottom: 20,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  transactionInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  transactionType: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  transactionClient: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   loadingContainer: {
     flex: 1,
@@ -420,6 +435,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textLight,
     marginTop: 16,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   footer: {
     paddingVertical: 16,

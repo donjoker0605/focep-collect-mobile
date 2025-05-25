@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientDetailScreen.js
+// src/screens/Collecteur/ClientDetailScreen.js - VERSION SANS MOCKS
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,165 +14,76 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import Header from '../../components/Header/Header';
-import Card from '../../components/Card/Card';
-import TransactionItem from '../../components/TransactionItem/TransactionItem';
-import theme from '../../theme';
+
+// ✅ SERVICES RÉELS
+import { clientService, transactionService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
-import { useOfflineSync } from '../../hooks/useOfflineSync';
-
-// Mock des données de paramètres de commission pour la démo
-const mockCommissionParams = {
-  id: 1,
-  type: 'PERCENTAGE',
-  valeur: 0.05, // 5%
-  paliers: [],
-  isActive: true,
-  entityType: 'client',
-  entityId: 1,
-  createdAt: new Date(2022, 5, 15),
-  updatedAt: new Date(2023, 2, 10)
-};
-
-// Données fictives pour la démo
-const mockTransactions = [
-  {
-    id: 1,
-    type: 'Épargne',
-    montant: 15000,
-    date: new Date(2023, 3, 28, 10, 30),
-    category: 'Épargne',
-    isIncome: true,
-    icon: 'arrow-down-circle',
-  },
-  {
-    id: 2,
-    type: 'Épargne',
-    montant: 25000,
-    date: new Date(2023, 3, 20, 11, 15),
-    category: 'Épargne',
-    isIncome: true,
-    icon: 'arrow-down-circle',
-  },
-  {
-    id: 3,
-    type: 'Retrait',
-    montant: 10000,
-    date: new Date(2023, 3, 15, 14, 20),
-    category: 'Retrait',
-    isIncome: false,
-    icon: 'arrow-up-circle',
-  },
-  {
-    id: 4,
-    type: 'Épargne',
-    montant: 5000,
-    date: new Date(2023, 3, 10, 9, 45),
-    category: 'Épargne',
-    isIncome: true,
-    icon: 'arrow-down-circle',
-  },
-];
+import theme from '../../theme';
 
 const ClientDetailScreen = ({ route, navigation }) => {
   const { user } = useAuth();
-  const { isOnline } = useOfflineSync();
   const { client } = route.params || {};
   
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [clientDetails, setClientDetails] = useState(null);
   const [transactions, setTransactions] = useState([]);
-  const [commissionParams, setCommissionParams] = useState(null);
-  const [commissionLoading, setCommissionLoading] = useState(true);
+  const [error, setError] = useState(null);
   
-  // Déterminer les droits de l'utilisateur
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN';
-  const isCollecteur = user?.role === 'COLLECTEUR';
+  // ✅ SUPPRESSION: Plus de données fictives de commission
+  // const [commissionParams, setCommissionParams] = useState(null);
   
   useEffect(() => {
-    // Si le client est passé en paramètre, l'utiliser directement
     if (client) {
-      setClientDetails({
-        id: client.id,
-        nom: client.nom,
-        prenom: client.prenom,
-        numeroCni: client.numeroCni,
-        numeroCompte: client.numeroCompte,
-        telephone: client.telephone || '+237 655 123 456',
-        ville: client.ville || 'Douala',
-        quartier: client.quartier || 'Akwa',
-        dateCreation: client.dateCreation || new Date(2022, 5, 15),
-        solde: client.solde || 124500.0,
-        status: client.status || 'active',
-      });
+      setClientDetails(client);
+      loadClientData();
     } else {
-      // Sinon, charger le client à partir de l'ID
-      fetchClientDetails();
+      setError('Aucune donnée client fournie');
+      setIsLoading(false);
     }
-    
-    // Charger les transactions et les paramètres de commission
-    fetchTransactions();
-    fetchCommissionParams();
   }, [client]);
   
-  const fetchClientDetails = () => {
-    // Simuler une requête API
-    setTimeout(() => {
-      setClientDetails({
-        id: 1,
-        nom: 'Dupont',
-        prenom: 'Marie',
-        numeroCni: 'CM12345678',
-        numeroCompte: '37305D0100015254',
-        telephone: '+237 655 123 456',
-        ville: 'Douala',
-        quartier: 'Akwa',
-        dateCreation: new Date(2022, 5, 15),
-        solde: 124500.0,
-        status: 'active',
-      });
-    }, 1000);
-  };
-  
-  const fetchTransactions = () => {
-    // Simuler une requête API
-    setTimeout(() => {
-      setTransactions(mockTransactions);
+  // ✅ FONCTION RÉELLE DE CHARGEMENT DES DONNÉES
+  const loadClientData = async () => {
+    try {
+      setError(null);
+      
+      // Charger les détails complets du client depuis l'API
+      const clientResponse = await clientService.getClientById(client.id);
+      if (clientResponse.success) {
+        setClientDetails(clientResponse.data);
+      }
+      
+      // ✅ CHARGEMENT RÉEL DES TRANSACTIONS
+      const transactionsResponse = await transactionService.getTransactionsByClient(client.id);
+      if (transactionsResponse.success) {
+        setTransactions(transactionsResponse.data || []);
+      }
+      
+    } catch (err) {
+      console.error('Erreur lors du chargement des données client:', err);
+      setError(err.message || 'Erreur lors du chargement des données');
+    } finally {
       setIsLoading(false);
-    }, 1500);
-  };
-  
-  const fetchCommissionParams = () => {
-    // Simuler une requête API pour les paramètres de commission
-    setCommissionLoading(true);
-    setTimeout(() => {
-      setCommissionParams(mockCommissionParams);
-      setCommissionLoading(false);
-    }, 1200);
+    }
   };
   
   const onRefresh = async () => {
     setRefreshing(true);
-    
-    // Recharger toutes les données
-    fetchClientDetails();
-    fetchTransactions();
-    fetchCommissionParams();
-    
+    await loadClientData();
     setRefreshing(false);
   };
 
   const handleEditClient = () => {
-    // Navigation vers l'écran de modification de client
     navigation.navigate('ClientAddEdit', { mode: 'edit', client: clientDetails });
   };
   
-  const handleToggleStatus = () => {
+  // ✅ FONCTION RÉELLE DE CHANGEMENT DE STATUT
+  const handleToggleStatus = async () => {
     if (!clientDetails) return;
     
-    const newStatus = clientDetails.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
+    const newStatus = clientDetails.valide ? false : true;
+    const action = newStatus ? 'activer' : 'désactiver';
     
     Alert.alert(
       `Confirmation`,
@@ -184,24 +95,32 @@ const ClientDetailScreen = ({ route, navigation }) => {
         },
         {
           text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
-            
-            // Simuler une requête API
-            setTimeout(() => {
-              setClientDetails({
-                ...clientDetails,
-                status: newStatus
-              });
+          onPress: async () => {
+            try {
+              setIsLoading(true);
               
+              // ✅ APPEL API RÉEL pour changer le statut
+              const response = await clientService.updateClientStatus(clientDetails.id, newStatus);
+              
+              if (response.success) {
+                setClientDetails(prev => ({
+                  ...prev,
+                  valide: newStatus
+                }));
+                
+                const message = newStatus
+                  ? `Le compte de ${clientDetails.prenom} ${clientDetails.nom} a été activé avec succès.`
+                  : `Le compte de ${clientDetails.prenom} ${clientDetails.nom} a été désactivé avec succès.`;
+                
+                Alert.alert('Succès', message);
+              } else {
+                throw new Error(response.error || 'Erreur lors du changement de statut');
+              }
+            } catch (err) {
+              Alert.alert('Erreur', err.message || 'Impossible de changer le statut du client');
+            } finally {
               setIsLoading(false);
-              
-              const message = newStatus === 'active'
-                ? `Le compte de ${clientDetails.prenom} ${clientDetails.nom} a été activé avec succès.`
-                : `Le compte de ${clientDetails.prenom} ${clientDetails.nom} a été désactivé avec succès.`;
-              
-              Alert.alert('Succès', message);
-            }, 1000);
+            }
           },
         },
       ]
@@ -209,52 +128,69 @@ const ClientDetailScreen = ({ route, navigation }) => {
   };
   
   const handleViewTransaction = (transaction) => {
-    // Navigation vers l'écran de détail de la transaction
     navigation.navigate('CollecteDetail', { transaction });
   };
   
   const handleNewOperation = (type) => {
-    // Navigation vers l'écran de collecte avec le client pré-sélectionné
     navigation.navigate('Collecte', {
       selectedTab: type === 'epargne' ? 'epargne' : 'retrait',
       preSelectedClient: clientDetails
     });
   };
   
-  const handleEditCommission = () => {
-    // Navigation vers l'écran de modification des paramètres de commission
-    navigation.navigate('CommissionParametersScreen', {
-      entityType: 'client',
-      entityId: clientDetails.id,
-      entityName: `${clientDetails.prenom} ${clientDetails.nom}`
-    });
+  // ✅ COMPOSANTS SIMPLICIFIÉS TEMPORAIRES
+  const Header = ({ title, onBackPress, rightComponent }) => (
+    <View style={styles.headerContainer}>
+      <TouchableOpacity onPress={onBackPress}>
+        <Ionicons name="arrow-back" size={24} color="white" />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+      {rightComponent}
+    </View>
+  );
+
+  const Card = ({ children, style }) => (
+    <View style={[styles.card, style]}>
+      {children}
+    </View>
+  );
+
+  const TransactionItem = ({ transaction, onPress }) => (
+    <TouchableOpacity style={styles.transactionItem} onPress={onPress}>
+      <View style={styles.transactionLeft}>
+        <Ionicons 
+          name={transaction.type === 'EPARGNE' ? 'arrow-down-circle' : 'arrow-up-circle'} 
+          size={20} 
+          color={transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error} 
+        />
+        <View style={styles.transactionInfo}>
+          <Text style={styles.transactionType}>
+            {transaction.type === 'EPARGNE' ? 'Épargne' : 'Retrait'}
+          </Text>
+          <Text style={styles.transactionDate}>
+            {format(new Date(transaction.dateCreation || Date.now()), 'dd/MM/yyyy à HH:mm')}
+          </Text>
+        </View>
+      </View>
+      <Text style={[
+        styles.transactionAmount,
+        { color: transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
+      ]}>
+        {(transaction.montant || 0).toLocaleString()} FCFA
+      </Text>
+    </TouchableOpacity>
+  );
+  
+  const formatCurrencyValue = (amount) => {
+    return (amount || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
   };
   
   const formatDateString = (date) => {
-    return format(date, 'd MMMM yyyy', { locale: fr });
+    if (!date) return 'Non définie';
+    return format(new Date(date), 'd MMMM yyyy', { locale: fr });
   };
   
-  const formatCurrencyValue = (amount) => {
-    return amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
-  };
-  
-  // Rendu du type de commission
-  const renderCommissionType = () => {
-    if (!commissionParams) return 'Non défini';
-    
-    switch (commissionParams.type) {
-      case 'FIXED':
-        return `Fixe: ${formatCurrencyValue(commissionParams.valeur)} FCFA`;
-      case 'PERCENTAGE':
-        return `Pourcentage: ${(commissionParams.valeur * 100).toFixed(2)}%`;
-      case 'TIER':
-        return `Paliers: ${commissionParams.paliers?.length || 0} niveau(x)`;
-      default:
-        return 'Non défini';
-    }
-  };
-  
-  if (isLoading || !clientDetails) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <Header
@@ -269,6 +205,43 @@ const ClientDetailScreen = ({ route, navigation }) => {
       </SafeAreaView>
     );
   }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header
+          title="Détail du client"
+          onBackPress={() => navigation.goBack()}
+        />
+        
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={60} color={theme.colors.error} />
+          <Text style={styles.errorTitle}>Erreur</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadClientData}>
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  
+  if (!clientDetails) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header
+          title="Détail du client"
+          onBackPress={() => navigation.goBack()}
+        />
+        
+        <View style={styles.errorContainer}>
+          <Ionicons name="person-outline" size={60} color={theme.colors.gray} />
+          <Text style={styles.errorTitle}>Client introuvable</Text>
+          <Text style={styles.errorMessage}>Les informations du client ne sont pas disponibles.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   
   return (
     <SafeAreaView style={styles.container}>
@@ -276,10 +249,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
         title="Détail du client"
         onBackPress={() => navigation.goBack()}
         rightComponent={
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={handleEditClient}
-          >
+          <TouchableOpacity style={styles.editButton} onPress={handleEditClient}>
             <Ionicons name="create-outline" size={24} color={theme.colors.white} />
           </TouchableOpacity>
         }
@@ -301,20 +271,24 @@ const ClientDetailScreen = ({ route, navigation }) => {
             <View style={styles.profileHeader}>
               <View style={styles.avatarContainer}>
                 <Text style={styles.avatarText}>
-                  {clientDetails.prenom.charAt(0)}{clientDetails.nom.charAt(0)}
+                  {clientDetails.prenom?.charAt(0) || 'C'}{clientDetails.nom?.charAt(0) || 'L'}
                 </Text>
               </View>
               
               <View style={styles.profileInfo}>
-                <Text style={styles.clientName}>{clientDetails.prenom} {clientDetails.nom}</Text>
-                <Text style={styles.clientAccount}>{clientDetails.numeroCompte}</Text>
+                <Text style={styles.clientName}>
+                  {clientDetails.prenom} {clientDetails.nom}
+                </Text>
+                <Text style={styles.clientAccount}>
+                  {clientDetails.numeroCompte || `Client #${clientDetails.id}`}
+                </Text>
                 
                 <View style={[
                   styles.statusBadge,
-                  clientDetails.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+                  clientDetails.valide ? styles.activeBadge : styles.inactiveBadge
                 ]}>
                   <Text style={styles.statusText}>
-                    {clientDetails.status === 'active' ? 'Actif' : 'Inactif'}
+                    {clientDetails.valide ? 'Actif' : 'Inactif'}
                   </Text>
                 </View>
               </View>
@@ -325,13 +299,13 @@ const ClientDetailScreen = ({ route, navigation }) => {
                 <View style={styles.detailItem}>
                   <Ionicons name="id-card-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>CNI:</Text>
-                  <Text style={styles.detailValue}>{clientDetails.numeroCni}</Text>
+                  <Text style={styles.detailValue}>{clientDetails.numeroCni || 'Non renseigné'}</Text>
                 </View>
                 
                 <View style={styles.detailItem}>
                   <Ionicons name="call-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>Tél:</Text>
-                  <Text style={styles.detailValue}>{clientDetails.telephone}</Text>
+                  <Text style={styles.detailValue}>{clientDetails.telephone || 'Non renseigné'}</Text>
                 </View>
               </View>
               
@@ -339,13 +313,13 @@ const ClientDetailScreen = ({ route, navigation }) => {
                 <View style={styles.detailItem}>
                   <Ionicons name="location-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>Ville:</Text>
-                  <Text style={styles.detailValue}>{clientDetails.ville}</Text>
+                  <Text style={styles.detailValue}>{clientDetails.ville || 'Non renseigné'}</Text>
                 </View>
                 
                 <View style={styles.detailItem}>
                   <Ionicons name="business-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>Quartier:</Text>
-                  <Text style={styles.detailValue}>{clientDetails.quartier}</Text>
+                  <Text style={styles.detailValue}>{clientDetails.quartier || 'Non renseigné'}</Text>
                 </View>
               </View>
               
@@ -353,15 +327,22 @@ const ClientDetailScreen = ({ route, navigation }) => {
                 <View style={styles.detailItem}>
                   <Ionicons name="calendar-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>Date de création:</Text>
-                  <Text style={styles.detailValue}>{formatDateString(clientDetails.dateCreation)}</Text>
+                  <Text style={styles.detailValue}>
+                    {formatDateString(clientDetails.dateCreation)}
+                  </Text>
                 </View>
               </View>
             </View>
             
-            <View style={styles.soldeContainer}>
-              <Text style={styles.soldeLabel}>Solde actuel</Text>
-              <Text style={styles.soldeValue}>{formatCurrencyValue(clientDetails.solde)} FCFA</Text>
-            </View>
+            {/* ✅ SOLDE RÉEL DU CLIENT (si disponible) */}
+            {clientDetails.solde !== undefined && (
+              <View style={styles.soldeContainer}>
+                <Text style={styles.soldeLabel}>Solde actuel</Text>
+                <Text style={styles.soldeValue}>
+                  {formatCurrencyValue(clientDetails.solde)} FCFA
+                </Text>
+              </View>
+            )}
             
             <View style={styles.actionButtons}>
               <TouchableOpacity
@@ -383,93 +364,23 @@ const ClientDetailScreen = ({ route, navigation }) => {
               <TouchableOpacity
                 style={[
                   styles.actionButton,
-                  clientDetails.status === 'active' ? styles.desactiverButton : styles.activerButton
+                  clientDetails.valide ? styles.desactiverButton : styles.activerButton
                 ]}
                 onPress={handleToggleStatus}
               >
                 <Ionicons
-                  name={clientDetails.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"}
+                  name={clientDetails.valide ? "close-circle-outline" : "checkmark-circle-outline"}
                   size={24}
                   color={theme.colors.white}
                 />
                 <Text style={styles.actionButtonText}>
-                  {clientDetails.status === 'active' ? 'Désactiver le compte' : 'Activer le compte'}
+                  {clientDetails.valide ? 'Désactiver le compte' : 'Activer le compte'}
                 </Text>
               </TouchableOpacity>
             </View>
           </Card>
           
-          {/* Section Commission */}
-          <Card style={styles.commissionCard}>
-            <View style={styles.commissionHeader}>
-              <Text style={styles.sectionTitle}>Paramètres de commission</Text>
-              {(isAdmin || isCollecteur) && (
-                <TouchableOpacity
-                  style={styles.editCommissionButton}
-                  onPress={handleEditCommission}
-                >
-                  <Ionicons name="settings-outline" size={20} color={theme.colors.primary} />
-                  <Text style={styles.editCommissionText}>Configurer</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            
-            {commissionLoading ? (
-              <View style={styles.commissionLoading}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={styles.commissionLoadingText}>Chargement des paramètres...</Text>
-              </View>
-            ) : commissionParams ? (
-              <View style={styles.commissionDetails}>
-                <View style={styles.commissionRow}>
-                  <Text style={styles.commissionLabel}>Type de commission:</Text>
-                  <Text style={styles.commissionValue}>{renderCommissionType()}</Text>
-                </View>
-                
-                <View style={styles.commissionRow}>
-                  <Text style={styles.commissionLabel}>Statut:</Text>
-                  <View style={[
-                    styles.statusBadge,
-                    commissionParams.isActive ? styles.activeBadge : styles.inactiveBadge,
-                    { alignSelf: 'flex-start' }
-                  ]}>
-                    <Text style={styles.statusText}>
-                      {commissionParams.isActive ? 'Actif' : 'Inactif'}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.commissionRow}>
-                  <Text style={styles.commissionLabel}>Dernière mise à jour:</Text>
-                  <Text style={styles.commissionValue}>
-                    {formatDateString(commissionParams.updatedAt)}
-                  </Text>
-                </View>
-                
-                {commissionParams.type === 'TIER' && commissionParams.paliers?.length > 0 && (
-                  <View style={styles.paliersContainer}>
-                    <Text style={styles.paliersTitle}>Détails des paliers:</Text>
-                    {commissionParams.paliers.map((palier, index) => (
-                      <View key={index} style={styles.palierItem}>
-                        <Text style={styles.palierText}>
-                          {palier.min.toLocaleString()} - {palier.max === 999999999 ? "∞" : palier.max.toLocaleString()} FCFA: {palier.rate}%
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={styles.noCommission}>
-                <Text style={styles.noCommissionText}>
-                  Aucun paramètre de commission spécifique défini pour ce client.
-                  {(isAdmin || isCollecteur) && ' Cliquez sur "Configurer" pour en définir.'}
-                </Text>
-              </View>
-            )}
-          </Card>
-          
-          {/* Transactions récentes */}
+          {/* ✅ TRANSACTIONS RÉELLES */}
           <View style={styles.transactionsSection}>
             <Text style={styles.sectionTitle}>Transactions récentes</Text>
             
@@ -482,25 +393,24 @@ const ClientDetailScreen = ({ route, navigation }) => {
               </View>
             ) : (
               <View>
-                {transactions.map(transaction => (
+                {transactions.slice(0, 5).map((transaction, index) => (
                   <TransactionItem
-                    key={transaction.id}
-                    type={transaction.type}
-                    date={format(transaction.date, 'HH:mm - d MMM yyyy', { locale: fr })}
-                    category={transaction.category}
-                    amount={transaction.montant}
-                    isIncome={transaction.isIncome}
-                    icon={transaction.icon}
+                    key={transaction.id || index}
+                    transaction={transaction}
                     onPress={() => handleViewTransaction(transaction)}
                   />
                 ))}
                 
-                <TouchableOpacity
-                  style={styles.viewAllButton}
-                  onPress={() => navigation.navigate('ClientTransactions', { clientId: clientDetails.id })}
-                >
-                  <Text style={styles.viewAllButtonText}>Voir toutes les transactions</Text>
-                </TouchableOpacity>
+                {transactions.length > 5 && (
+                  <TouchableOpacity
+                    style={styles.viewAllButton}
+                    onPress={() => navigation.navigate('ClientTransactions', { clientId: clientDetails.id })}
+                  >
+                    <Text style={styles.viewAllButtonText}>
+                      Voir toutes les transactions ({transactions.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -515,6 +425,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.primary,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -528,6 +452,38 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textLight,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
   scrollView: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -539,6 +495,17 @@ const styles = StyleSheet.create({
   },
   editButton: {
     padding: 8,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   profileCard: {
     marginBottom: 20,
@@ -662,86 +629,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.error,
   },
   
-  // Commission Card Styles
-  commissionCard: {
-    marginBottom: 20,
-  },
-  commissionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  editCommissionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 6,
-  },
-  editCommissionText: {
-    color: theme.colors.primary,
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  commissionLoading: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  commissionLoadingText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginTop: 8,
-  },
-  noCommission: {
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    padding: 16,
-  },
-  noCommissionText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    lineHeight: 20,
-  },
-  commissionDetails: {
-    marginBottom: 8,
-  },
-  commissionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
-  },
-  commissionLabel: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  commissionValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  paliersContainer: {
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  paliersTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: 8,
-  },
-  palierItem: {
-    paddingVertical: 4,
-  },
-  palierText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  
   // Transactions Section Styles
   transactionsSection: {
     marginBottom: 24,
@@ -757,7 +644,11 @@ const styles = StyleSheet.create({
     padding: 32,
     backgroundColor: theme.colors.white,
     borderRadius: 8,
-    ...theme.shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   emptyTransactionsText: {
     fontSize: 14,
@@ -765,10 +656,49 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 12,
+    marginBottom: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  transactionInfo: {
+    marginLeft: 8,
+    flex: 1,
+  },
+  transactionType: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   viewAllButton: {
     alignItems: 'center',
     marginTop: 16,
     paddingVertical: 12,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: 8,
   },
   viewAllButtonText: {
     fontSize: 14,
