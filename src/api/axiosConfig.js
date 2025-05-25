@@ -1,12 +1,12 @@
-// src/api/axiosConfig.js - VERSION CORRIGÉE
+// src/api/axiosConfig.js - VERSION DÉFINITIVEMENT CORRIGÉE
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 import NetInfo from '@react-native-community/netinfo';
 
-// Instance Axios avec configuration
+// Instance Axios avec configuration CORRIGÉE
 const axiosInstance = axios.create({
-  baseURL: API_CONFIG.baseURL, // DÉJÀ http://192.168.91.2:8080/api
+  baseURL: API_CONFIG.baseURL, // ✅ Déjà http://192.168.91.2:8080/api
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
@@ -17,10 +17,7 @@ const axiosInstance = axios.create({
 // Intercepteur pour ajouter le token JWT à chaque requête
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // CORRECTION : Nettoyer l'URL
-    if (config.url?.startsWith('/api/')) {
-      config.url = config.url.substring(4);
-    }
+    // ✅ CORRECTION CRITIQUE : Plus besoin de nettoyer l'URL puisque baseURL est correcte
     
     // Ajouter un identifiant unique à chaque requête pour le suivi
     config.metadata = { 
@@ -34,25 +31,8 @@ axiosInstance.interceptors.request.use(
       console.log(`Data:`, config.data);
     }
     
-    // Vérifier la connexion internet
-	/*
-    try {
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
-        console.error('❌ OFFLINE');
-        return Promise.reject({
-          code: 'ERR_NETWORK_OFFLINE',
-          message: 'Appareil hors-ligne. Veuillez vérifier votre connexion internet.',
-          offline: true,
-        });
-      }
-    } catch (error) {
-      console.warn('Erreur lors de la vérification de la connexion:', error);
-    }
-	*/
-    
     // Ne pas ajouter de token pour les requêtes d'authentification
-     const publicRoutes = ['/auth/login', '/auth/register', '/public/'];
+    const publicRoutes = ['/auth/login', '/auth/register', '/public/'];
     const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
     
     if (!isPublicRoute) {
@@ -117,11 +97,6 @@ axiosInstance.interceptors.response.use(
     if (error.code === 'ECONNABORTED') {
       enhancedError.code = 'ERR_NETWORK_TIMEOUT';
       enhancedError.message = 'La requête a pris trop de temps à répondre';
-    }
-    
-    // Si nous avons déjà détecté une erreur hors ligne
-    if (error.offline) {
-      return Promise.reject(enhancedError);
     }
     
     // Erreur 401 (non autorisé) - essayer de rafraîchir le token si disponible
