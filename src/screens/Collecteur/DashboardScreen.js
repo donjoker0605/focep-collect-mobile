@@ -1,4 +1,4 @@
-// src/screens/Collecteur/DashboardScreen.js - VERSION UNIFIÉE
+// src/screens/Collecteur/DashboardScreen.js - FIX TEMPORAIRE POUR PRÉSENTATION
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -7,25 +7,71 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
-  TouchableOpacity
+  TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-
-// Components
-import {
-  Header,
-  Card,
-  StatCard,
-  TransactionItem,
-  LoadingSpinner,
-  EmptyState
-} from '../../components';
 
 // Services et Hooks
 import { collecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
+
+// COMPOSANTS DE REMPLACEMENT TEMPORAIRES
+const Header = ({ title, showNotificationButton, onNotificationPress }) => (
+  <View style={styles.headerContainer}>
+    <Text style={styles.headerTitle}>{title}</Text>
+    {showNotificationButton && (
+      <TouchableOpacity onPress={onNotificationPress}>
+        <Ionicons name="notifications-outline" size={24} color="white" />
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+const Card = ({ children, style }) => (
+  <View style={[styles.card, style]}>
+    {children}
+  </View>
+);
+
+const StatCard = ({ title, value, icon, color, onPress }) => (
+  <TouchableOpacity style={[styles.statCard, { borderLeftColor: color }]} onPress={onPress}>
+    <Ionicons name={icon} size={24} color={color} />
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statTitle}>{title}</Text>
+  </TouchableOpacity>
+);
+
+const LoadingSpinner = ({ size = "large" }) => (
+  <ActivityIndicator size={size} color={theme.colors.primary} />
+);
+
+const EmptyState = ({ type, title, message, buttonText, onButtonPress, icon, compact }) => (
+  <View style={[styles.emptyState, compact && styles.emptyStateCompact]}>
+    {icon && <Ionicons name={icon} size={48} color={theme.colors.textLight} />}
+    <Text style={styles.emptyTitle}>{title}</Text>
+    <Text style={styles.emptyMessage}>{message}</Text>
+    {buttonText && (
+      <TouchableOpacity style={styles.emptyButton} onPress={onButtonPress}>
+        <Text style={styles.emptyButtonText}>{buttonText}</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+const TransactionItem = ({ transaction, onPress }) => (
+  <TouchableOpacity style={styles.transactionItem} onPress={onPress}>
+    <View style={styles.transactionInfo}>
+      <Text style={styles.transactionType}>{transaction.type || 'Transaction'}</Text>
+      <Text style={styles.transactionDate}>{transaction.date || 'Aujourd\'hui'}</Text>
+    </View>
+    <Text style={styles.transactionAmount}>
+      {(transaction.montant || 0).toLocaleString()} FCFA
+    </Text>
+  </TouchableOpacity>
+);
 
 const DashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -190,94 +236,6 @@ const DashboardScreen = ({ navigation }) => {
           />
         </View>
 
-        {/* Statistiques du jour */}
-        <Card style={styles.todayStatsCard}>
-          <Text style={styles.cardTitle}>Activité du jour</Text>
-          
-          <View style={styles.todayStatsRow}>
-            <View style={styles.todayStatItem}>
-              <Text style={styles.todayStatValue}>
-                {dashboard?.transactionsAujourdhui || 0}
-              </Text>
-              <Text style={styles.todayStatLabel}>Transactions</Text>
-            </View>
-            
-            <View style={styles.todayStatItem}>
-              <Text style={styles.todayStatValue}>
-                {(dashboard?.montantEpargneAujourdhui || 0).toLocaleString()}
-              </Text>
-              <Text style={styles.todayStatLabel}>Épargne (FCFA)</Text>
-            </View>
-            
-            <View style={styles.todayStatItem}>
-              <Text style={styles.todayStatValue}>
-                {(dashboard?.montantRetraitAujourdhui || 0).toLocaleString()}
-              </Text>
-              <Text style={styles.todayStatLabel}>Retraits (FCFA)</Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Journal actuel */}
-        {dashboard?.journalActuel && (
-          <Card style={styles.journalCard}>
-            <View style={styles.journalHeader}>
-              <Text style={styles.cardTitle}>Journal actuel</Text>
-              <TouchableOpacity 
-                onPress={() => navigateToScreen('Journal')}
-                style={styles.journalViewButton}
-              >
-                <Text style={styles.journalViewButtonText}>Voir détails</Text>
-                <Ionicons name="chevron-forward" size={16} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.journalInfo}>
-              <Text style={styles.journalStatus}>
-                Statut: {dashboard.journalActuel.statut}
-              </Text>
-              <Text style={styles.journalDate}>
-                Du {new Date(dashboard.journalActuel.dateDebut).toLocaleDateString()} 
-                au {new Date(dashboard.journalActuel.dateFin).toLocaleDateString()}
-              </Text>
-              <Text style={styles.journalBalance}>
-                Solde: {(dashboard.journalActuel.soldeActuel || 0).toLocaleString()} FCFA
-              </Text>
-            </View>
-          </Card>
-        )}
-
-        {/* Transactions récentes */}
-        <Card style={styles.transactionsCard}>
-          <View style={styles.transactionsHeader}>
-            <Text style={styles.cardTitle}>Transactions récentes</Text>
-            <TouchableOpacity 
-              onPress={() => navigateToScreen('Journal')}
-              style={styles.viewAllButton}
-            >
-              <Text style={styles.viewAllButtonText}>Voir tout</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {dashboard?.transactionsRecentes?.length > 0 ? (
-            dashboard.transactionsRecentes.slice(0, 5).map((transaction, index) => (
-              <TransactionItem
-                key={transaction.id || index}
-                transaction={transaction}
-                onPress={() => navigateToScreen('TransactionDetail', { transactionId: transaction.id })}
-              />
-            ))
-          ) : (
-            <EmptyState
-              type="no-data"
-              title="Aucune transaction"
-              message="Aucune transaction récente à afficher"
-              icon="swap-horizontal-outline"
-              compact={true}
-            />
-          )}
-        </Card>
-
         {/* Actions rapides */}
         <Card style={styles.quickActionsCard}>
           <Text style={styles.cardTitle}>Actions rapides</Text>
@@ -336,6 +294,51 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    width: '48%',
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  statTitle: {
+    fontSize: 12,
+    color: '#666',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -375,86 +378,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  todayStatsCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
     marginBottom: 12,
-  },
-  todayStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  todayStatItem: {
-    alignItems: 'center',
-  },
-  todayStatValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-    marginBottom: 4,
-  },
-  todayStatLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-  },
-  journalCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  journalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  journalViewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  journalViewButtonText: {
-    color: theme.colors.primary,
-    fontSize: 14,
-    marginRight: 4,
-  },
-  journalInfo: {
-    gap: 8,
-  },
-  journalStatus: {
-    fontSize: 14,
-    color: theme.colors.text,
-  },
-  journalDate: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  journalBalance: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.success,
-  },
-  transactionsCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  transactionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  viewAllButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  viewAllButtonText: {
-    color: theme.colors.primary,
-    fontSize: 14,
   },
   quickActionsCard: {
     padding: 16,
@@ -472,13 +400,71 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 12,
-    ...theme.shadows.small,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   quickActionText: {
     marginTop: 8,
     fontSize: 14,
     color: theme.colors.text,
     textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateCompact: {
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  emptyButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  emptyButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  transactionInfo: {
+    flex: 1,
+  },
+  transactionType: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
   },
 });
 
