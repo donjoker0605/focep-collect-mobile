@@ -1,4 +1,4 @@
-// src/services/transactionService.js 
+// src/services/transactionService.js - ✅ CORRIGÉ
 import BaseApiService from './base/BaseApiService';
 
 class TransactionService extends BaseApiService {
@@ -6,8 +6,8 @@ class TransactionService extends BaseApiService {
     super();
   }
 
-  // ✅ CORRECTION: Ajout de la méthode manquante
-  async fetchJournalTransactions({ collecteurId, date, page = 0, size = 20, sort = 'dateHeure,desc' }) {
+  // ✅ CORRECTION: Changer dateHeure en dateOperation
+  async fetchJournalTransactions({ collecteurId, date, page = 0, size = 20, sort = 'dateOperation,desc' }) {
     try {
       console.log('📱 API: GET /mouvements/journal/transactions');
       const params = { collecteurId, date, page, size, sort };
@@ -19,7 +19,6 @@ class TransactionService extends BaseApiService {
     }
   }
 
-  // ✅ CORRECTION: Ajout de getTransactionDetails
   async getTransactionDetails(transactionId) {
     try {
       console.log('📱 API: GET /mouvements/', transactionId);
@@ -30,7 +29,6 @@ class TransactionService extends BaseApiService {
     }
   }
 
-  // ✅ CORRECTION: Méthode de vérification de solde
   async verifyBalance({ clientId, montant }) {
     try {
       console.log('📱 API: POST /mouvements/verify-balance');
@@ -44,7 +42,6 @@ class TransactionService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODES EXISTANTES CONSERVÉES
   async enregistrerEpargne(data) {
     try {
       console.log('📱 API: POST /mouvements/epargne', data);

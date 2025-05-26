@@ -39,12 +39,15 @@ class ClientService extends BaseApiService {
 
   // ✅ MÉTHODE EXISTANTE CONSERVÉE
   async createClient(clientData) {
+	  const user = await authService.getCurrentUser();
     try {
       console.log('📱 API: POST /clients', clientData);
       
       // ✅ CORRECTION: Ajouter les IDs manquants depuis le contexte utilisateur
       const enrichedData = {
         ...clientData,
+		collecteurId: user.id, 
+		agenceId: user.agenceId,
         collecteurId: clientData.collecteurId || this.getCurrentUserId(),
         agenceId: clientData.agenceId || this.getCurrentUserAgenceId(),
       };

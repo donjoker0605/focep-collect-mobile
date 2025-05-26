@@ -1,7 +1,7 @@
-// src/services/SyncService.js
+// src/services/SyncService.js - ✅ COMPATIBLE WEB
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import NetInfo from '@react-native-community/netinfo';
 import { Subject } from 'rxjs';
+import { Platform } from 'react-native';
 
 export const SYNC_STATUS = {
   IDLE: 'idle',
@@ -19,11 +19,39 @@ class SyncService {
     this.pendingOperations = [];
     this.lastSyncTime = null;
     
-    // Initialiser
-    this.init();
+    // ✅ CORRECTION WEB: Vérifier l'environnement
+    this.isWeb = Platform.OS === 'web';
+    this.canUseAsyncStorage = this.checkAsyncStorageAvailability();
+    
+    // Initialiser seulement si AsyncStorage est disponible
+    if (this.canUseAsyncStorage) {
+      this.init();
+    } else {
+      console.warn('SyncService: AsyncStorage non disponible, désactivation de la synchronisation');
+    }
+  }
+
+  // ✅ VÉRIFIER LA DISPONIBILITÉ D'ASYNCSTORAGE
+  checkAsyncStorageAvailability() {
+    try {
+      // Sur web, AsyncStorage peut ne pas être disponible
+      if (this.isWeb && typeof window !== 'undefined') {
+        // Vérifier si AsyncStorage est réellement disponible
+        return AsyncStorage && typeof AsyncStorage.getItem === 'function';
+      }
+      return true; // Sur mobile, AsyncStorage est toujours disponible
+    } catch (error) {
+      console.warn('AsyncStorage check failed:', error);
+      return false;
+    }
   }
 
   async init() {
+    if (!this.canUseAsyncStorage) {
+      console.warn('SyncService: init() abandonné, AsyncStorage non disponible');
+      return;
+    }
+
     try {
       // Charger les opérations en attente depuis le stockage
       const storedOperations = await AsyncStorage.getItem('sync_pending_operations');
@@ -32,12 +60,20 @@ class SyncService {
       // Notifier le nombre d'opérations en attente
       this.pendingCountChange.next(this.pendingOperations.length);
       
-      // Écouter les changements de connexion
-      NetInfo.addEventListener(state => {
-        if (state.isConnected && this.pendingOperations.length > 0) {
-          this.syncNow();
+      // ✅ CORRECTION: Utiliser import dynamique pour NetInfo sur web
+      if (!this.isWeb) {
+        try {
+          const NetInfo = await import('@react-native-community/netinfo');
+          // Écouter les changements de connexion
+          NetInfo.default.addEventListener(state => {
+            if (state.isConnected && this.pendingOperations.length > 0) {
+              this.syncNow();
+            }
+          });
+        } catch (netInfoError) {
+          console.warn('NetInfo non disponible:', netInfoError);
         }
-      });
+      }
     } catch (error) {
       console.error('Erreur lors de l\'initialisation du SyncService:', error);
     }
@@ -68,6 +104,11 @@ class SyncService {
 
   // Ajouter une opération à la file d'attente
   async queueOperation(operation) {
+    if (!this.canUseAsyncStorage) {
+      console.warn('SyncService: queueOperation abandonné, AsyncStorage non disponible');
+      return null;
+    }
+
     try {
       const operationWithId = {
         ...operation,
@@ -85,8 +126,18 @@ class SyncService {
       this.pendingCountChange.next(this.pendingOperations.length);
       
       // Essayer de synchroniser immédiatement si en ligne
-      const netInfo = await NetInfo.fetch();
-      if (netInfo.isConnected) {
+      if (!this.isWeb) {
+        try {
+          const NetInfo = await import('@react-native-community/netinfo');
+          const netInfo = await NetInfo.default.fetch();
+          if (netInfo.isConnected) {
+            await this.syncNow();
+          }
+        } catch (netInfoError) {
+          console.warn('NetInfo non disponible pour la vérification de connexion');
+        }
+      } else {
+        // Sur web, supposer qu'on est en ligne
         await this.syncNow();
       }
       
@@ -99,6 +150,10 @@ class SyncService {
 
   // Synchroniser maintenant
   async syncNow() {
+    if (!this.canUseAsyncStorage) {
+      return { success: false, message: 'AsyncStorage non disponible' };
+    }
+
     if (this.currentStatus === SYNC_STATUS.SYNCING) {
       return { success: false, message: 'Synchronisation déjà en cours' };
     }
@@ -106,8 +161,19 @@ class SyncService {
     try {
       this.setStatus(SYNC_STATUS.SYNCING);
       
-      const netInfo = await NetInfo.fetch();
-      if (!netInfo.isConnected) {
+      // Sur web, supposer qu'on est en ligne
+      let isConnected = true;
+      if (!this.isWeb) {
+        try {
+          const NetInfo = await import('@react-native-community/netinfo');
+          const netInfo = await NetInfo.default.fetch();
+          isConnected = netInfo.isConnected;
+        } catch (netInfoError) {
+          console.warn('Impossible de vérifier la connectivité, supposer connecté');
+        }
+      }
+
+      if (!isConnected) {
         this.setStatus(SYNC_STATUS.OFFLINE);
         return { success: false, message: 'Pas de connexion internet' };
       }
@@ -164,9 +230,8 @@ class SyncService {
 
   // Traiter une opération spécifique
   async processOperation(operation) {
-    const { type, data, endpoint } = operation;
+    const { type, data } = operation;
     
-    // Ici tu peux importer tes services selon le type d'opération
     switch (type) {
       case 'CREATE_CLIENT':
         const { clientService } = await import('./index');
@@ -189,7 +254,7 @@ class SyncService {
     }
   }
 
-  // Méthodes utilitaires pour les hooks
+  // Méthodes utilitaires
   async saveTransaction(transactionData) {
     return await this.queueOperation({
       type: 'CREATE_TRANSACTION',
@@ -211,9 +276,17 @@ class SyncService {
       return result.data || [];
     } catch (error) {
       console.error('Erreur lors de la récupération des collecteurs:', error);
-      // Retourner depuis le cache si disponible
-      const cachedData = await AsyncStorage.getItem('cached_collecteurs');
-      return cachedData ? JSON.parse(cachedData) : [];
+      // Retourner depuis le cache si disponible et AsyncStorage disponible
+      if (this.canUseAsyncStorage) {
+        try {
+          const cachedData = await AsyncStorage.getItem('cached_collecteurs');
+          return cachedData ? JSON.parse(cachedData) : [];
+        } catch (cacheError) {
+          console.error('Erreur lecture cache:', cacheError);
+          return [];
+        }
+      }
+      return [];
     }
   }
 
@@ -222,6 +295,10 @@ class SyncService {
   }
 
   async clearPendingData() {
+    if (!this.canUseAsyncStorage) {
+      return true; // Considérer comme nettoyé si AsyncStorage non disponible
+    }
+
     try {
       this.pendingOperations = [];
       await AsyncStorage.removeItem('sync_pending_operations');

@@ -1,3 +1,4 @@
+// src/services/collecteurService.js - ✅ VERSION SANS MOCK
 import BaseApiService from './base/BaseApiService';
 
 class CollecteurService extends BaseApiService {
@@ -14,7 +15,7 @@ class CollecteurService extends BaseApiService {
       const response = await this.axios.get('/collecteurs', { params });
       return this.formatResponse(response, 'Collecteurs récupérés');
     } catch (error) {
-      return this.handleError(error, 'Erreur lors de la récupération des collecteurs');
+      throw this.handleError(error, 'Erreur lors de la récupération des collecteurs');
     }
   }
 
@@ -28,25 +29,14 @@ class CollecteurService extends BaseApiService {
     }
   }
 
+  // ✅ CORRECTION CRITIQUE: Plus de données par défaut, lancer l'erreur
   async getCollecteurDashboard(collecteurId) {
     try {
       console.log('📱 API: GET /collecteurs/dashboard/', collecteurId);
       const response = await this.axios.get(`/collecteurs/${collecteurId}/dashboard`);
       return this.formatResponse(response, 'Dashboard récupéré');
     } catch (error) {
-      console.warn('Dashboard endpoint non disponible, utilisation de données par défaut');
-      return {
-        data: {
-          totalClients: 0,
-          totalEpargne: 0,
-          totalRetraits: 0,
-          soldeTotal: 0,
-          transactionsRecentes: [],
-          journalActuel: null
-        },
-        success: true,
-        warning: 'Données par défaut utilisées'
-      };
+      throw this.handleError(error, 'Erreur lors de la récupération du dashboard');
     }
   }
 }
