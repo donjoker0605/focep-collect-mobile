@@ -6,7 +6,6 @@ class TransactionService extends BaseApiService {
     super();
   }
 
-  // ✅ CORRECTION: Changer dateHeure en dateOperation
   async fetchJournalTransactions({ collecteurId, date, page = 0, size = 20, sort = 'dateOperation,desc' }) {
     try {
       console.log('📱 API: GET /mouvements/journal/transactions');

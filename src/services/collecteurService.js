@@ -1,4 +1,4 @@
-// src/services/collecteurService.js - ✅ VERSION SANS MOCK
+// src/services/collecteurService.js 
 import BaseApiService from './base/BaseApiService';
 
 class CollecteurService extends BaseApiService {

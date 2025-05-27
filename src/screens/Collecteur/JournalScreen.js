@@ -64,7 +64,7 @@ const JournalScreen = ({ navigation }) => {
         date: formattedDate,
         page: pageNum,
         size: 20,
-        sort: 'dateHeure,desc'
+        sort: 'dateOperation,desc'
       });
 
       if (response.success && response.data) {
@@ -203,7 +203,7 @@ const JournalScreen = ({ navigation }) => {
             {item.client?.prenom} {item.client?.nom}
           </Text>
           <Text style={styles.transactionDate}>
-            {format(new Date(item.dateHeure || item.dateCreation), 'dd/MM/yyyy à HH:mm')}
+            {format(new Date(item.dateOperation || item.dateCreation), 'dd/MM/yyyy à HH:mm')}
           </Text>
         </View>
       </View>

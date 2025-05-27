@@ -6,7 +6,7 @@ import NetInfo from '@react-native-community/netinfo';
 
 // Instance Axios avec configuration CORRIGÉE
 const axiosInstance = axios.create({
-  baseURL: API_CONFIG.baseURL, // ✅ Déjà http://192.168.94.22:8080/api
+  baseURL: API_CONFIG.baseURL, // ✅ Déjà http://192.168.91.23:8080/api
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',
@@ -17,7 +17,6 @@ const axiosInstance = axios.create({
 // Intercepteur pour ajouter le token JWT à chaque requête
 axiosInstance.interceptors.request.use(
   async (config) => {
-    // ✅ CORRECTION CRITIQUE : Plus besoin de nettoyer l'URL puisque baseURL est correcte
     
     // Ajouter un identifiant unique à chaque requête pour le suivi
     config.metadata = { 
