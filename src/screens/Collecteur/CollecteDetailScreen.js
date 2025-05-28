@@ -1,4 +1,4 @@
-// src/screens/Collecteur/CollecteDetailScreen.js
+// src/screens/Collecteur/CollecteDetailScreen.js - VERSION CORRIGÉE FINALE
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -8,22 +8,15 @@ import {
   TouchableOpacity, 
   Share, 
   ActivityIndicator,
-  Alert 
+  Alert,
+  SafeAreaView
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-// Components
-import { 
-  Header, 
-  Card, 
-  Button 
-} from '../../components';
-
-// Hooks et API
+// ✅ IMPORTS CORRIGÉS
 import { useAuth } from '../../hooks/useAuth';
-import { transactionService } from '../../services';
+import { transactionService } from '../../services/transactionService'; // ✅ IMPORT CORRECT
 
 // Utils et Theme
 import theme from '../../theme';
@@ -31,34 +24,51 @@ import { formatCurrency } from '../../utils/formatters';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 
 const CollecteDetailScreen = ({ navigation, route }) => {
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   
-  // Récupérer la transaction depuis les paramètres de route
-  const { transaction: initialTransaction } = route.params || {};
+  // ✅ RÉCUPÉRATION AMÉLIORÉE DES PARAMÈTRES
+  const { transaction: initialTransaction, transactionId } = route.params || {};
   
   // États
   const [transaction, setTransaction] = useState(initialTransaction);
   const [loading, setLoading] = useState(!initialTransaction);
   const [error, setError] = useState(null);
   
-  // Charger les détails de la transaction si non fournie dans les paramètres
+  // ✅ EFFET AMÉLIORÉ POUR CHARGER LES DÉTAILS
   useEffect(() => {
-    if (!initialTransaction && route.params?.transactionId) {
-      loadTransactionDetails(route.params.transactionId);
+    console.log('🔍 CollecteDetailScreen - Paramètres reçus:', { initialTransaction, transactionId });
+    
+    if (initialTransaction) {
+      console.log('✅ Transaction fournie directement:', initialTransaction);
+      setTransaction(initialTransaction);
+      setLoading(false);
+    } else if (transactionId) {
+      console.log('🔄 Chargement de la transaction avec ID:', transactionId);
+      loadTransactionDetails(transactionId);
+    } else {
+      console.error('❌ Aucune transaction ni ID fourni');
+      setError('Aucune donnée de transaction fournie');
+      setLoading(false);
     }
-  }, [initialTransaction, route.params?.transactionId]);
+  }, [initialTransaction, transactionId]);
   
-  // Charger les détails de la transaction
+  // ✅ FONCTION CORRIGÉE POUR CHARGER LES DÉTAILS
   const loadTransactionDetails = async (id) => {
     try {
       setLoading(true);
       setError(null);
+      console.log('🔄 Chargement des détails pour transaction:', id);
       
-      const response = await getTransactionDetails(id);
-      setTransaction(response);
+      const response = await transactionService.getTransactionDetails(id);
+      console.log('✅ Détails récupérés:', response);
+      
+      if (response.success) {
+        setTransaction(response.data);
+      } else {
+        throw new Error(response.error || 'Erreur lors du chargement des détails');
+      }
     } catch (err) {
-      console.error('Erreur lors du chargement des détails de la transaction:', err);
+      console.error('❌ Erreur lors du chargement des détails de la transaction:', err);
       setError(err.message || 'Erreur lors du chargement des détails de la transaction');
     } finally {
       setLoading(false);
@@ -69,34 +79,53 @@ const CollecteDetailScreen = ({ navigation, route }) => {
   const handleRefresh = () => {
     if (transaction?.id) {
       loadTransactionDetails(transaction.id);
+    } else if (transactionId) {
+      loadTransactionDetails(transactionId);
     }
   };
   
-  // Partager la transaction
+  // ✅ FONCTION DE PARTAGE AMÉLIORÉE
   const handleShare = async () => {
+    if (!transaction) return;
+    
     try {
-      // Formatage des informations à partager
-      const isIncome = transaction.type === 'EPARGNE';
-      const operationType = isIncome ? 'Épargne' : 'Retrait';
-      const date = formatDate(transaction.dateCreation);
-      const time = formatTime(transaction.dateCreation);
+      // Détermination du type de transaction
+      const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
+      const isEpargne = transactionType.toLowerCase().includes('epargne') || 
+                       transactionType.toLowerCase().includes('depot') ||
+                       transactionType === 'EPARGNE';
+      
+      const operationType = isEpargne ? 'Épargne' : 'Retrait';
+      const dateOperation = transaction.dateOperation || transaction.dateCreation || new Date();
+      const date = formatDate(dateOperation);
+      const time = formatTime(dateOperation);
+      
+      // Formatage des informations client
+      const clientNom = transaction.client?.nom || 'Client';
+      const clientPrenom = transaction.client?.prenom || '';
+      const clientComplet = `${clientPrenom} ${clientNom}`.trim();
+      
+      // Formatage du collecteur
+      const collecteurNom = transaction.collecteur?.nom || user?.nom || 'Collecteur';
+      const collecteurPrenom = transaction.collecteur?.prenom || user?.prenom || '';
+      const collecteurComplet = `${collecteurPrenom} ${collecteurNom}`.trim();
       
       const message = `
-Reçu de ${operationType}
+📋 REÇU DE ${operationType.toUpperCase()}
 
-Date: ${date} à ${time}
-Référence: ${transaction.reference || 'N/A'}
-Client: ${transaction.client.prenom} ${transaction.client.nom}
-Montant: ${formatCurrency(transaction.montant)} FCFA
-Statut: ${transaction.status === 'COMPLETED' ? 'Complété' : transaction.status}
-${transaction.description ? `Description: ${transaction.description}` : ''}
+📅 Date: ${date} à ${time}
+🆔 Référence: ${transaction.id || 'N/A'}
+👤 Client: ${clientComplet}
+💰 Montant: ${formatCurrency(transaction.montant)} FCFA
+📊 Statut: ${transaction.statut || 'Complété'}
+${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
 
-Opération effectuée par: ${transaction.collecteur.prenom} ${transaction.collecteur.nom}
-FOCEP Microfinance
+👨‍💼 Opération effectuée par: ${collecteurComplet}
+🏦 FOCEP Microfinance
       `;
       
       await Share.share({
-        message,
+        message: message.trim(),
         title: `Reçu de ${operationType} - ${date}`
       });
       
@@ -118,28 +147,39 @@ FOCEP Microfinance
     }
   };
   
-  // Rendu du statut de la transaction
+  // ✅ RENDU AMÉLIORÉ DU STATUT
   const renderStatus = () => {
-    let statusText = 'Inconnu';
-    let statusColor = theme.colors.gray;
-    let statusIcon = 'help-circle';
+    let statusText = 'Complété';
+    let statusColor = theme.colors.success;
+    let statusIcon = 'checkmark-circle';
     
-    switch (transaction.status) {
+    const statut = transaction.statut || transaction.status || 'COMPLETED';
+    
+    switch (statut.toUpperCase()) {
       case 'COMPLETED':
+      case 'VALIDE':
+      case 'SUCCESS':
         statusText = 'Complété';
         statusColor = theme.colors.success;
         statusIcon = 'checkmark-circle';
         break;
       case 'PENDING':
+      case 'EN_ATTENTE':
         statusText = 'En attente';
         statusColor = theme.colors.warning;
         statusIcon = 'time';
         break;
       case 'FAILED':
+      case 'ECHEC':
+      case 'ERROR':
         statusText = 'Échoué';
         statusColor = theme.colors.error;
         statusIcon = 'close-circle';
         break;
+      default:
+        statusText = 'Complété';
+        statusColor = theme.colors.success;
+        statusIcon = 'checkmark-circle';
     }
     
     return (
@@ -149,31 +189,71 @@ FOCEP Microfinance
       </View>
     );
   };
+
+  // ✅ COMPOSANTS UI SIMPLES
+  const Header = ({ title, onBackPress }) => (
+    <View style={styles.headerContainer}>
+      <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
+        <Ionicons name="arrow-back" size={24} color="white" />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerSpacer} />
+    </View>
+  );
+
+  const Card = ({ children, style, elevation = 1 }) => (
+    <View style={[styles.card, style, { elevation }]}>
+      {children}
+    </View>
+  );
+
+  const Button = ({ 
+    title, 
+    onPress, 
+    icon, 
+    variant = 'primary', 
+    style 
+  }) => (
+    <TouchableOpacity 
+      style={[
+        styles.button, 
+        variant === 'outlined' ? styles.buttonOutlined : styles.buttonPrimary,
+        style
+      ]} 
+      onPress={onPress}
+    >
+      {icon && <Ionicons name={icon} size={20} color={variant === 'outlined' ? theme.colors.primary : 'white'} />}
+      <Text style={[
+        styles.buttonText,
+        variant === 'outlined' ? styles.buttonTextOutlined : styles.buttonTextPrimary
+      ]}>
+        {title}
+      </Text>
+    </TouchableOpacity>
+  );
   
-  // Si en cours de chargement
+  // ✅ ÉTATS DE CHARGEMENT ET D'ERREUR AMÉLIORÉS
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <SafeAreaView style={styles.container}>
         <Header
           title="Détails de l'opération"
-          showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={[styles.content, styles.loadingContainer]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Chargement des détails...</Text>
+          <Text style={styles.loadingSubText}>Récupération des informations de la transaction</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
   
-  // Si erreur
   if (error) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <SafeAreaView style={styles.container}>
         <Header
           title="Détails de l'opération"
-          showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={[styles.content, styles.errorContainer]}>
@@ -186,17 +266,15 @@ FOCEP Microfinance
             style={styles.retryButton}
           />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
   
-  // Si pas de transaction
   if (!transaction) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <SafeAreaView style={styles.container}>
         <Header
           title="Détails de l'opération"
-          showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={[styles.content, styles.errorContainer]}>
@@ -209,23 +287,27 @@ FOCEP Microfinance
             style={styles.retryButton}
           />
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
   
-  // Rendu principal
-  const isIncome = transaction.type === 'EPARGNE';
+  // ✅ DÉTERMINATION DU TYPE DE TRANSACTION
+  const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
+  const isIncome = transactionType.toLowerCase().includes('epargne') || 
+                   transactionType.toLowerCase().includes('depot') ||
+                   transactionType === 'EPARGNE';
+  
+  const dateOperation = transaction.dateOperation || transaction.dateCreation || new Date();
   
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.container}>
       <Header
         title="Détails de l'opération"
-        showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
       
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {/* Montant et Type */}
+        {/* ✅ MONTANT ET TYPE AMÉLIORÉS */}
         <Card style={styles.amountCard} elevation={2}>
           <View style={styles.amountContainer}>
             <Text style={styles.amountLabel}>
@@ -243,45 +325,56 @@ FOCEP Microfinance
           <View style={styles.dateTimeContainer}>
             <View style={styles.dateTimeItem}>
               <Text style={styles.dateTimeLabel}>Date</Text>
-              <Text style={styles.dateTimeValue}>{formatDate(transaction.dateCreation)}</Text>
+              <Text style={styles.dateTimeValue}>{formatDate(dateOperation)}</Text>
             </View>
             <View style={styles.dateTimeItem}>
               <Text style={styles.dateTimeLabel}>Heure</Text>
-              <Text style={styles.dateTimeValue}>{formatTime(transaction.dateCreation)}</Text>
+              <Text style={styles.dateTimeValue}>{formatTime(dateOperation)}</Text>
             </View>
           </View>
         </Card>
         
-        {/* Informations du client */}
-        <Card style={styles.detailsCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Client</Text>
-            <TouchableOpacity onPress={handleViewClient}>
-              <Text style={styles.viewLink}>Voir</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Nom</Text>
-            <Text style={styles.detailValue}>
-              {transaction.client.prenom} {transaction.client.nom}
-            </Text>
-          </View>
-          
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>N° de compte</Text>
-            <Text style={styles.detailValue}>{transaction.client.numerCompte || 'N/A'}</Text>
-          </View>
-          
-          {transaction.client.telephone && (
+        {/* ✅ INFORMATIONS CLIENT AMÉLIORÉES */}
+        {transaction.client && (
+          <Card style={styles.detailsCard}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle}>Client</Text>
+              <TouchableOpacity onPress={handleViewClient}>
+                <Text style={styles.viewLink}>Voir profil</Text>
+              </TouchableOpacity>
+            </View>
+            
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Téléphone</Text>
-              <Text style={styles.detailValue}>{transaction.client.telephone}</Text>
+              <Text style={styles.detailLabel}>Nom complet</Text>
+              <Text style={styles.detailValue}>
+                {transaction.client.prenom} {transaction.client.nom}
+              </Text>
             </View>
-          )}
-        </Card>
+            
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>N° de compte</Text>
+              <Text style={styles.detailValue}>
+                {transaction.client.numeroCompte || `#${transaction.client.id}`}
+              </Text>
+            </View>
+            
+            {transaction.client.telephone && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Téléphone</Text>
+                <Text style={styles.detailValue}>{transaction.client.telephone}</Text>
+              </View>
+            )}
+
+            {transaction.client.numeroCni && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>CNI</Text>
+                <Text style={styles.detailValue}>{transaction.client.numeroCni}</Text>
+              </View>
+            )}
+          </Card>
+        )}
         
-        {/* Détails de la transaction */}
+        {/* ✅ DÉTAILS DE LA TRANSACTION AMÉLIORÉS */}
         <Card style={styles.detailsCard}>
           <Text style={styles.cardTitle}>Détails de l'opération</Text>
           
@@ -308,25 +401,27 @@ FOCEP Microfinance
           
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Référence</Text>
-            <Text style={styles.detailValue}>{transaction.reference || 'N/A'}</Text>
+            <Text style={styles.detailValue}>#{transaction.id}</Text>
           </View>
           
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Collecteur</Text>
-            <Text style={styles.detailValue}>
-              {transaction.collecteur.prenom} {transaction.collecteur.nom}
-            </Text>
-          </View>
+          {transaction.collecteur && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Collecteur</Text>
+              <Text style={styles.detailValue}>
+                {transaction.collecteur.prenom} {transaction.collecteur.nom}
+              </Text>
+            </View>
+          )}
           
-          {transaction.description && (
+          {transaction.libelle && (
             <View style={styles.descriptionContainer}>
               <Text style={styles.detailLabel}>Description</Text>
-              <Text style={styles.descriptionText}>{transaction.description}</Text>
+              <Text style={styles.descriptionText}>{transaction.libelle}</Text>
             </View>
           )}
         </Card>
         
-        {/* Actions */}
+        {/* ✅ ACTIONS AMÉLIORÉES */}
         <View style={styles.actionsContainer}>
           <Button
             title="Partager le reçu"
@@ -346,7 +441,7 @@ FOCEP Microfinance
           />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -354,6 +449,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 60,
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 32,
   },
   content: {
     flex: 1,
@@ -374,7 +489,14 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  loadingSubText: {
+    marginTop: 8,
+    fontSize: 14,
     color: theme.colors.textLight,
+    textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
@@ -394,14 +516,24 @@ const styles = StyleSheet.create({
     color: theme.colors.textLight,
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 22,
   },
   retryButton: {
     minWidth: 150,
   },
   
   // Cards
-  amountCard: {
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 12,
     padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  amountCard: {
     marginBottom: 16,
   },
   amountContainer: {
@@ -459,7 +591,6 @@ const styles = StyleSheet.create({
   
   // Details
   detailsCard: {
-    padding: 20,
     marginBottom: 16,
   },
   cardHeader: {
@@ -472,7 +603,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
-    marginBottom: 16,
   },
   viewLink: {
     color: theme.colors.primary,
@@ -527,6 +657,33 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginBottom: 12,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  buttonPrimary: {
+    backgroundColor: theme.colors.primary,
+  },
+  buttonOutlined: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  buttonTextPrimary: {
+    color: 'white',
+  },
+  buttonTextOutlined: {
+    color: theme.colors.primary,
   },
 });
 

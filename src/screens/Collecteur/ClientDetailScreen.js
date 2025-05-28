@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientDetailScreen.js - VERSION SANS MOCKS
+// src/screens/Collecteur/ClientDetailScreen.js - VERSION CORRIGÉE BASÉE SUR VOTRE CODE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -15,8 +15,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// ✅ SERVICES RÉELS
-import { clientService, transactionService } from '../../services';
+// ✅ IMPORTS CORRIGÉS - AJOUT DU POINT-VIRGULE ET CORRECTION DU DESTRUCTURING
+import clientService from '../../services/clientService'; // ✅ IMPORT CORRIGÉ
+import transactionService from '../../services/transactionService'; // ✅ IMPORT CORRIGÉ
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
 
@@ -30,9 +31,6 @@ const ClientDetailScreen = ({ route, navigation }) => {
   const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState(null);
   
-  // ✅ SUPPRESSION: Plus de données fictives de commission
-  // const [commissionParams, setCommissionParams] = useState(null);
-  
   useEffect(() => {
     if (client) {
       setClientDetails(client);
@@ -43,25 +41,46 @@ const ClientDetailScreen = ({ route, navigation }) => {
     }
   }, [client]);
   
-  // ✅ FONCTION RÉELLE DE CHARGEMENT DES DONNÉES
+  // ✅ FONCTION CORRIGÉE DE CHARGEMENT DES DONNÉES
   const loadClientData = async () => {
     try {
       setError(null);
+      console.log('🔄 Chargement des données pour client:', client?.id);
       
-      // Charger les détails complets du client depuis l'API
-      const clientResponse = await clientService.getClientById(client.id);
-      if (clientResponse.success) {
-        setClientDetails(clientResponse.data);
+      // 1. Charger les détails complets du client depuis l'API
+      try {
+        const clientResponse = await clientService.getClientById(client.id);
+        console.log('✅ Réponse client service:', clientResponse);
+        if (clientResponse.success) {
+          setClientDetails(clientResponse.data);
+        }
+      } catch (clientError) {
+        console.warn('⚠️ Erreur détails client, utilisation des données existantes:', clientError.message);
+        // Continuer avec les données existantes au lieu de bloquer
       }
       
-      // ✅ CHARGEMENT RÉEL DES TRANSACTIONS
-      const transactionsResponse = await transactionService.getTransactionsByClient(client.id);
-      if (transactionsResponse.success) {
-        setTransactions(transactionsResponse.data || []);
+      // 2. ✅ CHARGEMENT CORRIGÉ DES TRANSACTIONS
+      try {
+        console.log('🔍 Tentative de chargement des transactions pour client:', client.id);
+        const transactionsResponse = await transactionService.getTransactionsByClient(client.id);
+        console.log('📊 Réponse transactions service:', transactionsResponse);
+        
+        if (transactionsResponse && transactionsResponse.success) {
+          const transactionsData = transactionsResponse.data || [];
+          console.log('✅ Transactions récupérées:', transactionsData.length, 'transactions');
+          setTransactions(transactionsData);
+        } else {
+          console.warn('⚠️ Réponse transactions non réussie ou vide');
+          setTransactions([]);
+        }
+      } catch (transactionError) {
+        console.error('❌ Erreur lors du chargement des transactions:', transactionError);
+        setTransactions([]);
+        // Ne pas bloquer l'interface pour les transactions - afficher un message informatif
       }
       
     } catch (err) {
-      console.error('Erreur lors du chargement des données client:', err);
+      console.error('❌ Erreur globale lors du chargement des données client:', err);
       setError(err.message || 'Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
@@ -78,7 +97,6 @@ const ClientDetailScreen = ({ route, navigation }) => {
     navigation.navigate('ClientAddEdit', { mode: 'edit', client: clientDetails });
   };
   
-  // ✅ FONCTION RÉELLE DE CHANGEMENT DE STATUT
   const handleToggleStatus = async () => {
     if (!clientDetails) return;
     
@@ -117,6 +135,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
                 throw new Error(response.error || 'Erreur lors du changement de statut');
               }
             } catch (err) {
+              console.error('❌ Erreur changement statut:', err);
               Alert.alert('Erreur', err.message || 'Impossible de changer le statut du client');
             } finally {
               setIsLoading(false);
@@ -127,8 +146,13 @@ const ClientDetailScreen = ({ route, navigation }) => {
     );
   };
   
+  // ✅ FONCTION CORRIGÉE POUR LA NAVIGATION VERS LES DÉTAILS DE TRANSACTION
   const handleViewTransaction = (transaction) => {
-    navigation.navigate('CollecteDetail', { transaction });
+    console.log('🔍 Navigation vers détails transaction:', transaction);
+    navigation.navigate('CollecteDetail', { 
+      transaction: transaction,
+      transactionId: transaction.id // ✅ AJOUT DU PARAMÈTRE ID POUR PLUS DE SÉCURITÉ
+    });
   };
   
   const handleNewOperation = (type) => {
@@ -138,7 +162,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
     });
   };
   
-  // ✅ COMPOSANTS SIMPLICIFIÉS TEMPORAIRES
+  // ✅ COMPOSANTS EXISTANTS CONSERVÉS
   const Header = ({ title, onBackPress, rightComponent }) => (
     <View style={styles.headerContainer}>
       <TouchableOpacity onPress={onBackPress}>
@@ -155,31 +179,49 @@ const ClientDetailScreen = ({ route, navigation }) => {
     </View>
   );
 
-  const TransactionItem = ({ transaction, onPress }) => (
-    <TouchableOpacity style={styles.transactionItem} onPress={onPress}>
-      <View style={styles.transactionLeft}>
-        <Ionicons 
-          name={transaction.type === 'EPARGNE' ? 'arrow-down-circle' : 'arrow-up-circle'} 
-          size={20} 
-          color={transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error} 
-        />
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionType}>
-            {transaction.type === 'EPARGNE' ? 'Épargne' : 'Retrait'}
-          </Text>
-          <Text style={styles.transactionDate}>
-            {format(new Date(transaction.dateCreation || Date.now()), 'dd/MM/yyyy à HH:mm')}
-          </Text>
+  // ✅ COMPOSANT TRANSACTION AMÉLIORÉ POUR GÉRER DIFFÉRENTS TYPES DE DONNÉES
+  const TransactionItem = ({ transaction, onPress }) => {
+    // ✅ GESTION ROBUSTE DES DIFFÉRENTS FORMATS DE TRANSACTION
+    const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
+    const isEpargne = transactionType.toLowerCase().includes('epargne') || 
+                     transactionType.toLowerCase().includes('depot') ||
+                     transactionType === 'EPARGNE';
+    
+    const dateToUse = transaction.dateOperation || transaction.dateCreation || Date.now();
+    const montant = transaction.montant || 0;
+    
+    return (
+      <TouchableOpacity style={styles.transactionItem} onPress={() => onPress(transaction)}>
+        <View style={styles.transactionLeft}>
+          <Ionicons 
+            name={isEpargne ? 'arrow-down-circle' : 'arrow-up-circle'} 
+            size={20} 
+            color={isEpargne ? theme.colors.success : theme.colors.error} 
+          />
+          <View style={styles.transactionInfo}>
+            <Text style={styles.transactionType}>
+              {isEpargne ? 'Épargne' : 'Retrait'}
+            </Text>
+            <Text style={styles.transactionDate}>
+              {format(new Date(dateToUse), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+            </Text>
+            {/* ✅ AJOUT DU LIBELLÉ SI DISPONIBLE */}
+            {transaction.libelle && (
+              <Text style={styles.transactionLibelle} numberOfLines={1}>
+                {transaction.libelle}
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
-      <Text style={[
-        styles.transactionAmount,
-        { color: transaction.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
-      ]}>
-        {(transaction.montant || 0).toLocaleString()} FCFA
-      </Text>
-    </TouchableOpacity>
-  );
+        <Text style={[
+          styles.transactionAmount,
+          { color: isEpargne ? theme.colors.success : theme.colors.error }
+        ]}>
+          {montant.toLocaleString()} FCFA
+        </Text>
+      </TouchableOpacity>
+    );
+  };
   
   const formatCurrencyValue = (amount) => {
     return (amount || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
@@ -187,7 +229,12 @@ const ClientDetailScreen = ({ route, navigation }) => {
   
   const formatDateString = (date) => {
     if (!date) return 'Non définie';
-    return format(new Date(date), 'd MMMM yyyy', { locale: fr });
+    try {
+      return format(new Date(date), 'd MMMM yyyy', { locale: fr });
+    } catch (error) {
+      console.warn('Erreur formatage date:', error);
+      return 'Date invalide';
+    }
   };
   
   if (isLoading) {
@@ -380,9 +427,16 @@ const ClientDetailScreen = ({ route, navigation }) => {
             </View>
           </Card>
           
-          {/* ✅ TRANSACTIONS RÉELLES */}
+          {/* ✅ TRANSACTIONS RÉELLES AVEC GESTION D'ÉTAT AMÉLIORÉE */}
           <View style={styles.transactionsSection}>
-            <Text style={styles.sectionTitle}>Transactions récentes</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Transactions récentes</Text>
+              {transactions.length > 0 && (
+                <Text style={styles.transactionCount}>
+                  {transactions.length} transaction{transactions.length > 1 ? 's' : ''}
+                </Text>
+              )}
+            </View>
             
             {transactions.length === 0 ? (
               <View style={styles.emptyTransactions}>
@@ -390,21 +444,27 @@ const ClientDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.emptyTransactionsText}>
                   Aucune transaction trouvée pour ce client
                 </Text>
+                <Text style={styles.emptyTransactionsSubText}>
+                  Les nouvelles opérations apparaîtront ici
+                </Text>
               </View>
             ) : (
               <View>
                 {transactions.slice(0, 5).map((transaction, index) => (
                   <TransactionItem
-                    key={transaction.id || index}
+                    key={transaction.id || `transaction-${index}`}
                     transaction={transaction}
-                    onPress={() => handleViewTransaction(transaction)}
+                    onPress={handleViewTransaction}
                   />
                 ))}
                 
                 {transactions.length > 5 && (
                   <TouchableOpacity
                     style={styles.viewAllButton}
-                    onPress={() => navigation.navigate('ClientTransactions', { clientId: clientDetails.id })}
+                    onPress={() => navigation.navigate('ClientTransactions', { 
+                      clientId: clientDetails.id,
+                      clientName: `${clientDetails.prenom} ${clientDetails.nom}`
+                    })}
                   >
                     <Text style={styles.viewAllButtonText}>
                       Voir toutes les transactions ({transactions.length})
@@ -420,6 +480,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
   );
 };
 
+// ✅ STYLES EXISTANTS CONSERVÉS + QUELQUES AJOUTS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -629,15 +690,28 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.error,
   },
   
-  // Transactions Section Styles
+  // ✅ STYLES POUR LA SECTION TRANSACTIONS AMÉLIORÉE
   transactionsSection: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
-    marginBottom: 16,
+  },
+  transactionCount: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    backgroundColor: theme.colors.lightGray,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   emptyTransactions: {
     alignItems: 'center',
@@ -652,8 +726,15 @@ const styles = StyleSheet.create({
   },
   emptyTransactionsText: {
     fontSize: 14,
-    color: theme.colors.textLight,
+    color: theme.colors.text,
     marginTop: 16,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  emptyTransactionsSubText: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 8,
     textAlign: 'center',
   },
   transactionItem: {
@@ -688,6 +769,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textLight,
     marginTop: 2,
+  },
+  transactionLibelle: {
+    fontSize: 11,
+    color: theme.colors.textLight,
+    marginTop: 1,
+    fontStyle: 'italic',
   },
   transactionAmount: {
     fontSize: 14,
