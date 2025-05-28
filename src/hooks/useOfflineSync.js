@@ -1,180 +1,313 @@
-// src/hooks/useOfflineSync.js
+// src/hooks/useOfflineSync.js - VERSION SIMPLIFIÉE ET FONCTIONNELLE
 import { useState, useEffect, useCallback } from 'react';
 import { Platform } from 'react-native';
-import SyncService, { SYNC_STATUS } from '../services/SyncService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import clientService from '../services/clientService'; 
 
-export { SYNC_STATUS };
+// États de synchronisation simples
+export const SYNC_STATUS = {
+  IDLE: 'idle',
+  SYNCING: 'syncing',
+  SUCCESS: 'success',
+  ERROR: 'error'
+};
 
 export const useOfflineSync = () => {
-  // États initiaux
+  // États initialisés
   const [isOnline, setIsOnline] = useState(true);
   const [syncStatus, setSyncStatus] = useState(SYNC_STATUS.IDLE);
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncDate, setLastSyncDate] = useState(null);
   
-  // Détection de l'environnement SSR
-  const isSSR = typeof window === 'undefined';
-
-  // Surveillance de la connexion
+  // Détection de la connexion réseau
   useEffect(() => {
-    if (isSSR) return;
-    
     let netInfoUnsubscribe = () => {};
     
     const setupNetworkListener = async () => {
-      if (Platform.OS !== 'web' || (typeof window !== 'undefined')) {
-        try {
+      try {
+        if (Platform.OS !== 'web') {
           const NetInfo = (await import('@react-native-community/netinfo')).default;
           
           // État initial
           const netState = await NetInfo.fetch();
-          setIsOnline(!!netState?.isConnected);
+          const connected = netState?.isConnected && netState?.isInternetReachable;
+          setIsOnline(connected);
           
           // Écouter les changements
           netInfoUnsubscribe = NetInfo.addEventListener(state => {
-            setIsOnline(!!state?.isConnected);
+            const nowConnected = state?.isConnected && state?.isInternetReachable;
+            const wasOffline = !isOnline;
+            
+            setIsOnline(nowConnected);
+            
+            // Si on vient de se reconnecter, synchroniser
+            if (wasOffline && nowConnected) {
+              syncPendingOperations();
+            }
           });
-        } catch (error) {
-          console.warn('NetInfo non disponible:', error);
-          setIsOnline(true); // Par défaut en ligne
+        } else {
+          // Sur web, considérer comme toujours en ligne
+          setIsOnline(true);
         }
+      } catch (error) {
+        console.warn('NetInfo non disponible:', error);
+        setIsOnline(true); // Par défaut en ligne
       }
     };
     
     setupNetworkListener();
+    loadPendingCount();
     
     return () => {
-      netInfoUnsubscribe();
+      if (netInfoUnsubscribe) {
+        netInfoUnsubscribe();
+      }
     };
-  }, [isSSR]);
-  
-  // Surveillance de l'état de synchronisation
-  useEffect(() => {
-    if (isSSR) return;
-    
-    // Vérifier si SyncService est correctement initialisé
-    if (!SyncService.statusChange || !SyncService.pendingCountChange) {
-      console.warn('SyncService n\'est pas correctement initialisé');
-      return () => {};
+  }, []);
+
+  // Charger le nombre d'opérations en attente
+  const loadPendingCount = async () => {
+    try {
+      const pending = await AsyncStorage.getItem('pendingOperations');
+      const operations = pending ? JSON.parse(pending) : [];
+      setPendingCount(operations.length);
+    } catch (error) {
+      console.error('Erreur chargement pending count:', error);
+      setPendingCount(0);
     }
+  };
+
+  // Sauvegarder une opération en attente
+  const savePendingOperation = async (operation) => {
+    try {
+      const existing = await AsyncStorage.getItem('pendingOperations');
+      const operations = existing ? JSON.parse(existing) : [];
+      
+      const newOperation = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        ...operation
+      };
+      
+      operations.push(newOperation);
+      
+      await AsyncStorage.setItem('pendingOperations', JSON.stringify(operations));
+      setPendingCount(operations.length);
+      
+      return newOperation;
+    } catch (error) {
+      console.error('Erreur sauvegarde opération:', error);
+      throw error;
+    }
+  };
+
+  // Supprimer une opération en attente
+  const removePendingOperation = async (operationId) => {
+    try {
+      const existing = await AsyncStorage.getItem('pendingOperations');
+      const operations = existing ? JSON.parse(existing) : [];
+      
+      const filtered = operations.filter(op => op.id !== operationId);
+      
+      await AsyncStorage.setItem('pendingOperations', JSON.stringify(filtered));
+      setPendingCount(filtered.length);
+    } catch (error) {
+      console.error('Erreur suppression opération:', error);
+    }
+  };
+
+  const saveClient = useCallback(async (clientData, isEdit = false) => {
+    console.log('💾 useOfflineSync.saveClient:', { clientData, isEdit, isOnline });
     
-    const statusSubscription = SyncService.statusChange.subscribe(status => {
-      setSyncStatus(status);
-    });
-    
-    const pendingSubscription = SyncService.pendingCountChange.subscribe(count => {
-      setPendingCount(count);
-    });
-    
-    // Obtenir l'état initial
-    const initialStatus = SyncService.getStatus();
-    setSyncStatus(initialStatus.status);
-    setPendingCount(initialStatus.pendingCount);
-    setLastSyncDate(initialStatus.lastSync);
-    
-    return () => {
-      if (statusSubscription && typeof statusSubscription.unsubscribe === 'function') {
-        statusSubscription.unsubscribe();
+    try {
+      // Validation des données d'abord
+      if (!clientData.nom || !clientData.prenom || !clientData.numeroCni) {
+        return {
+          success: false,
+          error: 'Données client incomplètes',
+          validationErrors: {
+            nom: !clientData.nom ? 'Le nom est requis' : null,
+            prenom: !clientData.prenom ? 'Le prénom est requis' : null,
+            numeroCni: !clientData.numeroCni ? 'Le numéro CNI est requis' : null
+          }
+        };
+      }
+
+      // Si en ligne, essayer la sauvegarde directe
+      if (isOnline) {
+        setSyncStatus(SYNC_STATUS.SYNCING);
+        
+        try {
+          let result;
+          
+          if (isEdit && clientData.id) {
+            result = await clientService.updateClient(clientData.id, clientData);
+          } else {
+            result = await clientService.createClient(clientData);
+          }
+
+          setSyncStatus(SYNC_STATUS.SUCCESS);
+          setLastSyncDate(new Date());
+          
+          console.log('✅ Client sauvegardé en ligne:', result);
+          
+          return {
+            success: true,
+            data: result.data || result,
+            message: result.message || 'Client sauvegardé avec succès'
+          };
+          
+        } catch (onlineError) {
+          console.warn('⚠️ Échec sauvegarde en ligne:', onlineError.message);
+          setSyncStatus(SYNC_STATUS.ERROR);
+          
+          // Continuer en mode hors ligne si l'erreur n'est pas de validation
+          if (onlineError.message?.includes('validation') || onlineError.message?.includes('400')) {
+            throw onlineError; // Relancer les erreurs de validation
+          }
+        }
+      }
+
+      // Mode hors ligne ou fallback après échec en ligne
+      console.log('📱 Sauvegarde en mode hors ligne');
+      
+      const operation = {
+        type: isEdit ? 'UPDATE_CLIENT' : 'CREATE_CLIENT',
+        data: { ...clientData, tempId: clientData.id || Date.now() },
+        status: 'PENDING'
+      };
+
+      await savePendingOperation(operation);
+      
+      // Sauvegarder localement aussi pour usage immédiat
+      await saveClientLocally(operation.data);
+
+      return {
+        success: true,
+        data: operation.data,
+        message: 'Client sauvegardé localement (sera synchronisé une fois en ligne)',
+        isOffline: true
+      };
+
+    } catch (error) {
+      console.error('❌ Erreur saveClient:', error);
+      setSyncStatus(SYNC_STATUS.ERROR);
+      
+      return {
+        success: false,
+        error: error.message || 'Erreur lors de la sauvegarde du client'
+      };
+    }
+  }, [isOnline]);
+
+  // Sauvegarder localement pour usage immédiat
+  const saveClientLocally = async (clientData) => {
+    try {
+      const localClients = await AsyncStorage.getItem('localClients');
+      const clients = localClients ? JSON.parse(localClients) : [];
+      
+      const clientToSave = {
+        ...clientData,
+        lastModified: new Date().toISOString(),
+        isLocal: true
+      };
+      
+      if (clientData.id || clientData.tempId) {
+        // Mise à jour
+        const index = clients.findIndex(c => 
+          c.id === clientData.id || c.tempId === clientData.tempId
+        );
+        if (index >= 0) {
+          clients[index] = clientToSave;
+        } else {
+          clients.push(clientToSave);
+        }
+      } else {
+        // Création
+        clientToSave.tempId = Date.now();
+        clients.push(clientToSave);
       }
       
-      if (pendingSubscription && typeof pendingSubscription.unsubscribe === 'function') {
-        pendingSubscription.unsubscribe();
+      await AsyncStorage.setItem('localClients', JSON.stringify(clients));
+      console.log('💾 Client sauvegardé localement');
+    } catch (error) {
+      console.error('❌ Erreur sauvegarde locale:', error);
+    }
+  };
+
+  // Synchroniser les opérations en attente
+  const syncPendingOperations = async () => {
+    try {
+      const pending = await AsyncStorage.getItem('pendingOperations');
+      const operations = pending ? JSON.parse(pending) : [];
+      
+      if (operations.length === 0) return;
+      
+      console.log(`🔄 Synchronisation de ${operations.length} opérations...`);
+      setSyncStatus(SYNC_STATUS.SYNCING);
+
+      for (const operation of operations) {
+        try {
+          let result;
+          
+          switch (operation.type) {
+            case 'CREATE_CLIENT':
+              result = await clientService.createClient(operation.data);
+              break;
+            case 'UPDATE_CLIENT':
+              result = await clientService.updateClient(operation.data.id, operation.data);
+              break;
+            default:
+              console.warn('⚠️ Type d\'opération non supporté:', operation.type);
+              continue;
+          }
+
+          if (result && (result.success !== false)) {
+            console.log('✅ Opération synchronisée:', operation.id);
+            await removePendingOperation(operation.id);
+          }
+
+        } catch (error) {
+          console.error('❌ Erreur sync opération:', operation.id, error.message);
+          // Continuer avec les autres opérations
+        }
       }
-    };
-  }, [isSSR]);
-  
-  // Fonction de synchronisation
+      
+      setSyncStatus(SYNC_STATUS.SUCCESS);
+      setLastSyncDate(new Date());
+      
+    } catch (error) {
+      console.error('❌ Erreur synchronisation globale:', error);
+      setSyncStatus(SYNC_STATUS.ERROR);
+    }
+  };
+
+  // Synchronisation manuelle
   const syncNow = useCallback(async () => {
-    if (isSSR) {
-      return { success: false, message: 'Non disponible dans cet environnement' };
+    if (!isOnline) {
+      return { success: false, message: 'Aucune connexion réseau' };
     }
     
     try {
-      const result = await SyncService.syncNow();
-      if (result && result.success) {
-        setLastSyncDate(new Date());
-      }
-      return result;
+      await syncPendingOperations();
+      return { success: true, message: 'Synchronisation terminée' };
     } catch (error) {
-      console.error('Erreur lors de la synchronisation:', error);
-      return { success: false, message: error.message || 'Erreur inconnue' };
+      return { success: false, message: error.message };
     }
-  }, [isSSR]);
-  
-  // Enregistrer une transaction (en ligne ou hors ligne)
-  const saveTransaction = useCallback(async (transactionData) => {
-    if (isSSR) {
-      return { success: false, message: 'Non disponible dans cet environnement' };
-    }
-    
-    try {
-      const result = await SyncService.saveTransaction(transactionData);
-      return { success: true, data: result };
-    } catch (error) {
-      console.error('Erreur lors de l\'enregistrement de la transaction:', error);
-      return { success: false, error: error.message || 'Erreur inconnue' };
-    }
-  }, [isSSR]);
-  
-  // Enregistrer un client (en ligne ou hors ligne)
-  const saveClient = useCallback(async (clientData, isUpdate = false) => {
-    if (isSSR) {
-      return { success: false, message: 'Non disponible dans cet environnement' };
-    }
-    
-    try {
-      const result = await SyncService.saveClient(clientData, isUpdate);
-      return { success: true, data: result };
-    } catch (error) {
-      console.error('Erreur lors de l\'enregistrement du client:', error);
-      return { success: false, error: error.message || 'Erreur inconnue' };
-    }
-  }, [isSSR]);
-  
-  // Obtenir les collecteurs (en ligne ou depuis le cache)
-  const getCollecteurs = useCallback(async () => {
-    if (isSSR) {
-      return { success: false, message: 'Non disponible dans cet environnement' };
-    }
-    
-    try {
-      const collecteurs = await SyncService.getCollecteurs();
-      return { success: true, data: collecteurs };
-    } catch (error) {
-      console.error('Erreur lors de la récupération des collecteurs:', error);
-      return { success: false, error: error.message || 'Erreur inconnue' };
-    }
-  }, [isSSR]);
-  
-  // Vérifier si tout est synchronisé
-  const checkIfSynced = useCallback(async () => {
-    if (isSSR) {
-      return false;
-    }
-    
-    try {
-      return await SyncService.isSynced();
-    } catch (error) {
-      console.error('Erreur lors de la vérification de la synchronisation:', error);
-      return false;
-    }
-  }, [isSSR]);
-  
-  // Nettoyer les données en attente (DANGER: perte de données)
+  }, [isOnline]);
+
+  // Nettoyer les données en attente (à utiliser avec précaution)
   const clearPendingData = useCallback(async () => {
-    if (isSSR) {
-      return { success: false, message: 'Non disponible dans cet environnement' };
-    }
-    
     try {
-      const result = await SyncService.clearPendingData();
-      return { success: result, message: result ? 'Données nettoyées' : 'Erreur lors du nettoyage' };
+      await AsyncStorage.removeItem('pendingOperations');
+      await AsyncStorage.removeItem('localClients');
+      setPendingCount(0);
+      return { success: true, message: 'Données nettoyées' };
     } catch (error) {
-      console.error('Erreur lors du nettoyage des données:', error);
-      return { success: false, message: error.message || 'Erreur inconnue' };
+      return { success: false, message: error.message };
     }
-  }, [isSSR]);
-  
+  }, []);
+
   return {
     // États
     isOnline,
@@ -182,12 +315,9 @@ export const useOfflineSync = () => {
     pendingCount,
     lastSyncDate,
     
-    // Actions
-    syncNow,
-    saveTransaction,
+    // Actions principales
     saveClient,
-    getCollecteurs,
-    checkIfSynced,
+    syncNow,
     clearPendingData
   };
 };

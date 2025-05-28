@@ -27,104 +27,163 @@ import MouvementService from '../../services/mouvementService';
 import JournalService from '../../services/journalService';
 import { theme } from '../../theme/theme';
 
-export const CollecteJournaliereScreen = ({ navigation }) => {
+export const CollecteJournaliereScreen = ({ navigation, route }) => { 
   const { user } = useAuthStore();
   const { clients, fetchClients } = useClientStore();
   
   const [selectedClient, setSelectedClient] = useState(null);
-  const [operation, setOperation] = useState('epargne'); // 'epargne' ou 'retrait'
+  const [operation, setOperation] = useState(
+    route?.params?.initialOperation || 'epargne'
+  );
   const [montant, setMontant] = useState('');
   const [journalActif, setJournalActif] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // ✅ CORRECTION: Commencer en mode loading
   const [errors, setErrors] = useState({});
   const [recentOperations, setRecentOperations] = useState([]);
 
-  // Charger les données au montage
+  // ✅ CORRECTION CRITIQUE: Appeler loadInitialData au montage
   useEffect(() => {
+    console.log('🎯 CollecteJournaliere initialisée avec:', {
+      initialOperation: route?.params?.initialOperation,
+      currentOperation: operation
+    });
+    
+    // ✅ APPEL MANQUANT
     loadInitialData();
   }, []);
 
+  // ✅ CORRECTION: Fonction de chargement améliorée
   const loadInitialData = async () => {
-  setIsLoading(true);
-  try {
-    await fetchClients(user.id);
+    console.log('🔄 Début chargement données initiales');
+    setIsLoading(true);
     
-    await loadOperationsDuJour();
-  } catch (error) {
-    Alert.alert('Erreur', 'Impossible de charger les données');
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-const loadOperationsDuJour = async () => {
-  try {
-    const operations = await MouvementService.getOperationsDuJour(user.id);
-    setRecentOperations(operations.slice(-5));
-  } catch (error) {
-    console.error('Error loading operations du jour:', error);
-    setRecentOperations([]); // Pas d'erreur si aucune opération
-  }
-};
-
-  const loadRecentOperations = async (journalId) => {
     try {
-      const operations = await MouvementService.getMouvementsByJournal(journalId);
-      setRecentOperations(operations.slice(-5)); // Les 5 dernières opérations
+      // 1. Charger les clients
+      await fetchClients(user.id);
+      console.log('✅ Clients chargés');
+      
+      // 2. ✅ NOUVEAU: Charger/créer le journal actif
+      await loadJournalDuJour();
+      console.log('✅ Journal chargé');
+      
+      // 3. Charger les opérations du jour
+      await loadOperationsDuJour();
+      console.log('✅ Opérations chargées');
+      
     } catch (error) {
-      console.error('Error loading recent operations:', error);
+      console.error('❌ Erreur chargement données:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setIsLoading(false);
+      console.log('🔄 Fin chargement données initiales');
+    }
+  };
+
+  // ✅ NOUVELLE FONCTION: Charger ou créer le journal du jour
+  const loadJournalDuJour = async () => {
+    try {
+      console.log('📅 Chargement journal du jour pour collecteur:', user.id);
+      
+      // ✅ Utiliser getOrCreateJournalDuJour au lieu de getJournalActif
+      const journal = await JournalService.getOrCreateJournalDuJour(user.id);
+      
+      if (journal) {
+        setJournalActif(journal);
+        console.log('✅ Journal actif défini:', journal.id);
+      } else {
+        console.warn('⚠️ Aucun journal retourné');
+        // ✅ Créer un journal si aucun n'existe
+        await createNewJournal();
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement journal:', error);
+      // ✅ Essayer de créer un nouveau journal en cas d'erreur
+      await createNewJournal();
+    }
+  };
+
+  // ✅ NOUVELLE FONCTION: Créer un nouveau journal
+  const createNewJournal = async () => {
+    try {
+      console.log('🆕 Création nouveau journal');
+      const today = new Date().toISOString().split('T')[0];
+      
+      const newJournal = await JournalService.createJournal({
+        dateDebut: today,
+        dateFin: today,
+        collecteurId: user.id,
+      });
+      
+      if (newJournal) {
+        setJournalActif(newJournal);
+        console.log('✅ Nouveau journal créé:', newJournal.id);
+      }
+    } catch (error) {
+      console.error('❌ Erreur création journal:', error);
+      Alert.alert('Erreur', 'Impossible de créer un journal. Contactez l\'administrateur.');
+    }
+  };
+
+  const loadOperationsDuJour = async () => {
+    try {
+      const operations = await MouvementService.getOperationsDuJour(user.id);
+      setRecentOperations(operations?.slice(-5) || []); // ✅ Protection contre undefined
+    } catch (error) {
+      console.error('Error loading operations du jour:', error);
+      setRecentOperations([]);
     }
   };
 
   const validateForm = () => {
-  const newErrors = {};
+    const newErrors = {};
 
-  if (!selectedClient) {
-    newErrors.client = 'Veuillez sélectionner un client';
-  }
-
-  if (!montant || isNaN(montant) || parseFloat(montant) <= 0) {
-    newErrors.montant = 'Veuillez saisir un montant valide';
-  }
-
-  setErrors(newErrors);
-  return Object.keys(newErrors).length === 0;
-};
-
-  const handleOperation = async () => {
-  if (!validateForm()) {
-    return;
-  }
-
-  setIsLoading(true);
-  
-  try {
-    const operationData = {
-      clientId: selectedClient.id,
-      collecteurId: user.id,
-      montant: parseFloat(montant),
-    };
-
-    let result;
-    if (operation === 'epargne') {
-      result = await MouvementService.enregistrerEpargne(operationData);
-      Alert.alert('Succès', `Épargne de ${montant} FCFA enregistrée pour ${selectedClient.nom} ${selectedClient.prenom}`);
-    } else {
-      result = await MouvementService.effectuerRetrait(operationData);
-      Alert.alert('Succès', `Retrait de ${montant} FCFA effectué pour ${selectedClient.nom} ${selectedClient.prenom}`);
+    if (!selectedClient) {
+      newErrors.client = 'Veuillez sélectionner un client';
     }
 
-    // Réinitialiser le formulaire
-    setMontant('');
-    setSelectedClient(null);
+    if (!montant || isNaN(montant) || parseFloat(montant) <= 0) {
+      newErrors.montant = 'Veuillez saisir un montant valide';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleOperation = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
     
-    await loadOperationsDuJour();
-  } catch (error) {
-    Alert.alert('Erreur', `Impossible d'effectuer l'opération: ${error.message}`);
-  } finally {
-    setIsLoading(false);
-  }
-};
+    try {
+      const operationData = {
+        clientId: selectedClient.id,
+        collecteurId: user.id,
+        montant: parseFloat(montant),
+      };
+
+      let result;
+      if (operation === 'epargne') {
+        result = await MouvementService.enregistrerEpargne(operationData);
+        Alert.alert('Succès', `Épargne de ${montant} FCFA enregistrée pour ${selectedClient.nom} ${selectedClient.prenom}`);
+      } else {
+        result = await MouvementService.effectuerRetrait(operationData);
+        Alert.alert('Succès', `Retrait de ${montant} FCFA effectué pour ${selectedClient.nom} ${selectedClient.prenom}`);
+      }
+
+      // Réinitialiser le formulaire
+      setMontant('');
+      setSelectedClient(null);
+      
+      // Recharger les opérations
+      await loadOperationsDuJour();
+    } catch (error) {
+      Alert.alert('Erreur', `Impossible d'effectuer l'opération: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const renderClientItem = (client) => (
     <List.Item
@@ -143,38 +202,57 @@ const loadOperationsDuJour = async () => {
   const renderRecentOperation = (operation, index) => (
     <List.Item
       key={index}
-      title={`${operation.type} - ${operation.montant} FCFA`}
-      description={`${operation.client.nom} ${operation.client.prenom} - ${new Date(operation.dateOperation).toLocaleTimeString()}`}
+      title={`${operation.sens || operation.type} - ${operation.montant} FCFA`}
+      description={`${operation.libelle || 'Transaction'} - ${new Date(operation.dateOperation).toLocaleTimeString()}`}
       left={(props) => (
         <List.Icon 
           {...props} 
-          icon={operation.type === 'EPARGNE' ? 'cash-plus' : 'cash-minus'}
-          color={operation.type === 'EPARGNE' ? theme.colors.primary : theme.colors.error}
+          icon={(operation.sens === 'epargne' || operation.type === 'EPARGNE') ? 'cash-plus' : 'cash-minus'}
+          color={(operation.sens === 'epargne' || operation.type === 'EPARGNE') ? theme.colors.primary : theme.colors.error}
         />
       )}
     />
   );
 
-  if (isLoading && !journalActif) {
+  // ✅ AMÉLIORATION: État de chargement plus informatif
+  if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Chargement...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>
+            {!journalActif ? 'Préparation du journal...' : 'Chargement...'}
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
+  // ✅ AMÉLIORATION: Écran sans journal avec option de création
   if (!journalActif) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.noJournalContainer}>
           <Text style={styles.noJournalText}>Aucun journal actif</Text>
-          <Button
-            mode="contained"
-            onPress={() => navigation.goBack()}
-          >
-            Retour
-          </Button>
+          <Text style={styles.noJournalSubtext}>
+            Un journal est nécessaire pour effectuer des opérations
+          </Text>
+          <View style={styles.noJournalActions}>
+            <Button
+              mode="contained"
+              onPress={createNewJournal}
+              style={styles.createJournalButton}
+            >
+              Créer un journal
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              Retour
+            </Button>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -189,7 +267,9 @@ const loadOperationsDuJour = async () => {
         <ScrollView style={styles.scrollView}>
           {/* En-tête journal */}
           <Surface style={styles.header}>
-            <Title>Collecte Journalière</Title>
+            <Title>
+              {operation === 'epargne' ? 'Nouvelle Épargne' : 'Nouveau Retrait'}
+            </Title>
             <Text style={styles.journalInfo}>
               Journal #{journalActif.id} - {new Date(journalActif.dateDebut).toLocaleDateString()}
             </Text>
@@ -309,8 +389,27 @@ const styles = StyleSheet.create({
   },
   noJournalText: {
     fontSize: 18,
+    marginBottom: 8,
+    color: theme.colors.onSurface,
+    textAlign: 'center',
+  },
+  // ✅ NOUVEAUX STYLES
+  noJournalSubtext: {
+    fontSize: 14,
     marginBottom: 20,
     color: theme.colors.onSurface,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  noJournalActions: {
+    width: '100%',
+    gap: 12,
+  },
+  createJournalButton: {
+    marginBottom: 8,
+  },
+  backButton: {
+    marginTop: 8,
   },
   keyboardView: {
     flex: 1,

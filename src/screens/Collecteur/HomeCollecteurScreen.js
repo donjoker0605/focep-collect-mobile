@@ -127,6 +127,22 @@ export const HomeCollecteurScreen = ({ navigation }) => {
       </View>
     );
   }
+  
+  const navigateToOperation = (operationType) => {
+    console.log(`🎯 Navigation vers ${operationType}`);
+    navigation.navigate('CollecteJournaliere', { 
+      initialOperation: operationType 
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,13 +171,25 @@ export const HomeCollecteurScreen = ({ navigation }) => {
                 <Text style={styles.journalDate}>
                   {new Date(journalActif.dateDebut).toLocaleDateString('fr-FR')}
                 </Text>
-                <Button
-                  mode="outlined"
-                  onPress={() => navigation.navigate('CollecteJournaliere')}
-                  style={styles.journalButton}
-                >
-                  Continuer la collecte
-                </Button>
+                {/* ✅ CORRECTION: Boutons séparés pour épargne et retrait */}
+                <View style={styles.journalActionsContainer}>
+                  <Button
+                    mode="contained"
+                    onPress={() => navigateToOperation('epargne')}
+                    style={[styles.journalButton, styles.epargneButton]}
+                    icon="cash-plus"
+                  >
+                    Épargne
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={() => navigateToOperation('retrait')}
+                    style={[styles.journalButton, styles.retraitButton]}
+                    icon="cash-minus"
+                  >
+                    Retrait
+                  </Button>
+                </View>
               </View>
             ) : (
               <View>
@@ -218,11 +246,32 @@ export const HomeCollecteurScreen = ({ navigation }) => {
           </Card.Content>
         </Card>
 
-        {/* Actions rapides */}
+        {/* Actions rapides - ✅ AMÉLIORATION */}
         <Card style={styles.card}>
           <Card.Content>
             <Title>Actions Rapides</Title>
             <View style={styles.actionsContainer}>
+              {/* ✅ AJOUT: Boutons épargne/retrait dans actions rapides */}
+              {journalActif && (
+                <>
+                  <Button
+                    mode="contained"
+                    onPress={() => navigateToOperation('epargne')}
+                    style={[styles.actionButton, styles.epargneActionButton]}
+                    icon="cash-plus"
+                  >
+                    Nouvelle Épargne
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={() => navigateToOperation('retrait')}
+                    style={[styles.actionButton, styles.retraitActionButton]}
+                    icon="cash-minus"
+                  >
+                    Nouveau Retrait
+                  </Button>
+                </>
+              )}
               <Button
                 mode="outlined"
                 onPress={() => navigation.navigate('Clients')}
@@ -244,14 +293,24 @@ export const HomeCollecteurScreen = ({ navigation }) => {
         </Card>
       </ScrollView>
 
-      {/* Bouton flottant pour nouvelle collecte */}
+      {/* ✅ CORRECTION: FABs séparés pour épargne et retrait */}
       {journalActif && (
-        <FAB
-          style={styles.fab}
-          icon="plus"
-          label="Nouvelle Collecte"
-          onPress={() => navigation.navigate('CollecteJournaliere')}
-        />
+        <View style={styles.fabContainer}>
+          <FAB
+            style={[styles.fab, styles.fabEpargne]}
+            icon="cash-plus"
+            label="Épargne"
+            onPress={() => navigateToOperation('epargne')}
+            color="white"
+          />
+          <FAB
+            style={[styles.fab, styles.fabRetrait]}
+            icon="cash-minus"
+            label="Retrait"
+            onPress={() => navigateToOperation('retrait')}
+            color="white"
+          />
+        </View>
       )}
     </SafeAreaView>
   );
@@ -304,8 +363,21 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     marginBottom: 8,
   },
+  // ✅ NOUVEAUX STYLES pour les boutons journal
+  journalActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
   journalButton: {
-    marginTop: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  epargneButton: {
+    backgroundColor: theme.colors.success || '#4CAF50',
+  },
+  retraitButton: {
+    borderColor: theme.colors.warning || '#FF9800',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -341,10 +413,26 @@ const styles = StyleSheet.create({
     width: '48%',
     marginVertical: 4,
   },
-  fab: {
+  // ✅ NOUVEAUX STYLES pour les actions épargne/retrait
+  epargneActionButton: {
+    backgroundColor: theme.colors.success || '#4CAF50',
+  },
+  retraitActionButton: {
+    borderColor: theme.colors.warning || '#FF9800',
+  },
+  // ✅ NOUVEAUX STYLES pour les FABs
+  fabContainer: {
     position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
+    right: 16,
+    bottom: 16,
+  },
+  fab: {
+    marginBottom: 12,
+  },
+  fabEpargne: {
+    backgroundColor: theme.colors.success || '#4CAF50',
+  },
+  fabRetrait: {
+    backgroundColor: theme.colors.warning || '#FF9800',
   },
 });

@@ -1,8 +1,7 @@
-// src/screens/Collecteur/HomeScreen.js
+// src/screens/Collecteur/HomeScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { Card, Title, Paragraph, Button } from 'react-native-paper';
-import ApiService from '../../services/apiService'; // ✅ SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
 
 export default function CollecteurHomeScreen({ navigation }) {
@@ -98,15 +97,20 @@ export default function CollecteurHomeScreen({ navigation }) {
           <Title>Actions rapides</Title>
         </Card.Content>
         <Card.Actions>
+          {}
           <Button 
             mode="contained" 
-            onPress={() => navigation.navigate('Collecte')}
+            onPress={() => navigation.navigate('CollecteJournaliere', { 
+              initialOperation: 'epargne' 
+            })}
           >
-            Nouvelle collecte
+            Nouvelle épargne
           </Button>
           <Button 
             mode="outlined" 
-            onPress={() => navigation.navigate('Retrait')}
+            onPress={() => navigation.navigate('CollecteJournaliere', { 
+              initialOperation: 'retrait' 
+            })}
           >
             Nouveau retrait
           </Button>

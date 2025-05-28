@@ -1,14 +1,13 @@
-﻿// src/config/apiConfig.js - VERSION CORRIGÉE AVEC VOTRE IP ACTUELLE
+﻿// src/config/apiConfig.js - VERSION CORRIGÉE
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export const API_CONFIG = {
-  baseURL: __DEV__ ? 'http://192.168.94.178:8080/api' : 'https://api.votredomaine.com/api',
+  baseURL: __DEV__ ? 'http://192.168.111.57:8080/api' : 'https://api.votredomaine.com/api', // ✅ CORRECTION: __DEV__ au lieu de **DEV**
   timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,
 };
-
 
 export const STORAGE_KEYS = {
   JWT_TOKEN: 'focep_jwt_token',
@@ -69,7 +68,7 @@ export const debugApiConfig = () => {
   console.log('🔧 Configuration API:', {
     baseURL: API_CONFIG.baseURL,
     platform: Platform.OS,
-    isDev: __DEV__,
+    isDev: __DEV__, // ✅ CORRECTION
     timeout: API_CONFIG.timeout
   });
 };

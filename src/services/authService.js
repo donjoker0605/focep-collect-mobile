@@ -1,47 +1,60 @@
-// src/services/authService.js
+// src/services/authService.js - CORRECTION FINALE AVEC TON ARCHITECTURE
 import { SecureStorage, SECURE_KEYS } from './secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 import { STORAGE_KEYS } from '../config/apiConfig';
+import axiosInstance from '../api/axiosConfig'; // ✅ TON AXIOS EXISTANT
 
 class AuthService {
+  constructor() {
+    this.axios = axiosInstance; // ✅ UTILISER TON AXIOS
+  }
+
   // Connexion utilisateur
   async login(email, password) {
     try {
-      const response = await ApiService.post('/auth/login', {
+      const response = await this.axios.post('/auth/login', { // ✅ CORRECTION
         email,
         password,
-      }, false); // false = pas de token requis pour login
+      });
 
-      if (response.token) {
+      // ✅ ADAPTATION À LA STRUCTURE DE TON BACKEND
+      const responseData = response.data;
+      const token = responseData.data?.token || responseData.token;
+
+      if (token) {
         // Stocker le token de manière sécurisée
-        await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, response.token);
+        await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, token);
+        
+        // ✅ CORRECTION: Aussi stocker dans AsyncStorage pour compatibilité
+        await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, token);
         
         // Stocker le refresh token s'il existe
-        if (response.refreshToken) {
-          await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, response.refreshToken);
+        const refreshToken = responseData.data?.refreshToken || responseData.refreshToken;
+        if (refreshToken) {
+          await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, refreshToken);
         }
         
         // Décoder le token pour obtenir les infos utilisateur
-        const decodedToken = jwtDecode(response.token);
+        const decodedToken = jwtDecode(token);
         const userInfo = {
-          id: decodedToken.sub,
+          id: decodedToken.userId || decodedToken.sub, // ✅ Compatibilité avec ton backend
           email: decodedToken.email,
           role: decodedToken.role,
           nom: decodedToken.nom,
           prenom: decodedToken.prenom,
           agenceId: decodedToken.agenceId,
-          // Ajouter la date d'expiration pour pouvoir vérifier côté client
           exp: decodedToken.exp,
         };
         
-        // Stocker les informations utilisateur de manière sécurisée
+        // Stocker les informations utilisateur de manière sécurisée ET dans AsyncStorage
         await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, userInfo);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userInfo));
         
         // Sauvegarder la date de dernière connexion
         await AsyncStorage.setItem('lastLoginAt', new Date().toISOString());
         
-        return { success: true, user: userInfo, token: response.token };
+        return { success: true, user: userInfo, token: token };
       }
       
       return { success: false, error: 'Token non reçu' };
@@ -56,7 +69,7 @@ class AuthService {
     try {
       // Tenter d'appeler le endpoint de logout si connecté
       try {
-        await ApiService.post('/auth/logout');
+        await this.axios.post('/auth/logout'); // ✅ CORRECTION
       } catch (e) {
         // Ignorer les erreurs, nous voulons nettoyer localement de toute façon
       }
@@ -64,8 +77,12 @@ class AuthService {
       // Nettoyage sécurisé
       await SecureStorage.clearAuthData();
       
-      // Nettoyage des préférences non sensibles
-      await AsyncStorage.removeItem('lastLoginAt');
+      // ✅ CORRECTION: Nettoyer aussi AsyncStorage
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.JWT_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        'lastLoginAt'
+      ]);
       
       return { success: true };
     } catch (error) {
@@ -75,7 +92,7 @@ class AuthService {
   }
 
   // Vérifier si l'utilisateur est connecté
-async isAuthenticated() { 
+  async isAuthenticated() { 
     try {
       const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
       if (!token) return { token: null, userData: null };
@@ -88,7 +105,7 @@ async isAuthenticated() {
         if (decodedToken.exp && decodedToken.exp < currentTime) {
           // Token expiré
           console.log('Token expiré, tentative de déconnexion');
-          await this.logout(); // Utiliser this au lieu de authService
+          await this.logout();
           return { token: null, userData: null };
         }
       } catch (decodeError) {
@@ -113,30 +130,36 @@ async isAuthenticated() {
         return false;
       }
       
-      const response = await ApiService.post('/auth/refresh-token', {
+      const response = await this.axios.post('/auth/refresh-token', { // ✅ CORRECTION
         refreshToken
-      }, false);
+      });
       
-      if (!response.token) {
+      const responseData = response.data;
+      const newToken = responseData.data?.token || responseData.token;
+      
+      if (!newToken) {
         return false;
       }
       
       // Stocker le nouveau token
-      await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, response.token);
+      await SecureStorage.saveItem(SECURE_KEYS.JWT_TOKEN, newToken);
+      await AsyncStorage.setItem(STORAGE_KEYS.JWT_TOKEN, newToken);
       
       // Stocker le nouveau refresh token s'il existe
-      if (response.refreshToken) {
-        await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, response.refreshToken);
+      const newRefreshToken = responseData.data?.refreshToken || responseData.refreshToken;
+      if (newRefreshToken) {
+        await SecureStorage.saveItem(SECURE_KEYS.REFRESH_TOKEN, newRefreshToken);
       }
       
       // Mettre à jour la session utilisateur
-      const decodedToken = jwtDecode(response.token);
+      const decodedToken = jwtDecode(newToken);
       const userInfo = await SecureStorage.getJSON(SECURE_KEYS.USER_SESSION);
       
       if (userInfo) {
         // Mettre à jour uniquement l'expiration
         userInfo.exp = decodedToken.exp;
         await SecureStorage.saveItem(SECURE_KEYS.USER_SESSION, userInfo);
+        await AsyncStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userInfo));
       }
       
       return true;
@@ -146,10 +169,21 @@ async isAuthenticated() {
     }
   }
 
-  // Obtenir l'utilisateur actuel
+  // ✅ MÉTHODE CRITIQUE POUR TON PROBLÈME DE CLIENT
   async getCurrentUser() {
     try {
-      return await SecureStorage.getJSON(SECURE_KEYS.USER_SESSION);
+      // Essayer d'abord SecureStorage
+      let userInfo = await SecureStorage.getJSON(SECURE_KEYS.USER_SESSION);
+      
+      // Si pas trouvé, essayer AsyncStorage comme fallback
+      if (!userInfo) {
+        const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+        if (userData) {
+          userInfo = JSON.parse(userData);
+        }
+      }
+      
+      return userInfo;
     } catch (error) {
       console.error('Get current user error:', error);
       return null;
@@ -159,7 +193,15 @@ async isAuthenticated() {
   // Obtenir le token
   async getToken() {
     try {
-      return await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
+      // Essayer d'abord SecureStorage
+      let token = await SecureStorage.getItem(SECURE_KEYS.JWT_TOKEN);
+      
+      // Si pas trouvé, essayer AsyncStorage
+      if (!token) {
+        token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+      }
+      
+      return token;
     } catch (error) {
       console.error('Get token error:', error);
       return null;
@@ -169,9 +211,9 @@ async isAuthenticated() {
   // Réinitialisation de mot de passe
   async resetPassword(email) {
     try {
-      const response = await ApiService.post('/auth/reset-password', {
+      const response = await this.axios.post('/auth/reset-password', { // ✅ CORRECTION
         email,
-      }, false);
+      });
       
       return { success: true };
     } catch (error) {
@@ -208,4 +250,5 @@ async isAuthenticated() {
   }
 }
 
+export const authService = new AuthService(); // ✅ EXPORT NOMMÉ AUSSI
 export default new AuthService();

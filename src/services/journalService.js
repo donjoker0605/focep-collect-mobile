@@ -120,6 +120,15 @@ class JournalService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la clôture du journal');
     }
   }
+  
+	 async getOrCreateJournalDuJour(collecteurId) {
+	  try {
+		const response = await this.axios.get(`/journals/collecteur/${collecteurId}/today`);
+		return this.formatResponse(response, 'Journal du jour récupéré');
+	  } catch (error) {
+		throw this.handleError(error, 'Erreur lors de la récupération du journal');
+	  }
+	}
 }
 
 export default new JournalService();

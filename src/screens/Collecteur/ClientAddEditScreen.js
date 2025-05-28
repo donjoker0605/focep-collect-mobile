@@ -22,6 +22,8 @@ import Button from '../../components/Button/Button';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
+import clientService from '../../services/clientService';
+import authService from '../../services/authService';
 
 // Schéma de validation pour le formulaire client
 const createClientSchema = yup.object().shape({
@@ -45,6 +47,45 @@ const createClientSchema = yup.object().shape({
     .string()
     .required('Le quartier est requis'),
 });
+
+const testServicesConnection = async () => {
+  console.log('🔍 === TEST DES SERVICES ===');
+  
+  try {
+    // Test 1: Vérifier authService
+    console.log('1️⃣ Test authService...');
+    const user = await authService.getCurrentUser();
+    console.log('👤 Utilisateur:', user);
+    
+    if (!user) {
+      console.warn('⚠️ Pas d\'utilisateur connecté');
+      return;
+    }
+    
+    // Test 2: Test de connexivité clientService
+    console.log('2️⃣ Test clientService...');
+    const testConnection = await clientService.testConnection();
+    console.log('🔗 Test connexion:', testConnection);
+    
+    // Test 3: Validation des données
+    console.log('3️⃣ Test validation...');
+    const testData = {
+      nom: 'TestNom',
+      prenom: 'TestPrenom',
+      numeroCni: '123456789',
+      telephone: '677123456',
+      ville: 'Douala'
+    };
+    
+    const validation = clientService.validateClientDataLocally(testData);
+    console.log('✅ Validation:', validation);
+    
+    console.log('🎉 === TOUS LES TESTS TERMINÉS ===');
+    
+  } catch (error) {
+    console.error('❌ Erreur dans les tests:', error);
+  }
+};
 
 // Schéma de validation pour l'édition (nom et prénom non modifiables)
 const editClientSchema = yup.object().shape({
@@ -96,6 +137,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
   // Charger les paramètres de commission si nous sommes en mode édition
   useEffect(() => {
+	  testServicesConnection();
     if (isEditMode && client) {
       // Si le client a des paramètres de commission personnalisés, les charger
       if (client.commissionParams) {
