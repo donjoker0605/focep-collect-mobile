@@ -201,7 +201,6 @@ const CollecteScreen = ({ navigation, route }) => {
         clientId: selectedClient,
         collecteurId: user.id,
         montant: parseFloat(amount),
-        journalId: 3 // TODO: Récupérer le journal actif
       };
       
       let result;

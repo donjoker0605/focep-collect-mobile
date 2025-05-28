@@ -1,4 +1,3 @@
-// src/services/mouvementService.js
 import BaseApiService from './base/BaseApiService';
 
 class MouvementService extends BaseApiService {
@@ -6,15 +5,17 @@ class MouvementService extends BaseApiService {
     super();
   }
 
-  // Enregistrer une épargne avec gestion hors ligne
+  // ✅ ÉPARGNE AVEC JOURNAL AUTOMATIQUE
   async enregistrerEpargne(data) {
     try {
+      console.log('💰 Enregistrement épargne avec journal automatique:', data);
+      
+      // ✅ PLUS BESOIN DE PASSER LE JOURNAL - IL EST CRÉÉ AUTOMATIQUEMENT
       const response = await this.axios.post('/mouvements/epargne', {
         clientId: data.clientId,
         collecteurId: data.collecteurId,
         montant: data.montant,
-        journalId: data.journalId,
-      }, { canQueue: true }); // Permet la mise en file d'attente si hors ligne
+      }, { canQueue: true });
       
       return this.formatResponse(response, 'Épargne enregistrée avec succès');
     } catch (error) {
@@ -23,15 +24,17 @@ class MouvementService extends BaseApiService {
     }
   }
 
-  // Effectuer un retrait avec gestion hors ligne
+  // ✅ RETRAIT AVEC JOURNAL AUTOMATIQUE
   async effectuerRetrait(data) {
     try {
+      console.log('🏧 Effectuation retrait avec journal automatique:', data);
+      
       const response = await this.axios.post('/mouvements/retrait', {
         clientId: data.clientId,
         collecteurId: data.collecteurId,
         montant: data.montant,
-        journalId: data.journalId,
-      }, { canQueue: true }); // Permet la mise en file d'attente si hors ligne
+        // journalId: PAS BESOIN - GÉRÉ AUTOMATIQUEMENT CÔTÉ BACKEND
+      }, { canQueue: true });
       
       return this.formatResponse(response, 'Retrait effectué avec succès');
     } catch (error) {
@@ -40,7 +43,27 @@ class MouvementService extends BaseApiService {
     }
   }
 
-  // Consulter les mouvements d'un journal avec mise en cache
+  // ✅ RÉCUPÉRATION DES OPÉRATIONS DU JOUR POUR UN COLLECTEUR
+  async getOperationsDuJour(collecteurId, date = null) {
+    try {
+      const dateParam = date || new Date().toISOString().split('T')[0];
+      console.log('📊 Récupération opérations du jour:', collecteurId, dateParam);
+      
+      const response = await this.axios.get(`/mouvements/collecteur/${collecteurId}/jour`, {
+        params: { date: dateParam }
+      }, {
+        useCache: true,
+        maxAge: 2 * 60 * 1000 // 2 minutes de cache
+      });
+      
+      return this.formatResponse(response, 'Opérations du jour récupérées');
+    } catch (error) {
+      console.error('Erreur récupération opérations du jour:', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des opérations du jour');
+    }
+  }
+
+  // MÉTHODES EXISTANTES CONSERVÉES
   async getMouvementsByJournal(journalId) {
     try {
       const response = await this.axios.get(`/mouvements/journal/${journalId}`, {}, {
@@ -55,7 +78,6 @@ class MouvementService extends BaseApiService {
     }
   }
 
-  // Consulter les mouvements d'un client avec mise en cache
   async getMouvementsByClient(clientId, dateDebut, dateFin) {
     try {
       const params = {};
@@ -73,6 +95,41 @@ class MouvementService extends BaseApiService {
       return this.handleError(error, 'Erreur lors de la récupération des mouvements client');
     }
   }
+
+  // ✅ NOUVELLE MÉTHODE: Vérification du solde avant retrait
+  async verifierSoldeRetrait(clientId, montant) {
+    try {
+      const response = await this.axios.post('/mouvements/verify-balance', {
+        clientId,
+        montant
+      });
+      
+      return this.formatResponse(response, 'Solde vérifié');
+    } catch (error) {
+      console.error('Erreur vérification solde:', error);
+      throw this.handleError(error, 'Erreur lors de la vérification du solde');
+    }
+  }
+  
+  async getOperationsDuJour(collecteurId, date = null) {
+  try {
+    const dateParam = date || new Date().toISOString().split('T')[0];
+    console.log('📊 Récupération opérations du jour:', collecteurId, dateParam);
+    
+    // ✅ NOUVEAU ENDPOINT qui gère tout automatiquement
+    const response = await this.axios.get(`/mouvements/collecteur/${collecteurId}/jour`, {
+      params: { date: dateParam }
+    }, {
+      useCache: true,
+      maxAge: 2 * 60 * 1000 // 2 minutes de cache
+    });
+    
+    return this.formatResponse(response, 'Opérations du jour récupérées');
+  } catch (error) {
+    console.error('Erreur récupération opérations du jour:', error);
+    throw this.handleError(error, 'Erreur lors de la récupération des opérations du jour');
+  }
+}
 }
 
 export default new MouvementService();

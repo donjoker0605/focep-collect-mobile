@@ -45,24 +45,27 @@ export const CollecteJournaliereScreen = ({ navigation }) => {
   }, []);
 
   const loadInitialData = async () => {
-    setIsLoading(true);
-    try {
-      // Charger le journal actif
-      const journal = await JournalService.getJournalActif(user.id);
-      if (journal) {
-        setJournalActif(journal);
-        // Charger les mouvements récents du journal
-        loadRecentOperations(journal.id);
-      }
-      
-      // Charger les clients
-      await fetchClients(user.id);
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger les données');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  setIsLoading(true);
+  try {
+    await fetchClients(user.id);
+    
+    await loadOperationsDuJour();
+  } catch (error) {
+    Alert.alert('Erreur', 'Impossible de charger les données');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+const loadOperationsDuJour = async () => {
+  try {
+    const operations = await MouvementService.getOperationsDuJour(user.id);
+    setRecentOperations(operations.slice(-5));
+  } catch (error) {
+    console.error('Error loading operations du jour:', error);
+    setRecentOperations([]); // Pas d'erreur si aucune opération
+  }
+};
 
   const loadRecentOperations = async (journalId) => {
     try {
@@ -74,60 +77,54 @@ export const CollecteJournaliereScreen = ({ navigation }) => {
   };
 
   const validateForm = () => {
-    const newErrors = {};
+  const newErrors = {};
 
-    if (!selectedClient) {
-      newErrors.client = 'Veuillez sélectionner un client';
-    }
+  if (!selectedClient) {
+    newErrors.client = 'Veuillez sélectionner un client';
+  }
 
-    if (!montant || isNaN(montant) || parseFloat(montant) <= 0) {
-      newErrors.montant = 'Veuillez saisir un montant valide';
-    }
+  if (!montant || isNaN(montant) || parseFloat(montant) <= 0) {
+    newErrors.montant = 'Veuillez saisir un montant valide';
+  }
 
-    if (!journalActif) {
-      newErrors.journal = 'Aucun journal actif. Créez un nouveau journal.';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  setErrors(newErrors);
+  return Object.keys(newErrors).length === 0;
+};
 
   const handleOperation = async () => {
-    if (!validateForm()) {
-      return;
+  if (!validateForm()) {
+    return;
+  }
+
+  setIsLoading(true);
+  
+  try {
+    const operationData = {
+      clientId: selectedClient.id,
+      collecteurId: user.id,
+      montant: parseFloat(montant),
+    };
+
+    let result;
+    if (operation === 'epargne') {
+      result = await MouvementService.enregistrerEpargne(operationData);
+      Alert.alert('Succès', `Épargne de ${montant} FCFA enregistrée pour ${selectedClient.nom} ${selectedClient.prenom}`);
+    } else {
+      result = await MouvementService.effectuerRetrait(operationData);
+      Alert.alert('Succès', `Retrait de ${montant} FCFA effectué pour ${selectedClient.nom} ${selectedClient.prenom}`);
     }
 
-    setIsLoading(true);
+    // Réinitialiser le formulaire
+    setMontant('');
+    setSelectedClient(null);
     
-    try {
-      const operationData = {
-        clientId: selectedClient.id,
-        collecteurId: user.id,
-        montant: parseFloat(montant),
-        journalId: journalActif.id,
-      };
-
-      let result;
-      if (operation === 'epargne') {
-        result = await MouvementService.enregistrerEpargne(operationData);
-        Alert.alert('Succès', `Épargne de ${montant} FCFA enregistrée pour ${selectedClient.nom} ${selectedClient.prenom}`);
-      } else {
-        result = await MouvementService.effectuerRetrait(operationData);
-        Alert.alert('Succès', `Retrait de ${montant} FCFA effectué pour ${selectedClient.nom} ${selectedClient.prenom}`);
-      }
-
-      // Réinitialiser le formulaire
-      setMontant('');
-      setSelectedClient(null);
-      
-      // Recharger les opérations récentes
-      loadRecentOperations(journalActif.id);
-    } catch (error) {
-      Alert.alert('Erreur', `Impossible d'effectuer l'opération: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    await loadOperationsDuJour();
+  } catch (error) {
+    Alert.alert('Erreur', `Impossible d'effectuer l'opération: ${error.message}`);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const renderClientItem = (client) => (
     <List.Item

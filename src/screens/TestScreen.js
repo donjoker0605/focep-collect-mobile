@@ -140,7 +140,7 @@ export const TestScreen = ({ navigation }) => {
         <Card style={styles.card}>
           <Card.Content>
             <Title>Configuration Backend</Title>
-            <Text style={styles.configText}>URL: http://192.168.91.23:8080</Text>
+            <Text style={styles.configText}>URL: http://192.168.94.178:8080</Text>
             <Text style={styles.configText}>Endpoints testés:</Text>
             <Text style={styles.configText}>• GET /api/public/ping</Text>
             <Text style={styles.configText}>• POST /api/auth/login</Text>
