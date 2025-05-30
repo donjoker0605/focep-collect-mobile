@@ -30,7 +30,6 @@ class TransactionService extends BaseApiService {
     }
   }
 
-  // MÉTHODE CORRIGÉE : Récupérer les transactions d'un collecteur
   async getTransactionsByCollecteur(collecteurId, page = 0, size = 50) {
     try {
       console.log('📊 API: GET /mouvements/collecteur/', collecteurId);
@@ -43,7 +42,6 @@ class TransactionService extends BaseApiService {
     }
   }
 
-  // MÉTHODES EXISTANTES CONSERVÉES
   async fetchJournalTransactions({ collecteurId, date, page = 0, size = 20, sort = 'dateOperation,desc' }) {
     try {
       console.log('📊 API: GET /mouvements/journal/transactions');

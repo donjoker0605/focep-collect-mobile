@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-// ✅ IMPORTS CORRIGÉS
+// IMPORTS CORRIGÉS
 import { useAuth } from '../../hooks/useAuth';
 import { transactionService } from '../../services/transactionService'; // ✅ IMPORT CORRECT
 
@@ -26,7 +26,7 @@ import { formatDate, formatTime } from '../../utils/dateUtils';
 const CollecteDetailScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   
-  // ✅ RÉCUPÉRATION AMÉLIORÉE DES PARAMÈTRES
+  // RÉCUPÉRATION AMÉLIORÉE DES PARAMÈTRES
   const { transaction: initialTransaction, transactionId } = route.params || {};
   
   // États
@@ -34,46 +34,46 @@ const CollecteDetailScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(!initialTransaction);
   const [error, setError] = useState(null);
   
-  // ✅ EFFET AMÉLIORÉ POUR CHARGER LES DÉTAILS
+  // EFFET AMÉLIORÉ POUR CHARGER LES DÉTAILS
   useEffect(() => {
-    console.log('🔍 CollecteDetailScreen - Paramètres reçus:', { initialTransaction, transactionId });
-    
-    if (initialTransaction) {
-      console.log('✅ Transaction fournie directement:', initialTransaction);
-      setTransaction(initialTransaction);
-      setLoading(false);
-    } else if (transactionId) {
-      console.log('🔄 Chargement de la transaction avec ID:', transactionId);
-      loadTransactionDetails(transactionId);
-    } else {
-      console.error('❌ Aucune transaction ni ID fourni');
-      setError('Aucune donnée de transaction fournie');
-      setLoading(false);
-    }
-  }, [initialTransaction, transactionId]);
+  console.log('🔍 CollecteDetailScreen - Paramètres reçus:', { initialTransaction, transactionId });
   
-  // ✅ FONCTION CORRIGÉE POUR CHARGER LES DÉTAILS
+  if (initialTransaction) {
+    console.log('✅ Transaction fournie directement:', initialTransaction);
+    setTransaction(initialTransaction);
+    setLoading(false);
+  } else if (transactionId) {
+    console.log('🔄 Chargement de la transaction avec ID:', transactionId);
+    loadTransactionDetails(transactionId);
+  } else {
+    console.error('❌ Aucune transaction ni ID fourni');
+    setError('Aucune donnée de transaction fournie');
+    setLoading(false);
+  }
+}, [initialTransaction, transactionId]);
+  
+  // FONCTION CORRIGÉE POUR CHARGER LES DÉTAILS
   const loadTransactionDetails = async (id) => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('🔄 Chargement des détails pour transaction:', id);
-      
-      const response = await transactionService.getTransactionDetails(id);
-      console.log('✅ Détails récupérés:', response);
-      
-      if (response.success) {
-        setTransaction(response.data);
-      } else {
-        throw new Error(response.error || 'Erreur lors du chargement des détails');
-      }
-    } catch (err) {
-      console.error('❌ Erreur lors du chargement des détails de la transaction:', err);
-      setError(err.message || 'Erreur lors du chargement des détails de la transaction');
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    setError(null);
+    console.log('🔄 Chargement des détails pour transaction:', id);
+    
+    const response = await transactionService.getTransactionDetails(id);
+    console.log('✅ Détails récupérés:', response);
+    
+    if (response.success) {
+      setTransaction(response.data);
+    } else {
+      throw new Error(response.error || 'Erreur lors du chargement des détails');
     }
-  };
+  } catch (err) {
+    console.error('❌ Erreur lors du chargement des détails de la transaction:', err);
+    setError(err.message || 'Erreur lors du chargement des détails de la transaction');
+  } finally {
+    setLoading(false);
+  }
+};
   
   // Rafraîchir les détails
   const handleRefresh = () => {

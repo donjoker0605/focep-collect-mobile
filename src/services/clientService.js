@@ -30,10 +30,11 @@ class ClientService extends BaseApiService {
   // ✅ MÉTHODE EXISTANTE CONSERVÉE
   async getClientById(clientId) {
     try {
-      console.log('📱 API: GET /clients/', clientId);
+      console.log('🔍 API: GET /clients/', clientId);
       const response = await this.axios.get(`/clients/${clientId}`);
       return this.formatResponse(response, 'Client récupéré');
     } catch (error) {
+      console.error('❌ Erreur récupération client:', error);
       throw this.handleError(error, 'Erreur lors de la récupération du client');
     }
   }
@@ -97,16 +98,17 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVELLES MÉTHODES UTILES
+  // NOUVELLES MÉTHODES UTILES
   async updateClientStatus(clientId, newStatus) {
     try {
-      console.log('📱 API: PATCH /clients/status/', clientId, { valide: newStatus });
-      const response = await this.axios.patch(`/clients/${clientId}/status`, {
+      console.log('🔄 API: PUT /clients/{}/status', clientId);
+      const response = await this.axios.put(`/clients/${clientId}/status`, {
         valide: newStatus
       });
       return this.formatResponse(response, 'Statut du client mis à jour');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du changement de statut');
+      console.error('❌ Erreur mise à jour statut client:', error);
+      throw this.handleError(error, 'Erreur lors de la mise à jour du statut');
     }
   }
 
@@ -134,6 +136,19 @@ class ClientService extends BaseApiService {
       return this.handleError(error, 'Erreur lors de la recherche de clients');
     }
   }
+  
+  async getClientWithTransactions(clientId) {
+    try {
+      console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+      return this.formatResponse(response, 'Client avec transactions récupéré');
+    } catch (error) {
+      console.error('❌ Erreur récupération client avec transactions:', error);
+      throw this.handleError(error, 'Erreur lors de la récupération du client avec transactions');
+    }
+  }
+  
+  
 
   // ✅ VALIDATION CÔTÉ CLIENT ROBUSTE
   validateClientDataLocally(clientData) {

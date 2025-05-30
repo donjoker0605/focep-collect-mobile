@@ -41,51 +41,51 @@ const ClientDetailScreen = ({ route, navigation }) => {
     }
   }, [client]);
   
-  // ✅ FONCTION CORRIGÉE DE CHARGEMENT DES DONNÉES
   const loadClientData = async () => {
-    try {
-      setError(null);
-      console.log('🔄 Chargement des données pour client:', client?.id);
+  try {
+    setError(null);
+    console.log('🔄 Chargement des données pour client:', client?.id);
+    
+    // ✅ CORRECTION: Utiliser le bon endpoint qui récupère client + transactions
+    const clientResponse = await clientService.getClientWithTransactions(client.id);
+    console.log('✅ Réponse client service:', clientResponse);
+    
+    if (clientResponse.success) {
+      const clientData = clientResponse.data;
+      setClientDetails(clientData);
       
-      // 1. Charger les détails complets du client depuis l'API
-      try {
-        const clientResponse = await clientService.getClientById(client.id);
-        console.log('✅ Réponse client service:', clientResponse);
-        if (clientResponse.success) {
-          setClientDetails(clientResponse.data);
-        }
-      } catch (clientError) {
-        console.warn('⚠️ Erreur détails client, utilisation des données existantes:', clientError.message);
-        // Continuer avec les données existantes au lieu de bloquer
-      }
-      
-      // 2. ✅ CHARGEMENT CORRIGÉ DES TRANSACTIONS
-      try {
-        console.log('🔍 Tentative de chargement des transactions pour client:', client.id);
-        const transactionsResponse = await transactionService.getTransactionsByClient(client.id);
-        console.log('📊 Réponse transactions service:', transactionsResponse);
-        
-        if (transactionsResponse && transactionsResponse.success) {
-          const transactionsData = transactionsResponse.data || [];
-          console.log('✅ Transactions récupérées:', transactionsData.length, 'transactions');
-          setTransactions(transactionsData);
-        } else {
-          console.warn('⚠️ Réponse transactions non réussie ou vide');
-          setTransactions([]);
-        }
-      } catch (transactionError) {
-        console.error('❌ Erreur lors du chargement des transactions:', transactionError);
+      if (clientData.transactions) {
+        console.log('✅ Transactions trouvées:', clientData.transactions.length);
+        setTransactions(clientData.transactions);
+      } else {
+        console.warn('⚠️ Aucune transaction dans la réponse');
         setTransactions([]);
-        // Ne pas bloquer l'interface pour les transactions - afficher un message informatif
       }
-      
-    } catch (err) {
-      console.error('❌ Erreur globale lors du chargement des données client:', err);
-      setError(err.message || 'Erreur lors du chargement des données');
-    } finally {
-      setIsLoading(false);
+    } else {
+      throw new Error(clientResponse.error || 'Erreur lors du chargement du client');
     }
-  };
+    
+  } catch (err) {
+    console.error('❌ Erreur globale lors du chargement des données client:', err);
+    setError(err.message || 'Erreur lors du chargement des données');
+    
+    // ✅ FALLBACK: Essayer de charger seulement le client si l'endpoint complet échoue
+    try {
+      console.log('🔄 Tentative de fallback - chargement client seul');
+      const fallbackResponse = await clientService.getClientById(client.id);
+      if (fallbackResponse.success) {
+        setClientDetails(fallbackResponse.data);
+        setTransactions([]); // Pas de transactions mais au moins le client
+        setError(null); // Clear l'erreur précédente
+      }
+    } catch (fallbackError) {
+      console.error('❌ Même le fallback a échoué:', fallbackError);
+      // Garder l'erreur originale
+    }
+  } finally {
+    setIsLoading(false);
+  }
+};
   
   const onRefresh = async () => {
     setRefreshing(true);
