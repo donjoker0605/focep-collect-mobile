@@ -64,6 +64,21 @@ const ClientListScreen = ({ navigation }) => {
       setRefreshing(false);
     }
   }, [user.id]);
+  
+  const handleClientPress = (clientItem) => {
+  console.log('🎯 Navigation vers ClientDetail avec:', clientItem);
+  console.log('🎯 Type de clientItem:', typeof clientItem);
+  console.log('🎯 clientItem.id:', clientItem?.id);
+  
+  if (!clientItem || !clientItem.id) {
+    Alert.alert('Erreur', 'Données client invalides');
+    return;
+  }
+  
+  navigation.navigate('ClientDetail', { 
+    client: clientItem 
+  });
+};
 
   // Charger les clients au montage du composant et à chaque changement de statut de connexion
   useEffect(() => {

@@ -52,12 +52,31 @@ const JournalScreen = ({ navigation }) => {
       
       // ✅ UTILISATION CORRECTE DU SERVICE
       const response = await MouvementService.getOperationsDuJour(user.id, formattedDate);
+	  
+	  console.log('📋 RÉPONSE COMPLÈTE:', response);
+console.log('📋 RESPONSE.DATA:', response.data);
+console.log('📋 TYPE DE DATA:', typeof response.data);
+console.log('📋 EST-CE UN ARRAY?:', Array.isArray(response.data));
 
-      if (response.success && response.data) {
-        const operations = response.data;
-        setTransactions(operations || []);
-        calculateSummary(operations || []);
-      }
+		if (response.success && response.data) {
+		  
+		  let operations;
+		  
+		  if (Array.isArray(response.data)) {
+			// Cas 1: response.data est directement un array
+			operations = response.data;
+		  } else if (response.data.operations) {
+			// Cas 2: response.data est un JournalDuJourDTO avec .operations
+			operations = response.data.operations;
+		  } else {
+			// Cas 3: structure inattendue
+			console.error('❌ Structure de données inattendue:', response.data);
+			operations = [];
+		 }
+		  
+		  setTransactions(operations);
+		  calculateSummary(operations);
+		}
     } catch (err) {
       console.error('Error loading transactions:', err);
       setError(err.message || 'Erreur lors du chargement des transactions');

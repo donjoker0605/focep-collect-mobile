@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientDetailScreen.js - VERSION CORRIGÉE BASÉE SUR VOTRE CODE
+// src/screens/Collecteur/ClientDetailScreen.js - VERSION FINALE CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -15,15 +15,70 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// ✅ IMPORTS CORRIGÉS - AJOUT DU POINT-VIRGULE ET CORRECTION DU DESTRUCTURING
-import clientService from '../../services/clientService'; // ✅ IMPORT CORRIGÉ
-import transactionService from '../../services/transactionService'; // ✅ IMPORT CORRIGÉ
+// ✅ IMPORTS CORRIGÉS - SUPPRESSION DE L'IMPORT INUTILE
+import clientService from '../../services/clientService'; 
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
 
+// ✅ COMPOSANTS LOCAUX AVEC STYLES INTÉGRÉS
+const Header = ({ title, onBackPress, rightComponent }) => (
+  <View style={headerStyles.container}>
+    <TouchableOpacity onPress={onBackPress}>
+      <Ionicons name="arrow-back" size={24} color="white" />
+    </TouchableOpacity>
+    <Text style={headerStyles.title}>{title}</Text>
+    {rightComponent}
+  </View>
+);
+
+const Card = ({ children, style }) => (
+  <View style={[cardStyles.container, style]}>
+    {children}
+  </View>
+);
+
+// ✅ STYLES POUR LES COMPOSANTS LOCAUX
+const headerStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
+  },
+});
+
+const cardStyles = StyleSheet.create({
+  container: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+});
+
 const ClientDetailScreen = ({ route, navigation }) => {
   const { user } = useAuth();
-  const { client } = route.params || {};
+  
+  // ✅ EXTRACTION ROBUSTE DES PARAMÈTRES
+  const routeParams = route.params || {};
+  const { client, clientId } = routeParams;
+  
+  console.log('🎯 Paramètres reçus:', routeParams);
+  console.log('🎯 Client reçu:', client);
+  console.log('🎯 ClientId reçu:', clientId);
   
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,64 +87,110 @@ const ClientDetailScreen = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   
   useEffect(() => {
-    if (client) {
+    // ✅ LOGIQUE DE VALIDATION ROBUSTE
+    const actualClientId = client?.id || clientId;
+    
+    if (!actualClientId) {
+      console.error('❌ Aucun ID client fourni');
+      setError('Aucun identifiant client fourni');
+      setIsLoading(false);
+      return;
+    }
+    
+    console.log('✅ ID client valide:', actualClientId);
+    
+    // Initialiser avec les données client si disponibles
+    if (client && client.id) {
       setClientDetails(client);
-      loadClientData();
-    } else {
-      setError('Aucune donnée client fournie');
+    }
+    
+    loadClientData(actualClientId);
+  }, [client, clientId]);
+  
+  const loadClientData = async (targetClientId) => {
+    try {
+      setError(null);
+      console.log('🔄 Chargement des données pour client:', targetClientId);
+      
+      // ✅ VALIDATION SUPPLÉMENTAIRE
+      if (!targetClientId) {
+        throw new Error('ID client manquant');
+      }
+      
+      // ✅ UTILISATION DE L'ENDPOINT COMPLET
+      const clientResponse = await clientService.getClientWithTransactions(targetClientId);
+      console.log('✅ Réponse client service:', clientResponse);
+      
+      if (clientResponse.success) {
+        const clientData = clientResponse.data;
+        setClientDetails(clientData);
+        
+        if (clientData.transactions) {
+          console.log('Transactions trouvées:', clientData.transactions.length);
+          setTransactions(clientData.transactions);
+        } else {
+          console.warn('⚠️ Aucune transaction dans la réponse');
+          setTransactions([]);
+        }
+      } else {
+        throw new Error(clientResponse.error || 'Erreur lors du chargement du client');
+      }
+      
+    } catch (err) {
+      console.error('❌ Erreur lors du chargement:', err);
+      setError(err.message || 'Erreur lors du chargement des données');
+      
+      // ✅ FALLBACK AMÉLIORÉ
+      if (targetClientId) {
+        try {
+          console.log('🔄 Tentative de fallback - chargement client seul');
+          const fallbackResponse = await clientService.getClientById(targetClientId);
+          if (fallbackResponse.success) {
+            setClientDetails(fallbackResponse.data);
+            setTransactions([]);
+            setError(null);
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback échoué:', fallbackError);
+        }
+      }
+    } finally {
       setIsLoading(false);
     }
-  }, [client]);
+  };
   
-  const loadClientData = async () => {
-  try {
-    setError(null);
-    console.log('🔄 Chargement des données pour client:', client?.id);
-    
-    // ✅ CORRECTION: Utiliser le bon endpoint qui récupère client + transactions
-    const clientResponse = await clientService.getClientWithTransactions(client.id);
-    console.log('✅ Réponse client service:', clientResponse);
-    
-    if (clientResponse.success) {
-      const clientData = clientResponse.data;
-      setClientDetails(clientData);
-      
-      if (clientData.transactions) {
-        console.log('✅ Transactions trouvées:', clientData.transactions.length);
-        setTransactions(clientData.transactions);
-      } else {
-        console.warn('⚠️ Aucune transaction dans la réponse');
-        setTransactions([]);
-      }
-    } else {
-      throw new Error(clientResponse.error || 'Erreur lors du chargement du client');
-    }
-    
-  } catch (err) {
-    console.error('❌ Erreur globale lors du chargement des données client:', err);
-    setError(err.message || 'Erreur lors du chargement des données');
-    
-    // ✅ FALLBACK: Essayer de charger seulement le client si l'endpoint complet échoue
-    try {
-      console.log('🔄 Tentative de fallback - chargement client seul');
-      const fallbackResponse = await clientService.getClientById(client.id);
-      if (fallbackResponse.success) {
-        setClientDetails(fallbackResponse.data);
-        setTransactions([]); // Pas de transactions mais au moins le client
-        setError(null); // Clear l'erreur précédente
-      }
-    } catch (fallbackError) {
-      console.error('❌ Même le fallback a échoué:', fallbackError);
-      // Garder l'erreur originale
-    }
-  } finally {
-    setIsLoading(false);
+  // ✅ PROTECTION EARLY RETURN
+  if (!client && !clientId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header
+          title="Détail du client"
+          onBackPress={() => navigation.goBack()}
+        />
+        
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={60} color={theme.colors.error} />
+          <Text style={styles.errorTitle}>Paramètres manquants</Text>
+          <Text style={styles.errorMessage}>
+            Aucune information client n'a été fournie pour afficher cette page.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.retryButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
-};
   
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadClientData();
+    const actualClientId = client?.id || clientId;
+    if (actualClientId) {
+      await loadClientData(actualClientId);
+    }
     setRefreshing(false);
   };
 
@@ -117,7 +218,6 @@ const ClientDetailScreen = ({ route, navigation }) => {
             try {
               setIsLoading(true);
               
-              // ✅ APPEL API RÉEL pour changer le statut
               const response = await clientService.updateClientStatus(clientDetails.id, newStatus);
               
               if (response.success) {
@@ -146,12 +246,11 @@ const ClientDetailScreen = ({ route, navigation }) => {
     );
   };
   
-  // ✅ FONCTION CORRIGÉE POUR LA NAVIGATION VERS LES DÉTAILS DE TRANSACTION
   const handleViewTransaction = (transaction) => {
     console.log('🔍 Navigation vers détails transaction:', transaction);
     navigation.navigate('CollecteDetail', { 
       transaction: transaction,
-      transactionId: transaction.id // ✅ AJOUT DU PARAMÈTRE ID POUR PLUS DE SÉCURITÉ
+      transactionId: transaction.id
     });
   };
   
@@ -161,27 +260,8 @@ const ClientDetailScreen = ({ route, navigation }) => {
       preSelectedClient: clientDetails
     });
   };
-  
-  // ✅ COMPOSANTS EXISTANTS CONSERVÉS
-  const Header = ({ title, onBackPress, rightComponent }) => (
-    <View style={styles.headerContainer}>
-      <TouchableOpacity onPress={onBackPress}>
-        <Ionicons name="arrow-back" size={24} color="white" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-      {rightComponent}
-    </View>
-  );
 
-  const Card = ({ children, style }) => (
-    <View style={[styles.card, style]}>
-      {children}
-    </View>
-  );
-
-  // ✅ COMPOSANT TRANSACTION AMÉLIORÉ POUR GÉRER DIFFÉRENTS TYPES DE DONNÉES
   const TransactionItem = ({ transaction, onPress }) => {
-    // ✅ GESTION ROBUSTE DES DIFFÉRENTS FORMATS DE TRANSACTION
     const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
     const isEpargne = transactionType.toLowerCase().includes('epargne') || 
                      transactionType.toLowerCase().includes('depot') ||
@@ -205,7 +285,6 @@ const ClientDetailScreen = ({ route, navigation }) => {
             <Text style={styles.transactionDate}>
               {format(new Date(dateToUse), 'dd/MM/yyyy à HH:mm', { locale: fr })}
             </Text>
-            {/* ✅ AJOUT DU LIBELLÉ SI DISPONIBLE */}
             {transaction.libelle && (
               <Text style={styles.transactionLibelle} numberOfLines={1}>
                 {transaction.libelle}
@@ -265,7 +344,15 @@ const ClientDetailScreen = ({ route, navigation }) => {
           <Ionicons name="alert-circle" size={60} color={theme.colors.error} />
           <Text style={styles.errorTitle}>Erreur</Text>
           <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadClientData}>
+          <TouchableOpacity 
+            style={styles.retryButton} 
+            onPress={() => {
+              const actualClientId = client?.id || clientId;
+              if (actualClientId) {
+                loadClientData(actualClientId);
+              }
+            }}
+          >
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
@@ -381,7 +468,6 @@ const ClientDetailScreen = ({ route, navigation }) => {
               </View>
             </View>
             
-            {/* ✅ SOLDE RÉEL DU CLIENT (si disponible) */}
             {clientDetails.solde !== undefined && (
               <View style={styles.soldeContainer}>
                 <Text style={styles.soldeLabel}>Solde actuel</Text>
@@ -427,7 +513,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
             </View>
           </Card>
           
-          {/* ✅ TRANSACTIONS RÉELLES AVEC GESTION D'ÉTAT AMÉLIORÉE */}
+          {/* Transactions */}
           <View style={styles.transactionsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Transactions récentes</Text>
@@ -480,7 +566,7 @@ const ClientDetailScreen = ({ route, navigation }) => {
   );
 };
 
-// ✅ STYLES EXISTANTS CONSERVÉS + QUELQUES AJOUTS
+// STYLES EXISTANTS CONSERVÉS + QUELQUES AJOUTS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
