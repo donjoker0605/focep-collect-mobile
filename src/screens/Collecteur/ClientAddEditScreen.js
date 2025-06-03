@@ -111,6 +111,11 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   const [commissionType, setCommissionType] = useState('PERCENTAGE'); // FIXED, PERCENTAGE, TIER
   const [fixedAmount, setFixedAmount] = useState('1000'); // Montant fixe par défaut
   const [percentageValue, setPercentageValue] = useState('5'); // Pourcentage par défaut (5%)
+  const [tiers, setTiers] = useState([
+  { montantMin: 0, montantMax: 50000, taux: 5 },
+  { montantMin: 50001, montantMax: 100000, taux: 4 },
+  { montantMin: 100001, montantMax: 999999999, taux: 3 }
+]);
   const [showCommissionSettings, setShowCommissionSettings] = useState(false);
   const { saveClient } = useOfflineSync();
 
@@ -122,7 +127,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           prenom: client.prenom,
           numeroCni: client.numeroCni,
           telephone: client.telephone,
-          ville: client.ville || 'Douala',
+          ville: client.ville || '',
           quartier: client.quartier || '',
         }
       : {
@@ -130,7 +135,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           prenom: '',
           numeroCni: '',
           telephone: '',
-          ville: 'Douala',
+          ville: '',
           quartier: '',
         }
   });
@@ -442,6 +447,25 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                         Pourcentage
                       </Text>
                     </TouchableOpacity>
+					<TouchableOpacity
+					  style={[
+						styles.typeButton,
+						commissionType === 'TIER' && styles.selectedType
+					  ]}
+					  onPress={() => handleSelectType('TIER')}
+					>
+					  <Ionicons
+						name="stats-chart-outline"
+						size={24}
+						color={commissionType === 'TIER' ? theme.colors.white : theme.colors.primary}
+					  />
+					  <Text style={[
+						styles.typeText,
+						commissionType === 'TIER' && styles.selectedTypeText
+					  ]}>
+						Par paliers
+					  </Text>
+					</TouchableOpacity>
                   </View>
                   
                   {commissionType === 'FIXED' && (
@@ -487,6 +511,30 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                       </View>
                     </View>
                   )}
+				  {commissionType === 'TIER' && (
+					  <View style={styles.configSection}>
+						<Text style={styles.configTitle}>Configuration des paliers</Text>
+						{tiers.map((tier, index) => (
+						  <View key={index} style={styles.tierRow}>
+							<Text style={styles.tierLabel}>
+							  {tier.montantMin.toLocaleString()} - {tier.montantMax.toLocaleString()} FCFA
+							</Text>
+							<TextInput
+							  style={styles.tierInput}
+							  value={tier.taux.toString()}
+							  onChangeText={(value) => {
+								const newTiers = [...tiers];
+								newTiers[index].taux = parseFloat(value) || 0;
+								setTiers(newTiers);
+							  }}
+							  keyboardType="numeric"
+							  placeholder="Taux %"
+							/>
+							<Text style={styles.tierUnit}>%</Text>
+						  </View>
+						))}
+					  </View>
+					)}
                 </View>
               )}
             </Card>

@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientListScreen.js
+// src/screens/Collecteur/ClientListScreen.js - CORRECTION CRITIQUE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -21,7 +21,6 @@ import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 import { clientService } from '../../services';
-
 
 const ClientListScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -65,20 +64,35 @@ const ClientListScreen = ({ navigation }) => {
     }
   }, [user.id]);
   
-  const handleClientPress = (clientItem) => {
-  console.log('🎯 Navigation vers ClientDetail avec:', clientItem);
-  console.log('🎯 Type de clientItem:', typeof clientItem);
-  console.log('🎯 clientItem.id:', clientItem?.id);
-  
-  if (!clientItem || !clientItem.id) {
-    Alert.alert('Erreur', 'Données client invalides');
-    return;
-  }
-  
-  navigation.navigate('ClientDetail', { 
-    client: clientItem 
-  });
-};
+	const handleClientPress = (clientItem) => {
+	  console.log('🔥 DÉBOGAGE NAVIGATION COMPLET:');
+	  console.log('🔥 clientItem reçu:', JSON.stringify(clientItem, null, 2));
+	  console.log('🔥 navigation object:', navigation);
+	  console.log('🔥 Type navigation:', typeof navigation);
+	  console.log('🔥 Navigation methods:', Object.keys(navigation));
+	  
+	  // Vérification que l'objet est valide
+	  if (!clientItem || !clientItem.id) {
+		Alert.alert('Erreur', 'Client invalide sélectionné');
+		return;
+	  }
+	  
+	  // Test de navigation avec paramètres très explicites
+	  const navigationParams = { 
+		client: clientItem,
+		clientId: clientItem.id 
+	  };
+	  
+	  console.log('🔥 Paramètres à passer:', JSON.stringify(navigationParams, null, 2));
+	  
+	  try {
+		navigation.navigate('ClientDetail', navigationParams);
+		console.log('✅ Navigation appelée avec succès');
+	  } catch (error) {
+		console.error('❌ Erreur navigation:', error);
+		Alert.alert('Erreur Navigation', error.message);
+	  }
+	};
 
   // Charger les clients au montage du composant et à chaque changement de statut de connexion
   useEffect(() => {
@@ -147,9 +161,9 @@ const ClientListScreen = ({ navigation }) => {
     navigation.navigate('ClientAddEdit', { mode: 'edit', client });
   };
 
-  const handleViewClient = (client) => {
-    // Navigation vers l'écran de détail du client
-    navigation.navigate('ClientDetail', { client });
+  const handleViewClient = (clientItem) => {
+    console.log('👁️ Vue client:', clientItem);
+    handleClientPress(clientItem);
   };
 
   // Rendu de l'indicateur d'état
@@ -244,7 +258,7 @@ const ClientListScreen = ({ navigation }) => {
       <View style={styles.actionButtons}>
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => handleViewClient(item)}
+          onPress={() => handleViewClient(item)} 
         >
           <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.actionButtonText}>Voir</Text>

@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 
 // IMPORTS CORRIGÉS
 import { useAuth } from '../../hooks/useAuth';
-import { transactionService } from '../../services/transactionService'; // ✅ IMPORT CORRECT
+import { transactionService } from '../../services';
 
 // Utils et Theme
 import theme from '../../theme';

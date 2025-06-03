@@ -87,7 +87,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODE EXISTANTE CONSERVÉE
+  // MÉTHODE EXISTANTE CONSERVÉE
   async updateClient(clientId, clientData) {
     try {
       console.log('📱 API: PUT /clients/', clientId, clientData);
@@ -137,17 +137,17 @@ class ClientService extends BaseApiService {
     }
   }
   
-  async getClientWithTransactions(clientId) {
-    try {
-      console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
-      const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
-      return this.formatResponse(response, 'Client avec transactions récupéré');
-    } catch (error) {
-      console.error('❌ Erreur récupération client avec transactions:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération du client avec transactions');
-    }
-  }
-  
+	async getClientWithTransactions(clientId) {
+	  try {
+		console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
+		const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+		return this.formatResponse(response, 'Client avec transactions récupéré');
+	  } catch (error) {
+		console.error('❌ Erreur récupération client avec transactions:', error);
+		throw this.handleError(error, 'Erreur lors de la récupération du client avec transactions');
+	  }
+	}
+	  
   
 
   // ✅ VALIDATION CÔTÉ CLIENT ROBUSTE
