@@ -1,6 +1,6 @@
-// src/services/clientService.js - VERSION FINALE CORRIGÉE POUR TON ARCHITECTURE
+// src/services/clientService.js - VERSION FINALE COMPLÈTE AVEC NOUVEAUX ENDPOINTS
 import BaseApiService from './base/BaseApiService';
-import authService from './authService'; // ✅ IMPORT CORRECT (sans destructuring)
+import authService from './authService';
 
 class ClientService extends BaseApiService {
   constructor() {
@@ -39,7 +39,126 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODE PRINCIPALE COMPLÈTEMENT CORRIGÉE
+  // ✅ NOUVEAU ENDPOINT PRINCIPAL - DÉTAILS COMPLETS AVEC TRANSACTIONS
+  async getClientDetails(clientId) {
+    try {
+      console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+      
+      if (response.data && response.data.success) {
+        const clientDetails = response.data.data;
+        
+        // ✅ FORMATAGE ET ENRICHISSEMENT DES DONNÉES
+        const enrichedClient = {
+          ...clientDetails,
+          displayName: `${clientDetails.prenom} ${clientDetails.nom}`,
+          statusText: clientDetails.valide ? 'Actif' : 'Inactif',
+          formattedPhone: this.formatPhoneNumber(clientDetails.telephone),
+          fullAddress: `${clientDetails.ville || ''}${clientDetails.quartier ? ', ' + clientDetails.quartier : ''}`.trim(),
+          
+          // ✅ TRANSACTIONS FORMATÉES
+          transactions: (clientDetails.transactions || []).map(transaction => ({
+            ...transaction,
+            isEpargne: transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne',
+            formattedDate: this.formatTransactionDate(transaction.dateOperation),
+            displayAmount: this.formatCurrency(transaction.montant)
+          })),
+          
+          // ✅ CALCULS FINANCIERS SÉCURISÉS
+          totalEpargne: clientDetails.totalEpargne || 0,
+          totalRetraits: clientDetails.totalRetraits || 0,
+          soldeTotal: clientDetails.soldeTotal || 0,
+          totalTransactions: clientDetails.totalTransactions || (clientDetails.transactions?.length || 0)
+        };
+        
+        console.log('✅ Client avec détails formaté:', enrichedClient);
+        return enrichedClient;
+      } else {
+        throw new Error(response.data?.message || 'Détails du client non trouvés');
+      }
+    } catch (error) {
+      console.error('❌ Erreur récupération détails client:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Erreur lors de la récupération des détails du client');
+    }
+  }
+
+  // ✅ NOUVEAU ENDPOINT - TRANSACTIONS D'UN CLIENT
+  async getClientTransactions(clientId, filters = {}) {
+    try {
+      console.log('📊 API: GET /mouvements/client/{} avec filtres:', clientId, filters);
+      
+      const params = new URLSearchParams();
+      if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
+      if (filters.dateFin) params.append('dateFin', filters.dateFin);
+      if (filters.type) params.append('type', filters.type);
+      
+      const queryString = params.toString();
+      const url = `/mouvements/client/${clientId}${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await this.axios.get(url);
+      
+      if (response.data && response.data.success) {
+        const transactions = response.data.data || [];
+        
+        // ✅ FORMATAGE DES TRANSACTIONS
+        return transactions.map(transaction => ({
+          ...transaction,
+          isEpargne: transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne',
+          formattedDate: this.formatTransactionDate(transaction.dateOperation),
+          displayAmount: this.formatCurrency(transaction.montant),
+          typeLabel: this.getTransactionTypeLabel(transaction)
+        }));
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('❌ Erreur récupération transactions client:', error);
+      // Ne pas faire échouer l'écran pour les transactions
+      return [];
+    }
+  }
+
+  // ✅ NOUVEAU ENDPOINT - SOLDE D'UN CLIENT
+  async getClientBalance(clientId) {
+    try {
+      console.log('💰 API: GET /clients/{}/balance', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/balance`);
+      return this.formatResponse(response, 'Solde client récupéré');
+    } catch (error) {
+      console.error('❌ Erreur récupération solde client:', error);
+      // Retourner un solde par défaut plutôt que de faire échouer
+      return {
+        success: false,
+        data: { solde: 0, devise: 'FCFA' },
+        message: 'Impossible de récupérer le solde'
+      };
+    }
+  }
+
+  // ✅ NOUVEAU ENDPOINT - STATISTIQUES D'UN CLIENT
+  async getClientStats(clientId) {
+    try {
+      console.log('📈 API: GET /clients/{}/stats', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/stats`);
+      return this.formatResponse(response, 'Statistiques client récupérées');
+    } catch (error) {
+      console.error('❌ Erreur récupération stats client:', error);
+      // Retourner des stats par défaut
+      return {
+        success: false,
+        data: {
+          totalEpargne: 0,
+          totalRetraits: 0,
+          soldeActuel: 0,
+          nombreTransactions: 0,
+          derniereMaj: new Date().toISOString()
+        },
+        message: 'Statistiques non disponibles'
+      };
+    }
+  }
+
+  // ✅ MÉTHODE EXISTANTE AMÉLIORÉE
   async createClient(clientData) {
     try {
       console.log('📱 API: POST /clients - Données reçues:', clientData);
@@ -87,7 +206,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // MÉTHODE EXISTANTE CONSERVÉE
+  // ✅ MÉTHODES EXISTANTES CONSERVÉES
   async updateClient(clientId, clientData) {
     try {
       console.log('📱 API: PUT /clients/', clientId, clientData);
@@ -98,7 +217,6 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // NOUVELLES MÉTHODES UTILES
   async updateClientStatus(clientId, newStatus) {
     try {
       console.log('🔄 API: PUT /clients/{}/status', clientId);
@@ -136,19 +254,71 @@ class ClientService extends BaseApiService {
       return this.handleError(error, 'Erreur lors de la recherche de clients');
     }
   }
-  
-	async getClientWithTransactions(clientId) {
-	  try {
-		console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
-		const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
-		return this.formatResponse(response, 'Client avec transactions récupéré');
-	  } catch (error) {
-		console.error('❌ Erreur récupération client avec transactions:', error);
-		throw this.handleError(error, 'Erreur lors de la récupération du client avec transactions');
-	  }
-	}
-	  
-  
+
+  // ✅ MÉTHODES UTILITAIRES AMÉLIORÉES
+  formatTransactionDate(dateString) {
+    try {
+      if (!dateString) return 'Date inconnue';
+      
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Date invalide';
+      
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const transactionDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      
+      const diffTime = today.getTime() - transactionDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 0) {
+        return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays === 1) {
+        return `Hier à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+      } else if (diffDays <= 7) {
+        return `Il y a ${diffDays} jours`;
+      } else {
+        return date.toLocaleDateString('fr-FR', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
+      }
+    } catch (error) {
+      console.error('Erreur formatage date:', error);
+      return 'Date invalide';
+    }
+  }
+
+  formatCurrency(amount) {
+    try {
+      if (typeof amount !== 'number' || isNaN(amount)) return '0';
+      return new Intl.NumberFormat('fr-FR', {
+        style: 'decimal',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    } catch (error) {
+      console.error('Erreur formatage montant:', error);
+      return '0';
+    }
+  }
+
+  getTransactionTypeLabel(transaction) {
+    const type = transaction.typeMouvement || transaction.sens || 'INCONNU';
+    
+    switch (type.toUpperCase()) {
+      case 'EPARGNE':
+        return 'Épargne';
+      case 'RETRAIT':
+        return 'Retrait';
+      case 'DEPOT':
+        return 'Dépôt';
+      case 'TRANSFERT':
+        return 'Transfert';
+      default:
+        return type;
+    }
+  }
 
   // ✅ VALIDATION CÔTÉ CLIENT ROBUSTE
   validateClientDataLocally(clientData) {
@@ -190,7 +360,7 @@ class ClientService extends BaseApiService {
     };
   }
 
-  // ✅ MÉTHODES UTILITAIRES
+  // ✅ MÉTHODES UTILITAIRES EXISTANTES
   formatClientForDisplay(client) {
     return {
       ...client,
@@ -213,7 +383,7 @@ class ClientService extends BaseApiService {
     return phone;
   }
 
-  // ✅ MÉTHODE DE DÉBOGAGE
+  // ✅ MÉTHODE DE DÉBOGAGE AMÉLIORÉE
   async testConnection() {
     try {
       const user = await authService.getCurrentUser();
@@ -237,6 +407,60 @@ class ClientService extends BaseApiService {
         error: error.message,
         details: error.response?.data || 'Pas de détails'
       };
+    }
+  }
+
+  // ✅ NOUVELLE MÉTHODE - CACHE LOCAL SIMPLE
+  async getCachedClientDetails(clientId) {
+    const cacheKey = `client_details_${clientId}`;
+    const cached = localStorage.getItem(cacheKey);
+    
+    if (cached) {
+      try {
+        const parsedCache = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Cache valide pendant 5 minutes
+        if (now - parsedCache.timestamp < 5 * 60 * 1000) {
+          console.log('📱 Utilisation cache client:', clientId);
+          return parsedCache.data;
+        }
+      } catch (error) {
+        console.error('Erreur lecture cache:', error);
+      }
+    }
+    
+    // Pas de cache valide, récupérer depuis l'API
+    const freshData = await this.getClientDetails(clientId);
+    
+    // Sauvegarder en cache
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: freshData,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Erreur sauvegarde cache:', error);
+    }
+    
+    return freshData;
+  }
+
+  // ✅ MÉTHODE POUR NETTOYER LE CACHE
+  clearCache(clientId = null) {
+    try {
+      if (clientId) {
+        localStorage.removeItem(`client_details_${clientId}`);
+      } else {
+        // Nettoyer tout le cache client
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('client_details_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Erreur nettoyage cache:', error);
     }
   }
 }

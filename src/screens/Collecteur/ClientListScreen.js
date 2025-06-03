@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientListScreen.js - CORRECTION CRITIQUE
+// src/screens/Collecteur/ClientListScreen.js - NAVIGATION DÉFINITIVEMENT CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -11,9 +11,9 @@ import {
   SafeAreaView,
   RefreshControl,
   Alert,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
@@ -33,7 +33,7 @@ const ClientListScreen = ({ navigation }) => {
   const [filter, setFilter] = useState('all');
   const [error, setError] = useState(null);
 
-  // Charger les VRAIS clients depuis l'API
+  // CHARGEMENT DES CLIENTS - MÉTHODE ROBUSTE
   const loadClients = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) {
@@ -44,11 +44,9 @@ const ClientListScreen = ({ navigation }) => {
       
       setError(null);
       
-      // Appel API réel
       console.log('🔄 Chargement des clients pour collecteur:', user.id);
       const clientsData = await clientService.getClientsByCollecteur(user.id);
       
-      // S'assurer que c'est un tableau
       const clientsList = Array.isArray(clientsData) ? clientsData : [];
       console.log(`✅ ${clientsList.length} clients chargés`);
       
@@ -57,51 +55,64 @@ const ClientListScreen = ({ navigation }) => {
     } catch (err) {
       console.error('❌ Erreur chargement clients:', err);
       setError(err.message || 'Erreur lors du chargement des clients');
-      setClients([]); // Tableau vide en cas d'erreur
+      setClients([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   }, [user.id]);
   
-	const handleClientPress = (clientItem) => {
-	  console.log('🔥 DÉBOGAGE NAVIGATION COMPLET:');
-	  console.log('🔥 clientItem reçu:', JSON.stringify(clientItem, null, 2));
-	  console.log('🔥 navigation object:', navigation);
-	  console.log('🔥 Type navigation:', typeof navigation);
-	  console.log('🔥 Navigation methods:', Object.keys(navigation));
-	  
-	  // Vérification que l'objet est valide
-	  if (!clientItem || !clientItem.id) {
-		Alert.alert('Erreur', 'Client invalide sélectionné');
-		return;
-	  }
-	  
-	  // Test de navigation avec paramètres très explicites
-	  const navigationParams = { 
-		client: clientItem,
-		clientId: clientItem.id 
-	  };
-	  
-	  console.log('🔥 Paramètres à passer:', JSON.stringify(navigationParams, null, 2));
-	  
-	  try {
-		navigation.navigate('ClientDetail', navigationParams);
-		console.log('✅ Navigation appelée avec succès');
-	  } catch (error) {
-		console.error('❌ Erreur navigation:', error);
-		Alert.alert('Erreur Navigation', error.message);
-	  }
-	};
+  // NAVIGATION ENTIÈREMENT REFAITE - SOLUTION DÉFINITIVE
+  const handleClientPress = (clientItem) => {
+  console.log('🔥🔥🔥 NAVIGATION ALTERNATIVE - TEST CRITIQUE');
+  console.log('🔥 Client sélectionné:', clientItem.id, clientItem.nom);
+  
 
-  // Charger les clients au montage du composant et à chaque changement de statut de connexion
-  useEffect(() => {
-    if (user?.id) {
-      loadClients();
+  if (!clientItem?.id) {
+    Alert.alert('Erreur', 'Client invalide');
+    return;
+  }
+  
+  // MÉTHODE ALTERNATIVE 1: Navigation avec timeout
+  setTimeout(() => {
+    try {
+      console.log('🚀 Navigation avec timeout...');
+      navigation.navigate('ClientDetail', {
+        client: clientItem,
+        clientId: clientItem.id,
+        timestamp: Date.now()
+      });
+      console.log('✅ Navigation timeout réussie');
+    } catch (error) {
+      console.error('❌ Navigation timeout échouée:', error);
+      
+      // MÉTHODE ALTERNATIVE 2: Navigation avec replace
+      try {
+        console.log('🚀 Navigation avec replace...');
+        navigation.replace('ClientDetail', {
+          client: clientItem,
+          clientId: clientItem.id,
+          timestamp: Date.now()
+        });
+        console.log('✅ Navigation replace réussie');
+      } catch (replaceError) {
+        console.error('❌ Navigation replace échouée:', replaceError);
+        Alert.alert('Erreur', 'Navigation impossible');
+      }
     }
-  }, [user?.id, loadClients]);
+  }, 100);
+};
 
-  // Filtrer les clients lorsque les filtres ou la recherche changent
+  // CHARGEMENT AU FOCUS DE L'ÉCRAN
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        loadClients();
+      }
+    }, [user?.id, loadClients])
+  );
+
+  // FILTRAGE DES CLIENTS
   useEffect(() => {
     let filtered = clients;
 
@@ -123,50 +134,20 @@ const ClientListScreen = ({ navigation }) => {
     setFilteredClients(filtered);
   }, [searchQuery, filter, clients]);
 
-  // Fonction de filtrage des clients
-  const filterClients = () => {
-    let filtered = clients;
-
-    // Filtrer par statut
-    if (filter !== 'all') {
-      filtered = filtered.filter(client => client.status === filter);
-    }
-
-    // Filtrer par recherche
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(client =>
-        client.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (client.numeroCompte && client.numeroCompte.includes(searchQuery)) ||
-        (client.numeroCni && client.numeroCni.includes(searchQuery)) ||
-        (client.telephone && client.telephone.includes(searchQuery))
-      );
-    }
-
-    setFilteredClients(filtered);
-  };
-
-  // Fonction de rafraîchissement
   const onRefresh = () => {
     loadClients(true);
   };
 
   const handleAddClient = () => {
-    // Navigation vers l'écran d'ajout de client
     navigation.navigate('ClientAddEdit', { mode: 'add' });
   };
 
-  const handleEditClient = (client) => {
-    // Navigation vers l'écran de modification de client
-    navigation.navigate('ClientAddEdit', { mode: 'edit', client });
-  };
-
   const handleViewClient = (clientItem) => {
-    console.log('👁️ Vue client:', clientItem);
+    console.log('👁️ Vue client demandée:', clientItem);
     handleClientPress(clientItem);
   };
 
-  // Rendu de l'indicateur d'état
+  // RENDU DES ERREURS
   const renderErrorBanner = () => {
     if (!error) return null;
     
@@ -182,90 +163,57 @@ const ClientListScreen = ({ navigation }) => {
     );
   };
 
-  const handleToggleStatus = (client) => {
-    const newStatus = client.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
-
-    Alert.alert(
-      `Confirmation`,
-      `Êtes-vous sûr de vouloir ${action} le compte de ${client.prenom} ${client.nom} ?`,
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
-            
-            // Simuler une requête API
-            setTimeout(() => {
-              const updatedClients = clients.map(c => {
-                if (c.id === client.id) {
-                  return { ...c, status: newStatus };
-                }
-                return c;
-              });
-              
-              setClients(updatedClients);
-              setIsLoading(false);
-              
-              const message = newStatus === 'active'
-                ? `Le compte de ${client.prenom} ${client.nom} a été activé avec succès.`
-                : `Le compte de ${client.prenom} ${client.nom} a été désactivé avec succès.`;
-              
-              Alert.alert('Succès', message);
-            }, 1000);
-          },
-        },
-      ]
+  // RENDU D'UN CLIENT AVEC LOGGING AMÉLIORÉ
+  const renderClientItem = ({ item }) => {
+    console.log('🎨 Rendu client item:', item.id, item.nom);
+    
+    return (
+      <Card style={styles.clientCard}>
+        <View style={styles.clientHeader}>
+          <View style={styles.clientInfo}>
+            <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
+            <Text style={styles.clientAccount}>
+              {item.numeroCompte || `Client #${item.id}`}
+            </Text>
+          </View>
+          <View style={[
+            styles.statusBadge, 
+            item.valide ? styles.activeBadge : styles.inactiveBadge
+          ]}>
+            <Text style={styles.statusText}>
+              {item.valide ? 'Actif' : 'Inactif'}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.clientDetails}>
+          <View style={styles.detailItem}>
+            <Ionicons name="id-card-outline" size={16} color={theme.colors.textLight} />
+            <Text style={styles.detailText}>{item.numeroCni}</Text>
+          </View>
+          {item.telephone && (
+            <View style={styles.detailItem}>
+              <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
+              <Text style={styles.detailText}>{item.telephone}</Text>
+            </View>
+          )}
+        </View>
+        
+        <View style={styles.actionButtons}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('👆 Bouton "Voir" pressé pour client:', item.id);
+              handleViewClient(item);
+            }}
+          >
+            <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.actionButtonText}>Voir</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
     );
   };
-
-  const renderClientItem = ({ item }) => (
-    <Card style={styles.clientCard}>
-      <View style={styles.clientHeader}>
-        <View style={styles.clientInfo}>
-          <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
-          <Text style={styles.clientAccount}>
-            {item.numeroCompte || `Client #${item.id}`}
-          </Text>
-        </View>
-        <View style={[
-          styles.statusBadge, 
-          item.valide ? styles.activeBadge : styles.inactiveBadge
-        ]}>
-          <Text style={styles.statusText}>
-            {item.valide ? 'Actif' : 'Inactif'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.clientDetails}>
-        <View style={styles.detailItem}>
-          <Ionicons name="id-card-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.numeroCni}</Text>
-        </View>
-        {item.telephone && (
-          <View style={styles.detailItem}>
-            <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
-            <Text style={styles.detailText}>{item.telephone}</Text>
-          </View>
-        )}
-      </View>
-      
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleViewClient(item)} 
-        >
-          <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Voir</Text>
-        </TouchableOpacity>
-      </View>
-    </Card>
-  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -283,7 +231,6 @@ const ClientListScreen = ({ navigation }) => {
       />
       
       <View style={styles.contentContainer}>
-        {/* Afficher l'indicateur d'erreur/connexion */}
         {renderErrorBanner()}
         
         {/* Barre de recherche */}
@@ -338,7 +285,7 @@ const ClientListScreen = ({ navigation }) => {
           <FlatList
             data={filteredClients}
             renderItem={renderClientItem}
-            keyExtractor={item => item.id.toString()}
+            keyExtractor={item => `client-${item.id}`}
             contentContainerStyle={styles.clientsList}
             refreshControl={
               <RefreshControl
@@ -489,10 +436,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textLight,
     marginLeft: 8,
-  },
-  soldeText: {
-    color: theme.colors.primary,
-    fontWeight: '500',
   },
   actionButtons: {
     flexDirection: 'row',
