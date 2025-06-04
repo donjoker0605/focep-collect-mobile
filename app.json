@@ -23,7 +23,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
       "expo-file-system",
       [
         "expo-splash-screen",
@@ -36,10 +35,6 @@
       ],
       "expo-build-properties",
       "expo-secure-store"
-    ],
-    "experiments": {
-      "typedRoutes": true,
-      "bridgeless": false
-    }
+    ]
   }
 }

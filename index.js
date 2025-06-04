@@ -1,3 +1,5 @@
-// Exporter depuis expo-router (point d'entrée principal)
-// Ceci garantit que les paquets requis sont correctement chargés
-import 'expo-router/entry';
+// index.js
+import { registerRootComponent } from 'expo';
+import App from './src/App';
+
+registerRootComponent(App);

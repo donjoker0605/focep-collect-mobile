@@ -7,7 +7,7 @@ class ClientService extends BaseApiService {
     super();
   }
 
-  // ✅ MÉTHODE EXISTANTE CONSERVÉE
+  // MÉTHODE EXISTANTE CONSERVÉE
   async getClients({ collecteurId, page = 0, size = 20, search = '' } = {}) {
     try {
       console.log('📱 API: GET /clients/collecteur/', collecteurId);
@@ -21,13 +21,13 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODE EXISTANTE CONSERVÉE
+  // MÉTHODE EXISTANTE CONSERVÉE
   async getClientsByCollecteur(collecteurId) {
     const result = await this.getClients({ collecteurId, size: 1000 });
     return result.data || [];
   }
 
-  // ✅ MÉTHODE EXISTANTE CONSERVÉE
+  // MÉTHODE EXISTANTE CONSERVÉE
   async getClientById(clientId) {
     try {
       console.log('🔍 API: GET /clients/', clientId);
@@ -39,7 +39,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVEAU ENDPOINT PRINCIPAL - DÉTAILS COMPLETS AVEC TRANSACTIONS
+  // NOUVEAU ENDPOINT PRINCIPAL - DÉTAILS COMPLETS AVEC TRANSACTIONS
   async getClientDetails(clientId) {
     try {
       console.log('🔍 API: GET /clients/{}/with-transactions', clientId);
@@ -48,7 +48,7 @@ class ClientService extends BaseApiService {
       if (response.data && response.data.success) {
         const clientDetails = response.data.data;
         
-        // ✅ FORMATAGE ET ENRICHISSEMENT DES DONNÉES
+        // FORMATAGE ET ENRICHISSEMENT DES DONNÉES
         const enrichedClient = {
           ...clientDetails,
           displayName: `${clientDetails.prenom} ${clientDetails.nom}`,
@@ -56,7 +56,7 @@ class ClientService extends BaseApiService {
           formattedPhone: this.formatPhoneNumber(clientDetails.telephone),
           fullAddress: `${clientDetails.ville || ''}${clientDetails.quartier ? ', ' + clientDetails.quartier : ''}`.trim(),
           
-          // ✅ TRANSACTIONS FORMATÉES
+          // TRANSACTIONS FORMATÉES
           transactions: (clientDetails.transactions || []).map(transaction => ({
             ...transaction,
             isEpargne: transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne',
@@ -64,7 +64,7 @@ class ClientService extends BaseApiService {
             displayAmount: this.formatCurrency(transaction.montant)
           })),
           
-          // ✅ CALCULS FINANCIERS SÉCURISÉS
+          // CALCULS FINANCIERS SÉCURISÉS
           totalEpargne: clientDetails.totalEpargne || 0,
           totalRetraits: clientDetails.totalRetraits || 0,
           soldeTotal: clientDetails.soldeTotal || 0,
@@ -82,7 +82,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVEAU ENDPOINT - TRANSACTIONS D'UN CLIENT
+  // NOUVEAU ENDPOINT - TRANSACTIONS D'UN CLIENT
   async getClientTransactions(clientId, filters = {}) {
     try {
       console.log('📊 API: GET /mouvements/client/{} avec filtres:', clientId, filters);
@@ -100,7 +100,7 @@ class ClientService extends BaseApiService {
       if (response.data && response.data.success) {
         const transactions = response.data.data || [];
         
-        // ✅ FORMATAGE DES TRANSACTIONS
+        // FORMATAGE DES TRANSACTIONS
         return transactions.map(transaction => ({
           ...transaction,
           isEpargne: transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne',
@@ -118,7 +118,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVEAU ENDPOINT - SOLDE D'UN CLIENT
+  // NOUVEAU ENDPOINT - SOLDE D'UN CLIENT
   async getClientBalance(clientId) {
     try {
       console.log('💰 API: GET /clients/{}/balance', clientId);
@@ -135,7 +135,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVEAU ENDPOINT - STATISTIQUES D'UN CLIENT
+  // NOUVEAU ENDPOINT - STATISTIQUES D'UN CLIENT
   async getClientStats(clientId) {
     try {
       console.log('📈 API: GET /clients/{}/stats', clientId);
@@ -158,12 +158,12 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODE EXISTANTE AMÉLIORÉE
+  // MÉTHODE EXISTANTE AMÉLIORÉE
   async createClient(clientData) {
     try {
       console.log('📱 API: POST /clients - Données reçues:', clientData);
       
-      // ✅ RÉCUPÉRATION SÉCURISÉE DE L'UTILISATEUR CONNECTÉ
+      // RÉCUPÉRATION SÉCURISÉE DE L'UTILISATEUR CONNECTÉ
       const user = await authService.getCurrentUser();
       console.log('👤 Utilisateur connecté:', user);
       
@@ -171,7 +171,7 @@ class ClientService extends BaseApiService {
         throw new Error('Utilisateur non connecté. Veuillez vous reconnecter.');
       }
 
-      // ✅ ENRICHISSEMENT CORRECT DES DONNÉES
+      // ENRICHISSEMENT CORRECT DES DONNÉES
       const enrichedData = {
         nom: clientData.nom,
         prenom: clientData.prenom,
@@ -206,7 +206,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODES EXISTANTES CONSERVÉES
+  // MÉTHODES EXISTANTES CONSERVÉES
   async updateClient(clientId, clientData) {
     try {
       console.log('📱 API: PUT /clients/', clientId, clientData);
@@ -255,7 +255,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ MÉTHODES UTILITAIRES AMÉLIORÉES
+  // MÉTHODES UTILITAIRES AMÉLIORÉES
   formatTransactionDate(dateString) {
     try {
       if (!dateString) return 'Date inconnue';
@@ -320,7 +320,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ VALIDATION CÔTÉ CLIENT ROBUSTE
+  // VALIDATION CÔTÉ CLIENT ROBUSTE
   validateClientDataLocally(clientData) {
     const errors = {};
     
@@ -360,7 +360,7 @@ class ClientService extends BaseApiService {
     };
   }
 
-  // ✅ MÉTHODES UTILITAIRES EXISTANTES
+  // MÉTHODES UTILITAIRES EXISTANTES
   formatClientForDisplay(client) {
     return {
       ...client,
@@ -383,7 +383,7 @@ class ClientService extends BaseApiService {
     return phone;
   }
 
-  // ✅ MÉTHODE DE DÉBOGAGE AMÉLIORÉE
+  // MÉTHODE DE DÉBOGAGE AMÉLIORÉE
   async testConnection() {
     try {
       const user = await authService.getCurrentUser();
@@ -410,7 +410,7 @@ class ClientService extends BaseApiService {
     }
   }
 
-  // ✅ NOUVELLE MÉTHODE - CACHE LOCAL SIMPLE
+  // NOUVELLE MÉTHODE - CACHE LOCAL SIMPLE
   async getCachedClientDetails(clientId) {
     const cacheKey = `client_details_${clientId}`;
     const cached = localStorage.getItem(cacheKey);
@@ -446,7 +446,7 @@ class ClientService extends BaseApiService {
     return freshData;
   }
 
-  // ✅ MÉTHODE POUR NETTOYER LE CACHE
+  // MÉTHODE POUR NETTOYER LE CACHE
   clearCache(clientId = null) {
     try {
       if (clientId) {

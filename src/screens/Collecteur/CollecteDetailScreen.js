@@ -1,4 +1,4 @@
-// src/screens/Collecteur/CollecteDetailScreen.js - VERSION CORRIGÉE FINALE
+// src/screens/Collecteur/CollecteDetailScreen.js - IMPORTS CORRIGÉS
 import React, { useState, useEffect } from 'react';
 import { 
   View, 
@@ -14,11 +14,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-// IMPORTS CORRIGÉS
+// ✅ CORRECTION CRITIQUE: Chemin correct depuis screens/Collecteur/
 import { useAuth } from '../../hooks/useAuth';
 import { transactionService } from '../../services';
 
-// Utils et Theme
+// ✅ CORRECTION: Chemins corrects pour utils et theme
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 import { formatDate, formatTime } from '../../utils/dateUtils';
@@ -26,7 +26,7 @@ import { formatDate, formatTime } from '../../utils/dateUtils';
 const CollecteDetailScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   
-  // RÉCUPÉRATION AMÉLIORÉE DES PARAMÈTRES
+  // RÉCUPÉRATION DES PARAMÈTRES
   const { transaction: initialTransaction, transactionId } = route.params || {};
   
   // États
@@ -34,46 +34,49 @@ const CollecteDetailScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(!initialTransaction);
   const [error, setError] = useState(null);
   
-  // EFFET AMÉLIORÉ POUR CHARGER LES DÉTAILS
+  // EFFET POUR CHARGER LES DÉTAILS
   useEffect(() => {
-  console.log('🔍 CollecteDetailScreen - Paramètres reçus:', { initialTransaction, transactionId });
-  
-  if (initialTransaction) {
-    console.log('✅ Transaction fournie directement:', initialTransaction);
-    setTransaction(initialTransaction);
-    setLoading(false);
-  } else if (transactionId) {
-    console.log('🔄 Chargement de la transaction avec ID:', transactionId);
-    loadTransactionDetails(transactionId);
-  } else {
-    console.error('❌ Aucune transaction ni ID fourni');
-    setError('Aucune donnée de transaction fournie');
-    setLoading(false);
-  }
-}, [initialTransaction, transactionId]);
-  
-  // FONCTION CORRIGÉE POUR CHARGER LES DÉTAILS
-  const loadTransactionDetails = async (id) => {
-  try {
-    setLoading(true);
-    setError(null);
-    console.log('🔄 Chargement des détails pour transaction:', id);
+    console.log('🔍 CollecteDetailScreen - Paramètres reçus:', { 
+      initialTransaction: initialTransaction?.id, 
+      transactionId 
+    });
     
-    const response = await transactionService.getTransactionDetails(id);
-    console.log('✅ Détails récupérés:', response);
-    
-    if (response.success) {
-      setTransaction(response.data);
+    if (initialTransaction) {
+      console.log('✅ Transaction fournie directement:', initialTransaction.id);
+      setTransaction(initialTransaction);
+      setLoading(false);
+    } else if (transactionId) {
+      console.log('🔄 Chargement de la transaction avec ID:', transactionId);
+      loadTransactionDetails(transactionId);
     } else {
-      throw new Error(response.error || 'Erreur lors du chargement des détails');
+      console.error('❌ Aucune transaction ni ID fourni');
+      setError('Aucune donnée de transaction fournie');
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('❌ Erreur lors du chargement des détails de la transaction:', err);
-    setError(err.message || 'Erreur lors du chargement des détails de la transaction');
-  } finally {
-    setLoading(false);
-  }
-};
+  }, [initialTransaction, transactionId]);
+  
+  // FONCTION POUR CHARGER LES DÉTAILS
+  const loadTransactionDetails = async (id) => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('🔄 Chargement des détails pour transaction:', id);
+      
+      const response = await transactionService.getTransactionDetails(id);
+      console.log('✅ Détails récupérés:', response);
+      
+      if (response.success) {
+        setTransaction(response.data);
+      } else {
+        throw new Error(response.error || 'Erreur lors du chargement des détails');
+      }
+    } catch (err) {
+      console.error('❌ Erreur lors du chargement des détails de la transaction:', err);
+      setError(err.message || 'Erreur lors du chargement des détails de la transaction');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Rafraîchir les détails
   const handleRefresh = () => {
@@ -84,12 +87,11 @@ const CollecteDetailScreen = ({ navigation, route }) => {
     }
   };
   
-  // ✅ FONCTION DE PARTAGE AMÉLIORÉE
+  // FONCTION DE PARTAGE
   const handleShare = async () => {
     if (!transaction) return;
     
     try {
-      // Détermination du type de transaction
       const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
       const isEpargne = transactionType.toLowerCase().includes('epargne') || 
                        transactionType.toLowerCase().includes('depot') ||
@@ -100,12 +102,10 @@ const CollecteDetailScreen = ({ navigation, route }) => {
       const date = formatDate(dateOperation);
       const time = formatTime(dateOperation);
       
-      // Formatage des informations client
       const clientNom = transaction.client?.nom || 'Client';
       const clientPrenom = transaction.client?.prenom || '';
       const clientComplet = `${clientPrenom} ${clientNom}`.trim();
       
-      // Formatage du collecteur
       const collecteurNom = transaction.collecteur?.nom || user?.nom || 'Collecteur';
       const collecteurPrenom = transaction.collecteur?.prenom || user?.prenom || '';
       const collecteurComplet = `${collecteurPrenom} ${collecteurNom}`.trim();
@@ -129,13 +129,10 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
         title: `Reçu de ${operationType} - ${date}`
       });
       
-      // Vibration de réussite
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       console.error('Erreur lors du partage:', err);
       Alert.alert('Erreur', 'Impossible de partager le reçu');
-      
-      // Vibration d'erreur
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -143,17 +140,20 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
   // Naviguer vers le client
   const handleViewClient = () => {
     if (transaction?.client) {
-      navigation.navigate('ClientDetail', { client: transaction.client });
+      navigation.navigate('ClientDetail', { 
+        client: transaction.client,
+        clientId: transaction.client.id 
+      });
     }
   };
   
-  // ✅ RENDU AMÉLIORÉ DU STATUT
+  // RENDU DU STATUT
   const renderStatus = () => {
     let statusText = 'Complété';
     let statusColor = theme.colors.success;
     let statusIcon = 'checkmark-circle';
     
-    const statut = transaction.statut || transaction.status || 'COMPLETED';
+    const statut = transaction?.statut || transaction?.status || 'COMPLETED';
     
     switch (statut.toUpperCase()) {
       case 'COMPLETED':
@@ -190,7 +190,7 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
     );
   };
 
-  // ✅ COMPOSANTS UI SIMPLES
+  // COMPOSANTS UI
   const Header = ({ title, onBackPress }) => (
     <View style={styles.headerContainer}>
       <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
@@ -232,7 +232,7 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
     </TouchableOpacity>
   );
   
-  // ✅ ÉTATS DE CHARGEMENT ET D'ERREUR AMÉLIORÉS
+  // ÉTATS DE CHARGEMENT ET D'ERREUR
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -243,7 +243,6 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
         <View style={[styles.content, styles.loadingContainer]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Chargement des détails...</Text>
-          <Text style={styles.loadingSubText}>Récupération des informations de la transaction</Text>
         </View>
       </SafeAreaView>
     );
@@ -281,17 +280,12 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
           <Ionicons name="document-text-outline" size={60} color={theme.colors.gray} />
           <Text style={styles.errorTitle}>Données introuvables</Text>
           <Text style={styles.errorMessage}>Les détails de cette transaction ne sont pas disponibles.</Text>
-          <Button
-            title="Retour"
-            onPress={() => navigation.goBack()}
-            style={styles.retryButton}
-          />
         </View>
       </SafeAreaView>
     );
   }
   
-  // ✅ DÉTERMINATION DU TYPE DE TRANSACTION
+  // DÉTERMINATION DU TYPE DE TRANSACTION
   const transactionType = transaction.typeMouvement || transaction.type || transaction.sens || 'INCONNU';
   const isIncome = transactionType.toLowerCase().includes('epargne') || 
                    transactionType.toLowerCase().includes('depot') ||
@@ -307,7 +301,7 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
       />
       
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        {/* ✅ MONTANT ET TYPE AMÉLIORÉS */}
+        {/* MONTANT ET TYPE */}
         <Card style={styles.amountCard} elevation={2}>
           <View style={styles.amountContainer}>
             <Text style={styles.amountLabel}>
@@ -334,7 +328,7 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
           </View>
         </Card>
         
-        {/* ✅ INFORMATIONS CLIENT AMÉLIORÉES */}
+        {/* INFORMATIONS CLIENT */}
         {transaction.client && (
           <Card style={styles.detailsCard}>
             <View style={styles.cardHeader}>
@@ -364,39 +358,18 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
                 <Text style={styles.detailValue}>{transaction.client.telephone}</Text>
               </View>
             )}
-
-            {transaction.client.numeroCni && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>CNI</Text>
-                <Text style={styles.detailValue}>{transaction.client.numeroCni}</Text>
-              </View>
-            )}
           </Card>
         )}
         
-        {/* ✅ DÉTAILS DE LA TRANSACTION AMÉLIORÉS */}
+        {/* DÉTAILS DE LA TRANSACTION */}
         <Card style={styles.detailsCard}>
           <Text style={styles.cardTitle}>Détails de l'opération</Text>
           
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Type</Text>
-            <View style={[
-              styles.typeBadge,
-              { backgroundColor: isIncome ? `${theme.colors.info}20` : `${theme.colors.error}20` }
-            ]}>
-              <Ionicons 
-                name={isIncome ? 'arrow-down-circle' : 'arrow-up-circle'} 
-                size={14} 
-                color={isIncome ? theme.colors.info : theme.colors.error} 
-                style={styles.typeIcon}
-              />
-              <Text style={[
-                styles.typeText,
-                { color: isIncome ? theme.colors.info : theme.colors.error }
-              ]}>
-                {isIncome ? 'Épargne' : 'Retrait'}
-              </Text>
-            </View>
+            <Text style={styles.detailValue}>
+              {isIncome ? 'Épargne' : 'Retrait'}
+            </Text>
           </View>
           
           <View style={styles.detailRow}>
@@ -404,39 +377,20 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
             <Text style={styles.detailValue}>#{transaction.id}</Text>
           </View>
           
-          {transaction.collecteur && (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Collecteur</Text>
-              <Text style={styles.detailValue}>
-                {transaction.collecteur.prenom} {transaction.collecteur.nom}
-              </Text>
-            </View>
-          )}
-          
           {transaction.libelle && (
-            <View style={styles.descriptionContainer}>
+            <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Description</Text>
-              <Text style={styles.descriptionText}>{transaction.libelle}</Text>
+              <Text style={styles.detailValue}>{transaction.libelle}</Text>
             </View>
           )}
         </Card>
         
-        {/* ✅ ACTIONS AMÉLIORÉES */}
+        {/* ACTIONS */}
         <View style={styles.actionsContainer}>
           <Button
             title="Partager le reçu"
             onPress={handleShare}
             icon="share-outline"
-            style={styles.actionButton}
-          />
-          
-          <Button
-            title="Nouvelle opération"
-            onPress={() => navigation.navigate('Collecte', { 
-              selectedTab: isIncome ? 'epargne' : 'retrait',
-              preSelectedClient: transaction.client
-            })}
-            variant="outlined"
             style={styles.actionButton}
           />
         </View>
@@ -445,6 +399,7 @@ ${transaction.libelle ? `📝 Description: ${transaction.libelle}` : ''}
   );
 };
 
+// STYLES SIMPLIFIÉS POUR L'EXEMPLE
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -492,12 +447,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: '500',
   },
-  loadingSubText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -518,11 +467,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     lineHeight: 22,
   },
-  retryButton: {
-    minWidth: 150,
-  },
-  
-  // Cards
   card: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -551,7 +495,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   incomeAmount: {
-    color: theme.colors.info,
+    color: theme.colors.success,
   },
   expenseAmount: {
     color: theme.colors.error,
@@ -588,8 +532,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: theme.colors.text,
   },
-  
-  // Details
   detailsCard: {
     marginBottom: 16,
   },
@@ -627,31 +569,6 @@ const styles = StyleSheet.create({
     maxWidth: '60%',
     textAlign: 'right',
   },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  typeIcon: {
-    marginRight: 4,
-  },
-  typeText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  descriptionContainer: {
-    marginTop: 16,
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: theme.colors.text,
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  
-  // Actions
   actionsContainer: {
     marginTop: 8,
   },
@@ -684,6 +601,9 @@ const styles = StyleSheet.create({
   },
   buttonTextOutlined: {
     color: theme.colors.primary,
+  },
+  retryButton: {
+    minWidth: 150,
   },
 });
 

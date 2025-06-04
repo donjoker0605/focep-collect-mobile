@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientDetailScreen.js - VERSION FINALE CORRIGÉE
+// app/client-detail.js ou src/screens/Collecteur/ClientDetailScreen.js - EXPO ROUTER VERSION
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
@@ -7,67 +7,55 @@ import {
   ScrollView, 
   TouchableOpacity, 
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   RefreshControl,
-  FlatList
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, useNavigation } from '@react-navigation/native';
+// ✅ IMPORTS EXPO ROUTER
+import { useLocalSearchParams, router } from 'expo-router';
 
-// Services et Utils
 import { clientService } from '../../services';
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 import { formatDate, formatTime } from '../../utils/dateUtils';
 
-const ClientDetailScreen = ({ navigation, route }) => {
-  const routeHook = useRoute();
-  const navigationHook = useNavigation();
+const ClientDetailScreen = () => {
+  // ✅ RÉCUPÉRATION DES PARAMÈTRES EXPO ROUTER
+  const params = useLocalSearchParams();
   
-  console.log('🔍🔍🔍 DIAGNOSTIC NAVIGATION COMPLET:');
-  console.log('📋 Props route:', JSON.stringify(route, null, 2));
-  console.log('📋 Props navigation:', Object.keys(navigation || {}));
-  console.log('📋 Hook route:', JSON.stringify(routeHook, null, 2));
-  console.log('📋 Hook navigation:', Object.keys(navigationHook || {}));
-  console.log('📋 Params via props:', route?.params);
-  console.log('📋 Params via hook:', routeHook?.params);
-  console.log('📋 Route name via props:', route?.name);
-  console.log('📋 Route name via hook:', routeHook?.name);
+  console.log('🔍 ClientDetail Expo Router - Paramètres reçus:', params);
   
-  const navState = navigationHook.getState?.();
-  console.log('📋 Navigation state:', JSON.stringify(navState, null, 2));
+  // ✅ EXTRACTION SÉCURISÉE DES PARAMÈTRES
+  const clientId = params.clientId ? parseInt(params.clientId) : null;
   
-  const routeParams = route.params || {};
-  console.log('🎯 Route complète:', JSON.stringify(route, null, 2));
-  console.log('🎯 Route.params:', JSON.stringify(routeParams, null, 2));
-  
-  const { 
-    client: initialClient, 
-    clientId: routeClientId,
-    fallbackData 
-  } = routeParams;
-  
-  // Déterminer l'ID du client de manière robuste
-  const clientId = initialClient?.id || routeClientId || fallbackData?.id;
-  
-  console.log('🎯 Paramètres extraits:');
-  console.log('   - client:', initialClient);
-  console.log('   - clientId:', clientId);
-  console.log('   - fallbackData:', fallbackData);
-  
+  // ✅ GESTION DES DONNÉES CLIENT DEPUIS LES PARAMÈTRES
+  let initialClient = null;
+  if (params.clientData) {
+    try {
+      initialClient = JSON.parse(params.clientData);
+      console.log('✅ Données client décodées:', initialClient);
+    } catch (error) {
+      console.error('❌ Erreur décodage clientData:', error);
+    }
+  }
+
   // États
-  const [client, setClient] = useState(initialClient || fallbackData || null);
+  const [client, setClient] = useState(initialClient);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(!initialClient);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
   
+  console.log('🎯 État initial:', {
+    clientId,
+    hasInitialClient: !!initialClient,
+    clientNom: initialClient?.nom
+  });
+
   // ✅ FONCTION DE CHARGEMENT DES DÉTAILS COMPLETS
   const loadClientDetails = useCallback(async (showRefreshing = false) => {
     if (!clientId) {
-      console.error('❌ Aucun ID client fourni pour le chargement');
+      console.error('❌ Aucun ID client fourni');
       setError('Aucun client sélectionné');
       setLoading(false);
       return;
@@ -84,7 +72,6 @@ const ClientDetailScreen = ({ navigation, route }) => {
       
       setError(null);
 
-      // ✅ APPEL À L'ENDPOINT AVEC TRANSACTIONS
       const clientDetails = await clientService.getClientDetails(clientId);
       
       console.log('✅ Détails client récupérés:', clientDetails);
@@ -100,57 +87,32 @@ const ClientDetailScreen = ({ navigation, route }) => {
       console.error('❌ Erreur chargement détails client:', err);
       setError(err.message || 'Erreur lors du chargement des détails du client');
       
-      // Si on a des données initiales, les garder
-      if (!client && (initialClient || fallbackData)) {
-        setClient(initialClient || fallbackData);
+      // Garder les données initiales si disponibles
+      if (!client && initialClient) {
+        setClient(initialClient);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [clientId, initialClient, fallbackData, client]);
+  }, [clientId, initialClient, client]);
 
   // ✅ EFFET DE CHARGEMENT INITIAL
   useEffect(() => {
-  console.log('🧪 TEST VÉRIFICATION PARAMS:');
-  console.log('1. route.params:', route?.params);
-  console.log('2. routeHook.params:', routeHook?.params);
-  console.log('3. Toutes les clés route:', Object.keys(route || {}));
-  console.log('4. Type de route:', typeof route);
-  console.log('5. Constructeur route:', route?.constructor?.name);
-  
-  // ✅ TENTATIVE DE RÉCUPÉRATION ALTERNATIVE
-  const allParams = route?.params || routeHook?.params || {};
-  console.log('6. Params fusionnés:', allParams);
-  
-  if (allParams.client || allParams.clientId) {
-    console.log('✅ PARAMS TROUVÉS VIA MÉTHODE ALTERNATIVE');
-    setClient(allParams.client);
-  } else {
-    console.log('❌ AUCUN PARAM TROUVÉ - PROBLÈME ARCHITECTURAL');
-  }
-}, [route, routeHook]);
-
-  // ✅ CHARGEMENT SÉPARÉ DES TRANSACTIONS
-  const loadClientTransactions = useCallback(async () => {
-    if (!clientId) return;
-
-    try {
-      setLoadingTransactions(true);
-      console.log('🔄 Chargement transactions pour client:', clientId);
-      
-      const clientTransactions = await clientService.getClientTransactions(clientId);
-      console.log('✅ Transactions récupérées:', clientTransactions?.length || 0);
-      
-      setTransactions(clientTransactions || []);
-    } catch (err) {
-      console.error('❌ Erreur chargement transactions:', err);
-      // Ne pas faire échouer tout l'écran pour les transactions
-      setTransactions([]);
-    } finally {
-      setLoadingTransactions(false);
+    console.log('🔄 useEffect ClientDetail - clientId:', clientId, 'initialClient:', !!initialClient);
+    
+    if (clientId && !initialClient) {
+      // Pas de données initiales, charger depuis l'API
+      loadClientDetails();
+    } else if (clientId && initialClient) {
+      // Données initiales disponibles, charger en arrière-plan
+      loadClientDetails();
+    } else {
+      // Aucun ID client
+      setError('Aucun client spécifié');
+      setLoading(false);
     }
-  }, [clientId]);
+  }, [clientId, loadClientDetails]);
 
   // ✅ FONCTIONS D'ACTION
   const handleRefresh = () => {
@@ -162,20 +124,31 @@ const ClientDetailScreen = ({ navigation, route }) => {
   const handleNewTransaction = (type) => {
     if (!client) return;
     
-    navigation.navigate('Collecte', {
-      selectedTab: type,
-      preSelectedClient: client
-  });
-  }
-
-  const handleTransactionPress = (transaction) => {
-    navigation.navigate('CollecteDetail', {
-      transaction,
-      transactionId: transaction.id
+    router.push({
+      pathname: '/collecte',
+      params: {
+        selectedTab: type,
+        preSelectedClientId: client.id,
+        preSelectedClientData: JSON.stringify(client)
+      }
     });
   };
 
-  // ✅ RENDU DES COMPOSANTS UI
+  const handleTransactionPress = (transaction) => {
+    router.push({
+      pathname: '/collecte-detail',
+      params: {
+        transactionId: transaction.id,
+        transactionData: JSON.stringify(transaction)
+      }
+    });
+  };
+
+  const handleGoBack = () => {
+    router.back();
+  };
+
+  // ✅ COMPOSANTS UI
   const Header = ({ title, onBackPress }) => (
     <View style={styles.headerContainer}>
       <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
@@ -204,14 +177,15 @@ const ClientDetailScreen = ({ navigation, route }) => {
   );
 
   // ✅ RENDU DES TRANSACTIONS
-  const renderTransaction = ({ item }) => {
-    const isEpargne = item.typeMouvement === 'EPARGNE' || item.sens === 'epargne';
-    const date = new Date(item.dateOperation);
+  const renderTransaction = (transaction, index) => {
+    const isEpargne = transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne';
+    const date = new Date(transaction.dateOperation);
     
     return (
       <TouchableOpacity 
+        key={`transaction-${transaction.id}-${index}`}
         style={styles.transactionItem}
-        onPress={() => handleTransactionPress(item)}
+        onPress={() => handleTransactionPress(transaction)}
       >
         <View style={styles.transactionHeader}>
           <View style={[
@@ -236,11 +210,11 @@ const ClientDetailScreen = ({ navigation, route }) => {
             styles.transactionAmount,
             { color: isEpargne ? theme.colors.success : theme.colors.error }
           ]}>
-            {isEpargne ? '+' : '-'} {formatCurrency(item.montant)} FCFA
+            {isEpargne ? '+' : '-'} {formatCurrency(transaction.montant)} FCFA
           </Text>
         </View>
-        {item.libelle && (
-          <Text style={styles.transactionDescription}>{item.libelle}</Text>
+        {transaction.libelle && (
+          <Text style={styles.transactionDescription}>{transaction.libelle}</Text>
         )}
       </TouchableOpacity>
     );
@@ -252,7 +226,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <Header
           title="Détails du client"
-          onBackPress={() => navigation.goBack()}
+          onBackPress={handleGoBack}
         />
         <View style={[styles.content, styles.centerContent]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -267,7 +241,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <Header
           title="Détails du client"
-          onBackPress={() => navigation.goBack()}
+          onBackPress={handleGoBack}
         />
         <View style={[styles.content, styles.centerContent]}>
           <Ionicons name="alert-circle" size={60} color={theme.colors.error} />
@@ -286,7 +260,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
       <SafeAreaView style={styles.container}>
         <Header
           title="Détails du client"
-          onBackPress={() => navigation.goBack()}
+          onBackPress={handleGoBack}
         />
         <View style={[styles.content, styles.centerContent]}>
           <Ionicons name="person-outline" size={60} color={theme.colors.gray} />
@@ -312,7 +286,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container}>
       <Header
         title="Détails du client"
-        onBackPress={() => navigation.goBack()}
+        onBackPress={handleGoBack}
       />
       
       <ScrollView 
@@ -363,11 +337,6 @@ const ClientDetailScreen = ({ navigation, route }) => {
               value={client.quartier}
             />
           )}
-          <DetailRow 
-            label="Date de création" 
-            value={formatDate(new Date(client.dateCreation))}
-            icon="calendar-outline"
-          />
           <DetailRow 
             label="Statut" 
             value={client.valide ? 'Actif' : 'Inactif'}
@@ -424,24 +393,15 @@ const ClientDetailScreen = ({ navigation, route }) => {
 
         {/* ✅ HISTORIQUE DES TRANSACTIONS */}
         <Card title={`Historique (${transactions.length} transactions)`} style={styles.transactionsCard}>
-          {loadingTransactions ? (
-            <View style={styles.loadingTransactions}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={styles.loadingTransactionsText}>Chargement des transactions...</Text>
-            </View>
-          ) : transactions.length > 0 ? (
-            <FlatList
-              data={transactions.slice(0, 10)} // Limiter à 10 pour la performance
-              renderItem={renderTransaction}
-              keyExtractor={item => item.id.toString()}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.transactionSeparator} />}
-              ListFooterComponent={transactions.length > 10 ? (
+          {transactions.length > 0 ? (
+            <View>
+              {transactions.slice(0, 10).map(renderTransaction)}
+              {transactions.length > 10 && (
                 <TouchableOpacity style={styles.viewAllButton}>
                   <Text style={styles.viewAllText}>Voir toutes les transactions</Text>
                 </TouchableOpacity>
-              ) : null}
-            />
+              )}
+            </View>
           ) : (
             <View style={styles.noTransactions}>
               <Ionicons name="document-text-outline" size={40} color={theme.colors.gray} />
@@ -454,6 +414,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
   );
 };
 
+// STYLES (identiques au précédent)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -494,8 +455,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  
-  // Cards
   card: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -513,8 +472,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: 16,
   },
-  
-  // Detail Rows
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -539,8 +496,6 @@ const styles = StyleSheet.create({
     maxWidth: '50%',
     textAlign: 'right',
   },
-  
-  // Financial Card
   balanceContainer: {
     alignItems: 'center',
     marginBottom: 20,
@@ -573,8 +528,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
-  // Action Buttons
   actionButtonsContainer: {
     flexDirection: 'row',
     marginBottom: 16,
@@ -599,10 +552,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
   },
-  
-  // Transactions
   transactionItem: {
     padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
   },
   transactionHeader: {
     flexDirection: 'row',
@@ -639,26 +592,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 44,
   },
-  transactionSeparator: {
-    height: 1,
-    backgroundColor: theme.colors.lightGray,
-    marginHorizontal: 12,
-  },
-  
-  // Loading et Error States
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: theme.colors.textLight,
-  },
-  loadingTransactions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  loadingTransactionsText: {
-    marginLeft: 8,
     color: theme.colors.textLight,
   },
   errorTitle: {
@@ -684,8 +620,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-  
-  // Empty States
   noTransactions: {
     alignItems: 'center',
     padding: 20,
