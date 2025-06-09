@@ -1,13 +1,14 @@
-// src/navigation/AppNavigator.js - VERSION CORRIGÉE
+// src/navigation/AppNavigator.js
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 
-// Navigation stacks
-import MainNavigator from './MainNavigator'; // Pour les collecteurs
-import LoginScreen from '../screens/Auth/LoginScreen';
-// TODO: Créer AdminStack et SuperAdminStack plus tard
+// Stacks de navigation
+import AuthStack from './AuthStack';
+import CollecteurStack from './CollecteurStack';
+import AdminStack from './AdminStack';
+import SuperAdminStack from './SuperAdminStack';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,24 +29,22 @@ export default function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         // Stack d'authentification
-        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Auth" component={AuthStack} />
       ) : (
         // Stacks selon le rôle utilisateur
         <>
           {(user?.role === 'COLLECTEUR' || user?.role === 'ROLE_COLLECTEUR') && (
-            <Stack.Screen name="Main" component={MainNavigator} />
+            <Stack.Screen name="Collecteur" component={CollecteurStack} />
           )}
-          {/* TODO: Ajouter AdminStack et SuperAdminStack 
-          {user?.role === 'ADMIN' && (
+          {(user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN') && (
             <Stack.Screen name="Admin" component={AdminStack} />
           )}
-          {user?.role === 'SUPER_ADMIN' && (
+          {(user?.role === 'SUPER_ADMIN' || user?.role === 'ROLE_SUPER_ADMIN') && (
             <Stack.Screen name="SuperAdmin" component={SuperAdminStack} />
           )}
-          */}
-          {/* Fallback pour les rôles non gérés */}
-          {!['COLLECTEUR', 'ROLE_COLLECTEUR', 'ADMIN', 'SUPER_ADMIN'].includes(user?.role) && (
-            <Stack.Screen name="Main" component={MainNavigator} />
+          {/* Fallback pour rôles non gérés */}
+          {!['COLLECTEUR', 'ROLE_COLLECTEUR', 'ADMIN', 'ROLE_ADMIN', 'SUPER_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user?.role) && (
+            <Stack.Screen name="Collecteur" component={CollecteurStack} />
           )}
         </>
       )}

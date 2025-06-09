@@ -16,53 +16,6 @@ import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
 import theme from '../../theme';
 
-// Données fictives pour la démo
-const months = [
-  { id: 1, name: 'Janvier' },
-  { id: 2, name: 'Février' },
-  { id: 3, name: 'Mars' },
-  { id: 4, name: 'Avril' },
-  { id: 5, name: 'Mai' },
-  { id: 6, name: 'Juin' },
-  { id: 7, name: 'Juillet' },
-  { id: 8, name: 'Août' },
-  { id: 9, name: 'Septembre' },
-  { id: 10, name: 'Octobre' },
-  { id: 11, name: 'Novembre' },
-  { id: 12, name: 'Décembre' },
-];
-
-const years = [2023, 2024, 2025];
-
-const mockCollecteurs = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Jean',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Sophie',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Pierre',
-    agence: {
-      id: 2,
-      nomAgence: 'Agence Nord'
-    },
-  },
-];
 
 const generateOptions = [
   { id: 'monthly', label: 'Rapport mensuel', icon: 'calendar-outline' },

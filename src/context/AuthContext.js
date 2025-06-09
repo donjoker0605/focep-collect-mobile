@@ -1,7 +1,6 @@
-// src/context/AuthContext.js - VERSION SIMPLIFIÉE ET CORRIGÉE
+// src/context/AuthContext.js 
 import React, { createContext, useState, useEffect } from 'react';
 import authService from '../api/authService';
-import { SECURE_KEYS } from '../services/secureStorage';
 
 export const AuthContext = createContext();
 
@@ -10,7 +9,6 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [error, setError] = useState(null);
-  const router = useRouter();
 
   // Vérifier l'état d'authentification au démarrage
   useEffect(() => {
@@ -18,31 +16,29 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const checkAuthStatus = async () => {
-  try {
-    setIsLoading(true);
-    
-    const authResult = await authService.isAuthenticated();
-    
-    if (authResult && authResult.token && authResult.userData) {
-      setUser(authResult.userData);
-      setIsAuthenticated(true);
-      console.log('Session restaurée:', { role: authResult.userData?.role });
+    try {
+      setIsLoading(true);
       
-      // NE PAS rediriger ici - laisser le routing automatique faire son travail
-    } else {
+      const authResult = await authService.isAuthenticated();
+      
+      if (authResult && authResult.token && authResult.userData) {
+        setUser(authResult.userData);
+        setIsAuthenticated(true);
+        console.log('Session restaurée:', { role: authResult.userData?.role });
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
       setUser(null);
       setIsAuthenticated(false);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error('Erreur lors de la vérification de l\'état d\'authentification:', error);
-    setUser(null);
-    setIsAuthenticated(false);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
-  // Fonction de connexion CORRIGÉE
+  // Fonction de connexion CORRIGÉE - SANS NAVIGATION DIRECTE
   const login = async (email, password) => {
     setError(null);
     setIsLoading(true);
@@ -56,8 +52,7 @@ export const AuthProvider = ({ children }) => {
         setUser(result.user);
         setIsAuthenticated(true);
         
-        console.log('✅ Connexion réussie, redirection selon le rôle:', result.user.role);
-        redirectBasedOnRole(result.user.role);
+        console.log('✅ Connexion réussie! Rôle:', result.user.role);
         
         return { success: true, user: result.user };
       } else {
@@ -74,7 +69,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Fonction de déconnexion
+  // Fonction de déconnexion CORRIGÉE - SANS NAVIGATION DIRECTE
   const logout = async () => {
     try {
       setIsLoading(true);
@@ -84,42 +79,18 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       setError(null);
 
-      router.replace('/auth');
+      console.log('✅ Déconnexion réussie');
+      // ✅ SUPPRESSION DE LA NAVIGATION DIRECTE
+      // AppNavigator détectera automatiquement isAuthenticated = false
+      // et affichera AuthStack
+      
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
+      // Même en cas d'erreur, forcer la déconnexion locale
       setUser(null);
       setIsAuthenticated(false);
-      router.replace('/auth');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Fonction pour rediriger selon le rôle
-  const redirectBasedOnRole = (role) => {
-    if (!role) {
-      console.error('Aucun rôle fourni pour la redirection');
-      return;
-    }
-    
-    console.log('🔀 Redirection basée sur le rôle:', role);
-    
-    switch (role) {
-      case 'ROLE_ADMIN':
-      case 'ADMIN':
-        router.replace('/admin');
-        break;
-      case 'ROLE_SUPER_ADMIN':
-      case 'SUPER_ADMIN':
-        router.replace('/super-admin');
-        break;
-      case 'ROLE_COLLECTEUR':
-      case 'COLLECTEUR':
-        router.replace('/(tabs)');
-        break;
-      default:
-        console.error('Rôle non reconnu:', role);
-        setError(`Rôle non reconnu: ${role}`);
     }
   };
 

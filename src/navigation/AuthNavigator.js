@@ -1,5 +1,5 @@
 import React from 'react';
-import { Stack } from 'expo-router';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 // Importation des écrans d'authentification
 import LoginScreen from '../screens/Auth/LoginScreen';

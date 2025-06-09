@@ -11,8 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// ✅ IMPORTS EXPO ROUTER
-import { useLocalSearchParams, router } from 'expo-router';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { clientService } from '../../services';
 import theme from '../../theme';

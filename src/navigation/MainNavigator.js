@@ -1,15 +1,15 @@
-// src/navigation/MainNavigator.js 
+// src/navigation/MainNavigator.js - SIMPLIFIÉ ET CORRIGÉ
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-// ✅ IMPORTS CORRECTS basés sur tes fichiers existants
+// IMPORTS CORRECTS - Plus de référence à des fichiers manquants
 import DashboardScreen from '../screens/Collecteur/DashboardScreen';
 import ClientListScreen from '../screens/Collecteur/ClientListScreen';
 import CollecteScreen from '../screens/Collecteur/CollecteScreen';
 import JournalScreen from '../screens/Collecteur/JournalScreen';
-import ProfileScreen from '../screens/Collecteur/ProfileScreen'; // ✅ NOUVEAU FICHIER CRÉÉ
+import ProfileScreen from '../screens/Collecteur/ProfileScreen';
 
 // Écrans de détails
 import ClientDetailScreen from '../screens/Collecteur/ClientDetailScreen';

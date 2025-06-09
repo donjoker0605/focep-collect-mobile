@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-// ✅ IMPORTS CORRECTS
+// IMPORTS CORRECTS
 import MouvementService from '../../services/mouvementService'; // ← AJOUTER CETTE LIGNE
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
