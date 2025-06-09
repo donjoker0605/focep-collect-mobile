@@ -1,15 +1,14 @@
-// App.js (racine)
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import MainNavigator from './src/navigation/MainNavigator';
-
-const Stack = createNativeStackNavigator();
+import { AuthProvider } from './src/context/AuthContext';
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
   return (
     <NavigationContainer>
-      <MainNavigator />
+      <AuthProvider>
+        <AppNavigator />
+      </AuthProvider>
     </NavigationContainer>
   );
 }

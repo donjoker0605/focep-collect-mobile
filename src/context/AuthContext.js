@@ -1,7 +1,6 @@
 // src/context/AuthContext.js - VERSION SIMPLIFIÉE ET CORRIGÉE
 import React, { createContext, useState, useEffect } from 'react';
 import authService from '../api/authService';
-import { useRouter } from 'expo-router';
 import { SECURE_KEYS } from '../services/secureStorage';
 
 export const AuthContext = createContext();
