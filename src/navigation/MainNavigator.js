@@ -1,4 +1,4 @@
-// src/navigation/MainNavigator.js - VERSION CORRIGÉE
+// src/navigation/MainNavigator.js 
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,7 +9,7 @@ import DashboardScreen from '../screens/Collecteur/DashboardScreen';
 import ClientListScreen from '../screens/Collecteur/ClientListScreen';
 import CollecteScreen from '../screens/Collecteur/CollecteScreen';
 import JournalScreen from '../screens/Collecteur/JournalScreen';
-import ProfileScreenAdapter from '../screens/Collecteur/ProfileScreenAdapter';
+import ProfileScreen from '../screens/Collecteur/ProfileScreen'; // ✅ NOUVEAU FICHIER CRÉÉ
 
 // Écrans de détails
 import ClientDetailScreen from '../screens/Collecteur/ClientDetailScreen';
@@ -22,7 +22,7 @@ import NotificationsScreen from '../screens/Comon/NotificationsScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function TabNavigator() {
+function CollecteurTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -78,7 +78,7 @@ function TabNavigator() {
       />
       <Tab.Screen 
         name="Profile" 
-        component={ProfileScreenAdapter} 
+        component={ProfileScreen} 
         options={{ title: 'Profil' }} 
       />
     </Tab.Navigator>
@@ -89,8 +89,8 @@ export default function MainNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen 
-        name="MainTabs" 
-        component={TabNavigator} 
+        name="CollecteurTabs" 
+        component={CollecteurTabs} 
       />
       
       {/* Écrans modaux et de détails */}
