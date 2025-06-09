@@ -321,3 +321,5 @@ const RegisterScreen = ({ navigation }) => {
     </KeyboardAvoidingView>
   );
 }
+
+export default RegisterScreen;

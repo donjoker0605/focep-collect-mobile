@@ -248,3 +248,5 @@ const SecurityPinScreen = ({ navigation, route }) => {
     </KeyboardAvoidingView>
   );
 }
+
+export default SecurityPinScreen;
