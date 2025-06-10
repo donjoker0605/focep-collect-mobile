@@ -1,4 +1,4 @@
-// src/navigation/AppNavigator.js
+// src/navigation/AppNavigator.js - NAVIGATION PRINCIPALE CORRIGÉE
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
@@ -7,8 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 // Stacks de navigation
 import AuthStack from './AuthStack';
 import CollecteurStack from './CollecteurStack';
-import AdminStack from './AdminStack';
-import SuperAdminStack from './SuperAdminStack';
+import AdminStack from './AdminStack'; // ✅ IMPORT CORRIGÉ
 
 const Stack = createNativeStackNavigator();
 
@@ -21,6 +20,12 @@ const LoadingScreen = () => (
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
+  console.log('🔍 AppNavigator - User:', { 
+    isAuthenticated, 
+    role: user?.role, 
+    email: user?.email 
+  });
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -28,23 +33,21 @@ export default function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        // Stack d'authentification
         <Stack.Screen name="Auth" component={AuthStack} />
       ) : (
-        // Stacks selon le rôle utilisateur
+        // ✅ CORRECTION CRITIQUE : REDIRECTION SELON LE RÔLE RÉEL
         <>
-          {(user?.role === 'COLLECTEUR' || user?.role === 'ROLE_COLLECTEUR') && (
+          {(user?.role === 'ROLE_COLLECTEUR') && (
             <Stack.Screen name="Collecteur" component={CollecteurStack} />
           )}
-          {(user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN') && (
+          
+          {(user?.role === 'ROLE_ADMIN' || user?.role === 'ROLE_SUPER_ADMIN') && (
             <Stack.Screen name="Admin" component={AdminStack} />
           )}
-          {(user?.role === 'SUPER_ADMIN' || user?.role === 'ROLE_SUPER_ADMIN') && (
-            <Stack.Screen name="SuperAdmin" component={SuperAdminStack} />
-          )}
-          {/* Fallback pour rôles non gérés */}
-          {!['COLLECTEUR', 'ROLE_COLLECTEUR', 'ADMIN', 'ROLE_ADMIN', 'SUPER_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user?.role) && (
-            <Stack.Screen name="Collecteur" component={CollecteurStack} />
+          
+          {/* Fallback sécurisé */}
+          {!['ROLE_COLLECTEUR', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'].includes(user?.role) && (
+            <Stack.Screen name="Auth" component={AuthStack} />
           )}
         </>
       )}

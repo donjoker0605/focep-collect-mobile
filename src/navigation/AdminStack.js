@@ -1,25 +1,31 @@
-// src/navigation/AdminStack.js 
+// src/navigation/AdminStack.js - STACK ADMIN CORRIGÉ
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-// Écrans admin (ajustez les imports selon vos fichiers)
+// ✅ ÉCRANS ADMIN CORRIGÉS
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
+import AgenceManagementScreen from '../screens/Admin/AgenceManagementScreen';
 import ReportsScreen from '../screens/Admin/ReportsScreen';
-import ParameterManagementScreen from '../screens/Admin/ParameterManagementScreen';
+import ProfileScreen from '../screens/Collecteur/ProfileScreen'; // Réutilisé
 
-// Écrans de détails admin
+// Écrans de détails
 import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
 import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
-import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
-import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
+import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
+import ParameterManagementScreen from '../screens/Admin/ParameterManagementScreen';
+import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
+
+// Écrans communs
+import NotificationsScreen from '../screens/Comon/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// ✅ TABS ADMIN SPÉCIFIQUES
 function AdminTabs() {
   return (
     <Tab.Navigator
@@ -29,16 +35,19 @@ function AdminTabs() {
           
           switch (route.name) {
             case 'AdminDashboard':
-              iconName = focused ? 'analytics' : 'analytics-outline';
+              iconName = focused ? 'speedometer' : 'speedometer-outline';
               break;
             case 'CollecteurManagement':
               iconName = focused ? 'people' : 'people-outline';
               break;
             case 'Reports':
-              iconName = focused ? 'document-text' : 'document-text-outline';
+              iconName = focused ? 'bar-chart' : 'bar-chart-outline';
               break;
-            case 'Parameters':
-              iconName = focused ? 'settings' : 'settings-outline';
+            case 'AgenceManagement':
+              iconName = focused ? 'business' : 'business-outline';
+              break;
+            case 'Profile':
+              iconName = focused ? 'person' : 'person-outline';
               break;
             default:
               iconName = 'help-outline';
@@ -62,30 +71,82 @@ function AdminTabs() {
         options={{ title: 'Collecteurs' }} 
       />
       <Tab.Screen 
+        name="AgenceManagement" 
+        component={AgenceManagementScreen} 
+        options={{ title: 'Agences' }} 
+      />
+      <Tab.Screen 
         name="Reports" 
         component={ReportsScreen} 
         options={{ title: 'Rapports' }} 
       />
       <Tab.Screen 
-        name="Parameters" 
-        component={ParameterManagementScreen} 
-        options={{ title: 'Paramètres' }} 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ title: 'Profil' }} 
       />
     </Tab.Navigator>
   );
 }
 
+// ✅ STACK ADMIN PRINCIPAL
 export default function AdminStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="AdminTabs" component={AdminTabs} />
+      {/* Tabs principales */}
+      <Stack.Screen 
+        name="AdminTabs" 
+        component={AdminTabs} 
+      />
       
-      {/* Écrans de détails admin */}
-      <Stack.Screen name="CollecteurDetail" component={CollecteurDetailScreen} />
-      <Stack.Screen name="CollecteurCreation" component={CollecteurCreationScreen} />
-      <Stack.Screen name="CollecteurClients" component={CollecteurClientsScreen} />
-      <Stack.Screen name="TransfertCompte" component={TransfertCompteScreen} />
-      <Stack.Screen name="CommissionParameters" component={CommissionParametersScreen} />
+      {/* Écrans modaux et de détails */}
+      <Stack.Screen 
+        name="CollecteurDetailScreen" 
+        component={CollecteurDetailScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      <Stack.Screen 
+        name="CollecteurCreationScreen" 
+        component={CollecteurCreationScreen}
+        options={{ presentation: 'modal' }}
+      />
+      
+      <Stack.Screen 
+        name="CollecteurEditScreen" 
+        component={CollecteurCreationScreen}
+        options={{ presentation: 'modal' }}
+      />
+      
+      <Stack.Screen 
+        name="CollecteurClientsScreen" 
+        component={CollecteurClientsScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      <Stack.Screen 
+        name="CommissionParametersScreen" 
+        component={CommissionParametersScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      <Stack.Screen 
+        name="TransfertCompteScreen" 
+        component={TransfertCompteScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      <Stack.Screen 
+        name="ParameterManagementScreen" 
+        component={ParameterManagementScreen}
+        options={{ presentation: 'card' }}
+      />
+
+      <Stack.Screen 
+        name="Notifications" 
+        component={NotificationsScreen}
+        options={{ presentation: 'card' }}
+      />
     </Stack.Navigator>
   );
 }
