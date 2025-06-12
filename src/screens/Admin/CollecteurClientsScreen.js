@@ -17,41 +17,6 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 
-// Données fictives pour la démo
-const mockClients = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Marie',
-    numeroCompte: '37305D0100015254',
-    solde: 124500.0,
-    status: 'active',
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Jean',
-    numeroCompte: '37305D0100015255',
-    solde: 56700.0,
-    status: 'active',
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Sophie',
-    numeroCompte: '37305D0100015256',
-    solde: 83200.0,
-    status: 'inactive',
-  },
-  {
-    id: 4,
-    nom: 'Bernard',
-    prenom: 'Michel',
-    numeroCompte: '37305D0100015257',
-    solde: 42100.0,
-    status: 'active',
-  },
-];
 
 const CollecteurClientsScreen = ({ navigation, route }) => {
   const { collecteurId } = route.params || {};
