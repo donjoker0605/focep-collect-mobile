@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.js - VERSION FINALE CORRIGÉE
+// src/screens/Admin/AdminDashboardScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -132,7 +132,7 @@ const AdminDashboardScreen = ({ navigation }) => {
                   <Text style={styles.statLabel}>Collecteurs</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Ionicons name="person" size={24} color={theme.colors.info} />
+                  <Ionicons name="person" size={24} color={theme.colors.secondary} />
                   <Text style={styles.statValue}>{formatNumber(stats.totalClients)}</Text>
                   <Text style={styles.statLabel}>Clients</Text>
                 </View>
@@ -166,18 +166,6 @@ const AdminDashboardScreen = ({ navigation }) => {
                   <Text style={styles.actionButtonText}>Gérer collecteurs</Text>
                 </TouchableOpacity>
                 
-                {isSuperAdmin && (
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => navigation.navigate('AgenceManagement')}
-                  >
-                    <View style={styles.actionIconContainer}>
-                      <Ionicons name="business" size={24} color={theme.colors.white} />
-                    </View>
-                    <Text style={styles.actionButtonText}>Gérer agences</Text>
-                  </TouchableOpacity>
-                )}
-                
                 <TouchableOpacity 
                   style={styles.actionButton}
                   onPress={() => navigation.navigate('CommissionParametersScreen')}
@@ -207,18 +195,6 @@ const AdminDashboardScreen = ({ navigation }) => {
                   </View>
                   <Text style={styles.actionButtonText}>Rapports</Text>
                 </TouchableOpacity>
-                
-                {isSuperAdmin && (
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => navigation.navigate('ParameterManagementScreen')}
-                  >
-                    <View style={styles.actionIconContainer}>
-                      <Ionicons name="cog" size={24} color={theme.colors.white} />
-                    </View>
-                    <Text style={styles.actionButtonText}>Paramètres système</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </View>
 
@@ -408,7 +384,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textLight,
     textAlign: 'center',
   },
   errorContainer: {
@@ -466,7 +442,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textLight,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -544,14 +520,14 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textLight,
   },
   progressContainer: {
     marginTop: 16,
   },
   progressLabel: {
     fontSize: 14,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textLight,
     marginBottom: 8,
   },
   progressBar: {
@@ -588,7 +564,7 @@ const styles = StyleSheet.create({
   },
   soldeLabel: {
     fontSize: 14,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textLight,
     marginTop: 4,
   },
   alertCard: {

@@ -1,4 +1,4 @@
-// src/screens/Admin/CollecteurManagementScreen.js
+// src/screens/Admin/CollecteurManagementScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,16 +16,34 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
-import { collecteurService } from '../../services';
+
+// MODIFICATION: Importer le hook au lieu des données mockées
+import { useAdminCollecteurs } from '../../hooks/useAdminCollecteurs';
 
 const CollecteurManagementScreen = ({ navigation }) => {
-  const [collecteurs, setCollecteurs] = useState(mockCollecteurs);
-  const [filteredCollecteurs, setFilteredCollecteurs] = useState(mockCollecteurs);
+  // MODIFICATION: Utiliser le hook au lieu des données mockées
+  const {
+    collecteurs,
+    loading,
+    error,
+    hasMore,
+    totalElements,
+    refreshing,
+    fetchCollecteurs,
+    createCollecteur,
+    updateCollecteur,
+    toggleCollecteurStatus,
+    refreshCollecteurs,
+    loadMoreCollecteurs,
+    clearError,
+  } = useAdminCollecteurs();
+
+  // États locaux pour les filtres
+  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all, active, inactive
-  const [isLoading, setIsLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
+  // MODIFICATION: Utiliser les collecteurs du hook
   useEffect(() => {
     filterCollecteurs();
   }, [searchQuery, filter, collecteurs]);
@@ -35,7 +53,9 @@ const CollecteurManagementScreen = ({ navigation }) => {
 
     // Filtrer par statut
     if (filter !== 'all') {
-      filtered = filtered.filter(collecteur => collecteur.status === filter);
+      filtered = filtered.filter(collecteur => 
+        filter === 'active' ? collecteur.active : !collecteur.active
+      );
     }
 
     // Filtrer par recherche
@@ -44,21 +64,16 @@ const CollecteurManagementScreen = ({ navigation }) => {
         collecteur.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
         collecteur.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
         collecteur.adresseMail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        collecteur.telephone.includes(searchQuery)
+        (collecteur.telephone && collecteur.telephone.includes(searchQuery))
       );
     }
 
     setFilteredCollecteurs(filtered);
   };
 
+  // MODIFICATION: Utiliser la fonction du hook
   const onRefresh = () => {
-    setRefreshing(true);
-
-    // Simuler une requête API
-    setTimeout(() => {
-      // Dans une implémentation réelle, vous récupéreriez les données du serveur
-      setRefreshing(false);
-    }, 1500);
+    refreshCollecteurs();
   };
 
   const handleAddCollecteur = () => {
@@ -66,12 +81,16 @@ const CollecteurManagementScreen = ({ navigation }) => {
   };
 
   const handleEditCollecteur = (collecteur) => {
-    navigation.navigate('CollecteurEditScreen', { collecteur });
+    navigation.navigate('CollecteurCreationScreen', { 
+      mode: 'edit', 
+      collecteur 
+    });
   };
 
-  const handleToggleStatus = (collecteur) => {
-    const newStatus = collecteur.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
+  // MODIFICATION: Utiliser la fonction du hook
+  const handleToggleStatus = async (collecteur) => {
+    const newStatus = !collecteur.active;
+    const action = newStatus ? 'activer' : 'désactiver';
 
     Alert.alert(
       `Confirmation`,
@@ -83,27 +102,18 @@ const CollecteurManagementScreen = ({ navigation }) => {
         },
         {
           text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
+          onPress: async () => {
+            const result = await toggleCollecteurStatus(collecteur.id, newStatus);
             
-            // Simuler une requête API
-            setTimeout(() => {
-              const updatedCollecteurs = collecteurs.map(c => {
-                if (c.id === collecteur.id) {
-                  return { ...c, status: newStatus };
-                }
-                return c;
-              });
-              
-              setCollecteurs(updatedCollecteurs);
-              setIsLoading(false);
-              
-              const message = newStatus === 'active'
+            if (result.success) {
+              const message = newStatus
                 ? `Le compte de ${collecteur.prenom} ${collecteur.nom} a été activé avec succès.`
                 : `Le compte de ${collecteur.prenom} ${collecteur.nom} a été désactivé avec succès.`;
               
               Alert.alert('Succès', message);
-            }, 1000);
+            } else {
+              Alert.alert('Erreur', result.error || 'Une erreur est survenue');
+            }
           },
         },
       ]
@@ -111,7 +121,7 @@ const CollecteurManagementScreen = ({ navigation }) => {
   };
 
   const handleViewCollecteur = (collecteur) => {
-    navigation.navigate('CollecteurDetail', { collecteur });
+    navigation.navigate('CollecteurDetailScreen', { collecteur });
   };
 
   const renderCollecteurItem = ({ item }) => (
@@ -123,10 +133,10 @@ const CollecteurManagementScreen = ({ navigation }) => {
         </View>
         <View style={[
           styles.statusBadge, 
-          item.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+          item.active ? styles.activeBadge : styles.inactiveBadge
         ]}>
           <Text style={styles.statusText}>
-            {item.status === 'active' ? 'Actif' : 'Inactif'}
+            {item.active ? 'Actif' : 'Inactif'}
           </Text>
         </View>
       </View>
@@ -134,16 +144,18 @@ const CollecteurManagementScreen = ({ navigation }) => {
       <View style={styles.collecteurDetails}>
         <View style={styles.detailItem}>
           <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.telephone}</Text>
+          <Text style={styles.detailText}>{item.telephone || 'Non renseigné'}</Text>
         </View>
         <View style={styles.detailItem}>
           <Ionicons name="business-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.agence.nomAgence}</Text>
+          <Text style={styles.detailText}>
+            {item.agence?.nomAgence || 'Agence non définie'}
+          </Text>
         </View>
         <View style={styles.detailItem}>
           <Ionicons name="people-outline" size={16} color={theme.colors.textLight} />
           <Text style={styles.detailText}>
-            {item.totalClients} client{item.totalClients !== 1 ? 's' : ''}
+            {item.totalClients || 0} client{(item.totalClients || 0) !== 1 ? 's' : ''}
           </Text>
         </View>
       </View>
@@ -170,22 +182,47 @@ const CollecteurManagementScreen = ({ navigation }) => {
           onPress={() => handleToggleStatus(item)}
         >
           <Ionicons 
-            name={item.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"} 
+            name={item.active ? "close-circle-outline" : "checkmark-circle-outline"} 
             size={18} 
-            color={item.status === 'active' ? theme.colors.error : theme.colors.success} 
+            color={item.active ? theme.colors.error : theme.colors.success} 
           />
           <Text 
             style={[
               styles.actionButtonText, 
-              { color: item.status === 'active' ? theme.colors.error : theme.colors.success }
+              { color: item.active ? theme.colors.error : theme.colors.success }
             ]}
           >
-            {item.status === 'active' ? 'Désactiver' : 'Activer'}
+            {item.active ? 'Désactiver' : 'Activer'}
           </Text>
         </TouchableOpacity>
       </View>
     </Card>
   );
+
+  // MODIFICATION: Gestion d'erreur du hook
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header
+          title="Gestion des collecteurs"
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              clearError();
+              fetchCollecteurs();
+            }}
+          >
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -227,29 +264,35 @@ const CollecteurManagementScreen = ({ navigation }) => {
             style={[styles.filterButton, filter === 'all' && styles.activeFilterButton]}
             onPress={() => setFilter('all')}
           >
-            <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>Tous</Text>
+            <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
+              Tous ({totalElements})
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.filterButton, filter === 'active' && styles.activeFilterButton]}
             onPress={() => setFilter('active')}
           >
-            <Text style={[styles.filterText, filter === 'active' && styles.activeFilterText]}>Actifs</Text>
+            <Text style={[styles.filterText, filter === 'active' && styles.activeFilterText]}>
+              Actifs
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={[styles.filterButton, filter === 'inactive' && styles.activeFilterButton]}
             onPress={() => setFilter('inactive')}
           >
-            <Text style={[styles.filterText, filter === 'inactive' && styles.activeFilterText]}>Inactifs</Text>
+            <Text style={[styles.filterText, filter === 'inactive' && styles.activeFilterText]}>
+              Inactifs
+            </Text>
           </TouchableOpacity>
         </View>
         
         {/* Liste des collecteurs */}
-        {isLoading ? (
+        {loading && collecteurs.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement...</Text>
+            <Text style={styles.loadingText}>Chargement des collecteurs...</Text>
           </View>
         ) : (
           <FlatList
@@ -263,6 +306,15 @@ const CollecteurManagementScreen = ({ navigation }) => {
                 onRefresh={onRefresh}
                 colors={[theme.colors.primary]}
               />
+            }
+            onEndReached={loadMoreCollecteurs}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loading && collecteurs.length > 0 ? (
+                <View style={styles.footerLoading}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                </View>
+              ) : null
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
@@ -287,6 +339,7 @@ const CollecteurManagementScreen = ({ navigation }) => {
   );
 };
 
+// MODIFICATION: Ajout de styles pour l'état d'erreur
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -429,6 +482,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textLight,
   },
+  footerLoading: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
   emptyContainer: {
     paddingVertical: 60,
     alignItems: 'center',
@@ -450,6 +507,32 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: theme.colors.white,
     fontWeight: '500',
+  },
+  // MODIFICATION: Nouveaux styles pour l'état d'erreur
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 32,
+  },
+  errorText: {
+    fontSize: 16,
+    color: theme.colors.error,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: theme.colors.white,
+    fontWeight: '600',
   },
 });
 

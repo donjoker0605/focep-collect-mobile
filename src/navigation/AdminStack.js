@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 // ✅ ÉCRANS ADMIN CORRIGÉS
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
-import AgenceManagementScreen from '../screens/Admin/AgenceManagementScreen';
 import ReportsScreen from '../screens/Admin/ReportsScreen';
 import ProfileScreen from '../screens/Collecteur/ProfileScreen'; // Réutilisé
 
@@ -16,8 +15,9 @@ import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
 import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
-import ParameterManagementScreen from '../screens/Admin/ParameterManagementScreen';
 import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
+import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
+import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
 
 // Écrans communs
 import NotificationsScreen from '../screens/Comon/NotificationsScreen';
@@ -42,9 +42,6 @@ function AdminTabs() {
               break;
             case 'Reports':
               iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-              break;
-            case 'AgenceManagement':
-              iconName = focused ? 'business' : 'business-outline';
               break;
             case 'Profile':
               iconName = focused ? 'person' : 'person-outline';
@@ -71,11 +68,6 @@ function AdminTabs() {
         options={{ title: 'Collecteurs' }} 
       />
       <Tab.Screen 
-        name="AgenceManagement" 
-        component={AgenceManagementScreen} 
-        options={{ title: 'Agences' }} 
-      />
-      <Tab.Screen 
         name="Reports" 
         component={ReportsScreen} 
         options={{ title: 'Rapports' }} 
@@ -97,6 +89,17 @@ export default function AdminStack() {
       <Stack.Screen 
         name="AdminTabs" 
         component={AdminTabs} 
+      />
+	  <Stack.Screen 
+        name="JournalClotureScreen" 
+        component={JournalClotureScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      <Stack.Screen 
+        name="CommissionCalculationScreen" 
+        component={CommissionCalculationScreen}
+        options={{ presentation: 'card' }}
       />
       
       {/* Écrans modaux et de détails */}
@@ -136,11 +139,6 @@ export default function AdminStack() {
         options={{ presentation: 'card' }}
       />
       
-      <Stack.Screen 
-        name="ParameterManagementScreen" 
-        component={ParameterManagementScreen}
-        options={{ presentation: 'card' }}
-      />
 
       <Stack.Screen 
         name="Notifications" 
