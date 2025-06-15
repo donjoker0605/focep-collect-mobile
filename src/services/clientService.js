@@ -1,4 +1,4 @@
-// src/services/clientService.js - SERVICE COMPLET POUR LES CLIENTS
+// src/services/clientService.js
 import BaseApiService from './base/BaseApiService';
 
 class ClientService extends BaseApiService {
@@ -7,7 +7,7 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * ✅ RÉCUPÉRER TOUS LES CLIENTS DE L'AGENCE DE L'ADMIN CONNECTÉ
+   * Récupérer tous les clients (filtrés par agence côté backend)
    */
   async getAllClients({ page = 0, size = 20, search = '' } = {}) {
     try {
@@ -23,27 +23,11 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * ✅ RÉCUPÉRER LES CLIENTS D'UN COLLECTEUR SPÉCIFIQUE
-   */
-  async getClientsByCollecteur(collecteurId, { page = 0, size = 20, search = '' } = {}) {
-    try {
-      console.log('📱 API: GET /clients/collecteur/', collecteurId);
-      const params = { page, size };
-      if (search?.trim()) params.search = search.trim();
-      
-      const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
-      return this.formatResponse(response, 'Clients du collecteur récupérés');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des clients du collecteur');
-    }
-  }
-
-  /**
-   * ✅ RÉCUPÉRER UN CLIENT PAR ID
+   * Récupérer un client par son ID
    */
   async getClientById(clientId) {
     try {
-      console.log('👤 API: GET /clients/', clientId);
+      console.log('📱 API: GET /clients/', clientId);
       const response = await this.axios.get(`/clients/${clientId}`);
       return this.formatResponse(response, 'Client récupéré');
     } catch (error) {
@@ -52,11 +36,11 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * ✅ CRÉER UN NOUVEAU CLIENT
+   * Créer un nouveau client
    */
   async createClient(clientData) {
     try {
-      console.log('➕ API: POST /clients', clientData);
+      console.log('📱 API: POST /clients');
       const response = await this.axios.post('/clients', clientData);
       return this.formatResponse(response, 'Client créé avec succès');
     } catch (error) {
@@ -65,259 +49,197 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * ✅ METTRE À JOUR UN CLIENT
+   * Mettre à jour un client
    */
   async updateClient(clientId, clientData) {
     try {
-      console.log('📝 API: PUT /clients/', clientId);
+      console.log('📱 API: PUT /clients/', clientId);
       const response = await this.axios.put(`/clients/${clientId}`, clientData);
       return this.formatResponse(response, 'Client mis à jour');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la mise à jour du client');
+      throw this.handleError(error, 'Erreur lors de la mise à jour');
     }
   }
 
   /**
-   * ✅ BASCULER LE STATUT DE VALIDATION D'UN CLIENT
+   * Basculer le statut actif/inactif d'un client
    */
   async toggleClientStatus(clientId, newStatus) {
     try {
-      console.log('🔄 API: PATCH /clients/', clientId, '/toggle-status');
+      console.log('📱 API: PATCH /clients/toggle-status/', clientId);
       const response = await this.axios.patch(`/clients/${clientId}/toggle-status`, {
         valide: newStatus
       });
-      return this.formatResponse(response, 'Statut du client modifié');
+      return this.formatResponse(response, 'Statut modifié');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du changement de statut du client');
+      throw this.handleError(error, 'Erreur lors du changement de statut');
     }
   }
 
   /**
-   * ✅ SUPPRIMER UN CLIENT (DÉSACTIVATION)
+   * Récupérer les clients d'un collecteur
    */
-  async deleteClient(clientId) {
+  async getClientsByCollecteur(collecteurId, params = {}) {
     try {
-      console.log('🗑️ API: DELETE /clients/', clientId);
-      const response = await this.axios.delete(`/clients/${clientId}`);
-      return this.formatResponse(response, 'Client supprimé');
+      console.log('📱 API: GET /collecteurs/clients/', collecteurId);
+      const response = await this.axios.get(`/collecteurs/${collecteurId}/clients`, { params });
+      return this.formatResponse(response, 'Clients du collecteur récupérés');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la suppression du client');
+      throw this.handleError(error, 'Erreur lors de la récupération des clients');
     }
   }
 
   /**
-   * ✅ RECHERCHER DES CLIENTS
+   * Rechercher des clients
    */
-  async searchClients(searchQuery, { page = 0, size = 20 } = {}) {
+  async searchClients(searchQuery) {
     try {
-      console.log('🔍 API: GET /clients/search');
-      const params = { 
-        q: searchQuery,
-        page, 
-        size 
-      };
-      
-      const response = await this.axios.get('/clients/search', { params });
-      return this.formatResponse(response, 'Recherche de clients effectuée');
+      console.log('📱 API: GET /clients/search');
+      const response = await this.axios.get('/clients/search', {
+        params: { q: searchQuery }
+      });
+      return this.formatResponse(response, 'Recherche effectuée');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la recherche de clients');
+      throw this.handleError(error, 'Erreur lors de la recherche');
     }
   }
 
   /**
-   * ✅ RÉCUPÉRER LES COMPTES D'UN CLIENT
+   * Récupérer l'historique des transactions d'un client
    */
-  async getClientComptes(clientId) {
+  async getClientTransactions(clientId, params = {}) {
     try {
-      console.log('💳 API: GET /clients/', clientId, '/comptes');
-      const response = await this.axios.get(`/clients/${clientId}/comptes`);
-      return this.formatResponse(response, 'Comptes du client récupérés');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des comptes');
-    }
-  }
-
-  /**
-   * ✅ RÉCUPÉRER LES TRANSACTIONS D'UN CLIENT
-   */
-  async getClientTransactions(clientId, { page = 0, size = 10, type = null } = {}) {
-    try {
-      console.log('📊 API: GET /clients/', clientId, '/transactions');
-      const params = { page, size };
-      if (type) params.type = type;
-      
+      console.log('📱 API: GET /clients/transactions/', clientId);
       const response = await this.axios.get(`/clients/${clientId}/transactions`, { params });
-      return this.formatResponse(response, 'Transactions du client récupérées');
+      return this.formatResponse(response, 'Transactions récupérées');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des transactions');
     }
   }
 
   /**
-   * ✅ RÉCUPÉRER LE SOLDE TOTAL D'UN CLIENT
+   * Récupérer les statistiques d'un client
+   */
+  async getClientStatistics(clientId) {
+    try {
+      console.log('📱 API: GET /clients/statistics/', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/statistics`);
+      return this.formatResponse(response, 'Statistiques récupérées');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+    }
+  }
+
+  /**
+   * Valider un client
+   */
+  async validateClient(clientId) {
+    try {
+      console.log('📱 API: POST /clients/validate/', clientId);
+      const response = await this.axios.post(`/clients/${clientId}/validate`);
+      return this.formatResponse(response, 'Client validé');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la validation');
+    }
+  }
+
+  /**
+   * Transférer un client vers un autre collecteur
+   */
+  async transferClient(clientId, newCollecteurId) {
+    try {
+      console.log('📱 API: POST /clients/transfer/', clientId);
+      const response = await this.axios.post(`/clients/${clientId}/transfer`, {
+        newCollecteurId
+      });
+      return this.formatResponse(response, 'Client transféré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du transfert');
+    }
+  }
+
+  /**
+   * Récupérer le solde d'un client
    */
   async getClientBalance(clientId) {
     try {
-      console.log('💰 API: GET /clients/', clientId, '/solde');
-      const response = await this.axios.get(`/clients/${clientId}/solde`);
-      return this.formatResponse(response, 'Solde du client récupéré');
+      console.log('📱 API: GET /clients/balance/', clientId);
+      const response = await this.axios.get(`/clients/${clientId}/balance`);
+      return this.formatResponse(response, 'Solde récupéré');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération du solde');
     }
   }
 
   /**
-   * ✅ RÉCUPÉRER LES STATISTIQUES D'UN CLIENT
+   * Récupérer les clients avec des opérations récentes
    */
-  async getClientStatistics(clientId) {
+  async getClientsWithRecentActivity(days = 7) {
     try {
-      console.log('📈 API: GET /clients/', clientId, '/statistics');
-      const response = await this.axios.get(`/clients/${clientId}/statistics`);
-      return this.formatResponse(response, 'Statistiques du client récupérées');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
-    }
-  }
-
-  /**
-   * ✅ TRANSFÉRER UN CLIENT VERS UN AUTRE COLLECTEUR
-   */
-  async transferClient(clientId, newCollecteurId, justification = '') {
-    try {
-      console.log('🔄 API: POST /clients/', clientId, '/transfer');
-      const response = await this.axios.post(`/clients/${clientId}/transfer`, {
-        newCollecteurId,
-        justification
-      });
-      return this.formatResponse(response, 'Client transféré avec succès');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors du transfert du client');
-    }
-  }
-
-  /**
-   * ✅ VALIDER UN CLIENT (APPROUVER)
-   */
-  async validateClient(clientId) {
-    try {
-      console.log('✅ API: POST /clients/', clientId, '/validate');
-      const response = await this.axios.post(`/clients/${clientId}/validate`);
-      return this.formatResponse(response, 'Client validé avec succès');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la validation du client');
-    }
-  }
-
-  /**
-   * ✅ INVALIDER UN CLIENT (REJETER)
-   */
-  async invalidateClient(clientId, reason = '') {
-    try {
-      console.log('❌ API: POST /clients/', clientId, '/invalidate');
-      const response = await this.axios.post(`/clients/${clientId}/invalidate`, {
-        reason
-      });
-      return this.formatResponse(response, 'Client invalidé');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de l\'invalidation du client');
-    }
-  }
-
-  /**
-   * ✅ RÉCUPÉRER LES CLIENTS RÉCEMMENT CRÉÉS
-   */
-  async getRecentClients(days = 7) {
-    try {
-      console.log('🕐 API: GET /clients/recent');
-      const response = await this.axios.get('/clients/recent', {
+      console.log('📱 API: GET /clients/recent-activity');
+      const response = await this.axios.get('/clients/recent-activity', {
         params: { days }
       });
-      return this.formatResponse(response, 'Clients récents récupérés');
+      return this.formatResponse(response, 'Clients actifs récupérés');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des clients récents');
+      throw this.handleError(error, 'Erreur lors de la récupération');
     }
   }
 
   /**
-   * ✅ RÉCUPÉRER LES CLIENTS PAR STATUT
+   * Récupérer les meilleurs clients (par épargne)
    */
-  async getClientsByStatus(status, { page = 0, size = 20 } = {}) {
+  async getTopClients(limit = 10) {
     try {
-      console.log('📋 API: GET /clients/status/', status);
-      const params = { page, size };
-      
-      const response = await this.axios.get(`/clients/status/${status}`, { params });
-      return this.formatResponse(response, `Clients ${status} récupérés`);
-    } catch (error) {
-      throw this.handleError(error, `Erreur lors de la récupération des clients ${status}`);
-    }
-  }
-
-  /**
-   * ✅ EXPORTER LES CLIENTS EN CSV
-   */
-  async exportClients(format = 'csv', filters = {}) {
-    try {
-      console.log('📥 API: GET /clients/export');
-      const params = { format, ...filters };
-      
-      const response = await this.axios.get('/clients/export', { 
-        params,
-        responseType: 'blob' 
+      console.log('📱 API: GET /clients/top');
+      const response = await this.axios.get('/clients/top', {
+        params: { limit }
       });
-      
-      return this.formatResponse(response, 'Clients exportés');
+      return this.formatResponse(response, 'Meilleurs clients récupérés');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de l\'exportation des clients');
+      throw this.handleError(error, 'Erreur lors de la récupération');
     }
   }
 
   /**
-   * ✅ IMPORTER DES CLIENTS DEPUIS UN FICHIER
+   * Exporter la liste des clients
    */
-  async importClients(file, collecteurId) {
+  async exportClients(format = 'excel', filters = {}) {
     try {
-      console.log('📤 API: POST /clients/import');
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('collecteurId', collecteurId);
-      
-      const response = await this.axios.post('/clients/import', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      console.log('📱 API: GET /clients/export');
+      const response = await this.axios.get('/clients/export', {
+        params: { format, ...filters },
+        responseType: 'blob'
       });
-      
-      return this.formatResponse(response, 'Clients importés avec succès');
+      return this.formatResponse(response, 'Export généré');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de l\'importation des clients');
+      throw this.handleError(error, 'Erreur lors de l\'export');
     }
   }
 
   /**
-   * ✅ RÉCUPÉRER LES STATISTIQUES GLOBALES DES CLIENTS
+   * Récupérer le résumé des clients pour le dashboard
    */
-  async getClientsStatistics() {
+  async getClientsSummary() {
     try {
-      console.log('📊 API: GET /clients/statistics');
-      const response = await this.axios.get('/clients/statistics');
-      return this.formatResponse(response, 'Statistiques des clients récupérées');
+      console.log('📱 API: GET /clients/summary');
+      const response = await this.axios.get('/clients/summary');
+      return this.formatResponse(response, 'Résumé récupéré');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+      throw this.handleError(error, 'Erreur lors de la récupération du résumé');
     }
   }
 
   /**
-   * ✅ FILTRER LES CLIENTS PAR CRITÈRES MULTIPLES
+   * Supprimer un client (soft delete)
    */
-  async filterClients(filters = {}) {
+  async deleteClient(clientId) {
     try {
-      console.log('🔽 API: POST /clients/filter');
-      const response = await this.axios.post('/clients/filter', filters);
-      return this.formatResponse(response, 'Clients filtrés');
+      console.log('📱 API: DELETE /clients/', clientId);
+      const response = await this.axios.delete(`/clients/${clientId}`);
+      return this.formatResponse(response, 'Client supprimé');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du filtrage des clients');
+      throw this.handleError(error, 'Erreur lors de la suppression');
     }
   }
 }

@@ -1,4 +1,4 @@
-// src/screens/Admin/ClientManagementScreen.js - NOUVELLE FONCTIONNALITÉ
+// src/screens/Admin/ClientManagementScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -15,78 +15,58 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
-import SelectInput from '../../components/SelectInput/SelectInput';
 import theme from '../../theme';
-import { clientService, collecteurService } from '../../services';
+import { clientService } from '../../services';
 
 const ClientManagementScreen = ({ navigation }) => {
   // États pour les données
   const [clients, setClients] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);
-  const [collecteurs, setCollecteurs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
   // États pour les filtres
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCollecteur, setSelectedCollecteur] = useState(null);
-  const [sortBy, setSortBy] = useState('nom'); // nom, collecteur, date
-  const [statusFilter, setStatusFilter] = useState('all'); // all, valid, invalid
+  const [filter, setFilter] = useState('all'); // all, active, inactive
   const [totalElements, setTotalElements] = useState(0);
 
-  // Options de tri
-  const sortOptions = [
-    { id: 'nom', label: 'Nom du client' },
-    { id: 'collecteur', label: 'Collecteur' },
-    { id: 'date', label: 'Date de création' },
-  ];
-
-  // Charger les données au démarrage
+  // Charger les clients au démarrage
   useEffect(() => {
-    loadInitialData();
+    loadClients();
   }, []);
 
   // Filtrer quand les données ou filtres changent
   useEffect(() => {
-    filterAndSortClients();
-  }, [clients, searchQuery, selectedCollecteur, sortBy, statusFilter]);
+    filterClients();
+  }, [searchQuery, filter, clients]);
 
-  const loadInitialData = async () => {
+  const loadClients = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError(null);
       
-      // Charger les collecteurs et clients en parallèle
-      const [collecteursResponse, clientsResponse] = await Promise.all([
-        collecteurService.getAllCollecteurs(),
-        clientService.getAllClients() // Récupère tous les clients de l'agence de l'admin
-      ]);
+      const response = await clientService.getAllClients();
       
-      if (collecteursResponse.success) {
-        const collecteursData = Array.isArray(collecteursResponse.data) ? collecteursResponse.data : [];
-        setCollecteurs(collecteursData);
-      }
-      
-      if (clientsResponse.success) {
-        const clientsData = Array.isArray(clientsResponse.data) ? clientsResponse.data : [];
+      if (response.success) {
+        const clientsData = Array.isArray(response.data) ? response.data : [];
         setClients(clientsData);
         setTotalElements(clientsData.length);
       } else {
-        setError(clientsResponse.error || 'Erreur lors du chargement des clients');
+        setError(response.error || 'Erreur lors du chargement des clients');
+        setClients([]);
       }
-      
     } catch (err) {
-      console.error('Erreur lors du chargement initial:', err);
-      setError(err.message || 'Erreur lors du chargement des données');
+      console.error('Erreur lors du chargement des clients:', err);
+      setError(err.message || 'Erreur lors du chargement des clients');
       setClients([]);
-      setCollecteurs([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const filterAndSortClients = () => {
+  const filterClients = () => {
     if (!Array.isArray(clients)) {
       setFilteredClients([]);
       return;
@@ -94,82 +74,50 @@ const ClientManagementScreen = ({ navigation }) => {
 
     let filtered = [...clients];
 
-    // ✅ FILTRER PAR COLLECTEUR
-    if (selectedCollecteur) {
+    // Filtrer par statut
+    if (filter !== 'all') {
       filtered = filtered.filter(client => 
-        client.collecteur && client.collecteur.id === selectedCollecteur
+        client && (filter === 'active' ? client.valide : !client.valide)
       );
     }
 
-    // ✅ FILTRER PAR STATUT
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(client => 
-        statusFilter === 'valid' ? client.valide : !client.valide
-      );
-    }
-
-    // ✅ FILTRER PAR RECHERCHE
+    // Filtrer par recherche
     if (searchQuery.trim()) {
-      const searchLower = searchQuery.toLowerCase();
       filtered = filtered.filter(client => {
         if (!client) return false;
         
+        const searchLower = searchQuery.toLowerCase();
         return (
           (client.nom || '').toLowerCase().includes(searchLower) ||
           (client.prenom || '').toLowerCase().includes(searchLower) ||
-          (client.numeroCompte || '').includes(searchQuery) ||
           (client.telephone || '').includes(searchQuery) ||
-          (client.collecteur?.nom || '').toLowerCase().includes(searchLower) ||
-          (client.collecteur?.prenom || '').toLowerCase().includes(searchLower)
+          (client.collecteurNom || '').toLowerCase().includes(searchLower)
         );
       });
     }
-
-    // ✅ TRIER LES RÉSULTATS
-    filtered.sort((a, b) => {
-      if (!a || !b) return 0;
-      
-      switch (sortBy) {
-        case 'nom':
-          return `${a.nom || ''} ${a.prenom || ''}`.localeCompare(`${b.nom || ''} ${b.prenom || ''}`);
-        case 'collecteur':
-          const collecteurA = `${a.collecteur?.nom || ''} ${a.collecteur?.prenom || ''}`;
-          const collecteurB = `${b.collecteur?.nom || ''} ${b.collecteur?.prenom || ''}`;
-          return collecteurA.localeCompare(collecteurB);
-        case 'date':
-          return new Date(b.dateCreation || 0) - new Date(a.dateCreation || 0);
-        default:
-          return 0;
-      }
-    });
 
     setFilteredClients(filtered);
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadInitialData().finally(() => setRefreshing(false));
+    loadClients(false);
   };
 
-  const handleViewClient = (client) => {
+  const handleViewDetails = (client) => {
     if (!client) return;
     navigation.navigate('ClientDetailScreen', { client });
   };
 
-  const handleEditClient = (client) => {
-    if (!client) return;
-    navigation.navigate('ClientEditScreen', { client });
-  };
-
-  const handleToggleClientStatus = async (client) => {
+  const handleToggleStatus = async (client) => {
     if (!client) return;
     
     const newStatus = !client.valide;
-    const action = newStatus ? 'valider' : 'invalider';
+    const action = newStatus ? 'activer' : 'désactiver';
     
     Alert.alert(
       'Confirmation',
-      `Voulez-vous ${action} le client ${client.prenom} ${client.nom} ?`,
+      `Voulez-vous ${action} ${client.prenom} ${client.nom} ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -178,16 +126,13 @@ const ClientManagementScreen = ({ navigation }) => {
             try {
               const response = await clientService.toggleClientStatus(client.id, newStatus);
               if (response.success) {
-                // Mettre à jour localement
-                setClients(prev => prev.map(c => 
-                  c.id === client.id ? { ...c, valide: newStatus } : c
-                ));
+                loadClients(false);
                 Alert.alert('Succès', `Client ${action} avec succès`);
               } else {
-                Alert.alert('Erreur', response.error || `Erreur lors de la ${action}ion`);
+                Alert.alert('Erreur', response.error || `Erreur lors de l'${action}ion`);
               }
             } catch (err) {
-              Alert.alert('Erreur', err.message || `Erreur lors de la ${action}ion`);
+              Alert.alert('Erreur', err.message || `Erreur lors de l'${action}ion`);
             }
           }
         }
@@ -195,18 +140,6 @@ const ClientManagementScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ OPTIONS SÉCURISÉES POUR LES SÉLECTEURS
-  const collecteurOptions = [
-    { id: null, label: 'Tous les collecteurs' },
-    ...Array.isArray(collecteurs) 
-      ? collecteurs.map(collecteur => ({
-          id: collecteur.id,
-          label: `${collecteur.prenom || ''} ${collecteur.nom || ''}`.trim() || 'Nom inconnu'
-        }))
-      : []
-  ];
-
-  // ✅ RENDU SÉCURISÉ DES CLIENTS
   const renderClientItem = ({ item }) => {
     if (!item) return null;
 
@@ -217,46 +150,32 @@ const ClientManagementScreen = ({ navigation }) => {
             <Text style={styles.clientName}>
               {`${item.prenom || ''} ${item.nom || ''}`.trim() || 'Nom inconnu'}
             </Text>
-            <Text style={styles.clientAccount}>
-              Compte: {item.numeroCompte || 'Non renseigné'}
+            <Text style={styles.clientPhone}>
+              {item.telephone || 'Téléphone non renseigné'}
             </Text>
-            <Text style={styles.clientCollecteur}>
-              Collecteur: {item.collecteur ? 
-                `${item.collecteur.prenom || ''} ${item.collecteur.nom || ''}`.trim() : 
-                'Non assigné'
-              }
+            <Text style={styles.collecteurName}>
+              Collecteur: {item.collecteurNom || 'Non assigné'}
             </Text>
           </View>
           <View style={[
             styles.statusBadge,
-            item.valide ? styles.validBadge : styles.invalidBadge
+            item.valide ? styles.activeBadge : styles.inactiveBadge
           ]}>
             <Text style={styles.statusText}>
-              {item.valide ? 'Validé' : 'Non validé'}
+              {item.valide ? 'Actif' : 'Inactif'}
             </Text>
           </View>
         </View>
 
-        <View style={styles.clientDetails}>
-          <View style={styles.detailItem}>
-            <Ionicons name="call" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              {item.telephone || 'Non renseigné'}
-            </Text>
+        <View style={styles.clientStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Épargne totale</Text>
+            <Text style={styles.statValue}>{item.totalEpargne || 0} FCFA</Text>
           </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="location" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              {item.adresse || 'Non renseignée'}
-            </Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="calendar" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              Créé le: {item.dateCreation ? 
-                new Date(item.dateCreation).toLocaleDateString('fr-FR') : 
-                'Date inconnue'
-              }
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Dernière opération</Text>
+            <Text style={styles.statValue}>
+              {item.derniereOperation || 'Aucune'}
             </Text>
           </View>
         </View>
@@ -264,34 +183,26 @@ const ClientManagementScreen = ({ navigation }) => {
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => handleViewClient(item)}
+            onPress={() => handleViewDetails(item)}
           >
-            <Ionicons name="eye" size={16} color={theme.colors.primary} />
+            <Ionicons name="eye-outline" size={20} color={theme.colors.primary} />
             <Text style={styles.actionButtonText}>Détails</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => handleEditClient(item)}
-          >
-            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
-            <Text style={styles.actionButtonText}>Modifier</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleToggleClientStatus(item)}
+            onPress={() => handleToggleStatus(item)}
           >
             <Ionicons 
-              name={item.valide ? "close-circle" : "checkmark-circle"} 
-              size={16} 
-              color={item.valide ? theme.colors.warning : theme.colors.success} 
+              name={item.valide ? "close-circle-outline" : "checkmark-circle-outline"} 
+              size={20} 
+              color={item.valide ? theme.colors.error : theme.colors.success} 
             />
             <Text style={[
               styles.actionButtonText,
-              { color: item.valide ? theme.colors.warning : theme.colors.success }
+              { color: item.valide ? theme.colors.error : theme.colors.success }
             ]}>
-              {item.valide ? 'Invalider' : 'Valider'}
+              {item.valide ? 'Désactiver' : 'Activer'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -299,137 +210,136 @@ const ClientManagementScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ GESTION D'ERREUR
-  if (error && !loading) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Header 
+      <View style={styles.container}>
+        <Header
           title="Gestion des clients"
-          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Chargement des clients...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error && !refreshing) {
+    return (
+      <View style={styles.container}>
+        <Header
+          title="Gestion des clients"
           onBackPress={() => navigation.goBack()}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color={theme.colors.error} />
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={loadInitialData}
-          >
+          <TouchableOpacity style={styles.retryButton} onPress={() => loadClients()}>
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
+      <Header
         title="Gestion des clients"
-        showBackButton={true}
         onBackPress={() => navigation.goBack()}
       />
       
-      <View style={styles.contentContainer}>
-        {/* Barre de recherche */}
+      <View style={styles.content}>
+        {/* Barre de recherche et filtres */}
         <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={20} color={theme.colors.gray} style={styles.searchIcon} />
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color={theme.colors.textLight} />
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher un client..."
               value={searchQuery}
               onChangeText={setSearchQuery}
+              placeholderTextColor={theme.colors.textLight}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color={theme.colors.gray} />
+                <Ionicons name="close-circle" size={20} color={theme.colors.textLight} />
               </TouchableOpacity>
             )}
           </View>
         </View>
-        
-        {/* Filtres */}
-        <View style={styles.filtersContainer}>
-          <View style={styles.filterRow}>
-            <SelectInput
-              placeholder="Collecteur"
-              value={selectedCollecteur}
-              options={collecteurOptions}
-              onChange={setSelectedCollecteur}
-              style={styles.filterSelect}
-            />
-            
-            <SelectInput
-              placeholder="Tri"
-              value={sortBy}
-              options={sortOptions}
-              onChange={setSortBy}
-              style={styles.filterSelect}
-            />
+
+        {/* Statistiques */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{totalElements}</Text>
+            <Text style={styles.statLabel}>Total</Text>
           </View>
-          
-          <View style={styles.statusFilters}>
-            <TouchableOpacity
-              style={[styles.statusButton, statusFilter === 'all' && styles.activeStatusButton]}
-              onPress={() => setStatusFilter('all')}
-            >
-              <Text style={[styles.statusButtonText, statusFilter === 'all' && styles.activeStatusButtonText]}>
-                Tous ({totalElements})
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.statusButton, statusFilter === 'valid' && styles.activeStatusButton]}
-              onPress={() => setStatusFilter('valid')}
-            >
-              <Text style={[styles.statusButtonText, statusFilter === 'valid' && styles.activeStatusButtonText]}>
-                Validés
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.statusButton, statusFilter === 'invalid' && styles.activeStatusButton]}
-              onPress={() => setStatusFilter('invalid')}
-            >
-              <Text style={[styles.statusButtonText, statusFilter === 'invalid' && styles.activeStatusButtonText]}>
-                Non validés
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.statCard}>
+            <Text style={[styles.statNumber, { color: theme.colors.success }]}>
+              {clients.filter(c => c && c.valide).length}
+            </Text>
+            <Text style={styles.statLabel}>Actifs</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statNumber, { color: theme.colors.error }]}>
+              {clients.filter(c => c && !c.valide).length}
+            </Text>
+            <Text style={styles.statLabel}>Inactifs</Text>
           </View>
         </View>
-        
+
+        {/* Filtres */}
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'all' && styles.activeFilter]}
+            onPress={() => setFilter('all')}
+          >
+            <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
+              Tous
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'active' && styles.activeFilter]}
+            onPress={() => setFilter('active')}
+          >
+            <Text style={[styles.filterText, filter === 'active' && styles.activeFilterText]}>
+              Actifs
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filter === 'inactive' && styles.activeFilter]}
+            onPress={() => setFilter('inactive')}
+          >
+            <Text style={[styles.filterText, filter === 'inactive' && styles.activeFilterText]}>
+              Inactifs
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Liste des clients */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement des clients...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredClients}
-            renderItem={renderClientItem}
-            keyExtractor={item => item?.id?.toString() || Math.random().toString()}
-            contentContainerStyle={styles.clientsList}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[theme.colors.primary]}
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people" size={64} color={theme.colors.gray} />
-                <Text style={styles.emptyText}>
-                  {searchQuery.trim() !== '' || selectedCollecteur || statusFilter !== 'all'
-                    ? 'Aucun client ne correspond à vos critères' 
-                    : 'Aucun client disponible'}
-                </Text>
-              </View>
-            }
-          />
-        )}
+        <FlatList
+          data={filteredClients}
+          renderItem={renderClientItem}
+          keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+            />
+          }
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={64} color={theme.colors.textLight} />
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Aucun client trouvé' : 'Aucun client enregistré'}
+              </Text>
+            </View>
+          }
+        />
       </View>
     </SafeAreaView>
   );
@@ -440,140 +350,146 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.primary,
   },
-  contentContainer: {
+  content: {
     flex: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 10,
+    padding: 16,
   },
-  searchInputContainer: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    ...theme.shadows.small,
-  },
-  searchIcon: {
-    marginRight: 8,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
   },
   searchInput: {
     flex: 1,
+    marginLeft: 8,
     fontSize: 16,
-    height: 40,
+    color: theme.colors.text,
   },
-  filtersContainer: {
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     paddingHorizontal: 16,
     marginBottom: 16,
   },
-  filterRow: {
+  statCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    minWidth: 100,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 4,
+  },
+  filterContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
-  },
-  filterSelect: {
-    flex: 1,
-    marginRight: 8,
-  },
-  statusFilters: {
-    flexDirection: 'row',
-  },
-  statusButton: {
-    paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: theme.colors.lightGray,
+    marginBottom: 16,
   },
-  activeStatusButton: {
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: theme.colors.lightGray,
+    marginRight: 8,
+  },
+  activeFilter: {
     backgroundColor: theme.colors.primary,
   },
-  statusButtonText: {
-    color: theme.colors.textLight,
-    fontWeight: '500',
+  filterText: {
     fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '500',
   },
-  activeStatusButtonText: {
+  activeFilterText: {
     color: theme.colors.white,
   },
-  clientsList: {
+  listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   clientCard: {
-    marginBottom: 16,
+    marginBottom: 12,
+    padding: 16,
   },
   clientHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 12,
   },
   clientInfo: {
     flex: 1,
-    marginRight: 12,
   },
   clientName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  clientAccount: {
+  clientPhone: {
     fontSize: 14,
     color: theme.colors.textLight,
     marginBottom: 2,
   },
-  clientCollecteur: {
-    fontSize: 13,
+  collecteurName: {
+    fontSize: 14,
     color: theme.colors.primary,
-    fontWeight: '500',
   },
   statusBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: 'flex-start',
   },
-  validBadge: {
+  activeBadge: {
     backgroundColor: 'rgba(52, 199, 89, 0.2)',
   },
-  invalidBadge: {
-    backgroundColor: 'rgba(255, 149, 0, 0.2)',
+  inactiveBadge: {
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.text,
+    fontWeight: '600',
   },
-  clientDetails: {
-    marginBottom: 12,
-  },
-  detailItem: {
+  clientStats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.lightGray,
   },
-  detailText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginLeft: 8,
+  statItem: {
+    flex: 1,
   },
   actionButtons: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: theme.colors.lightGray,
-    paddingTop: 12,
+    justifyContent: 'space-around',
   },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 8,
   },
   actionButtonText: {

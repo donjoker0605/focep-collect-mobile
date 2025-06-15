@@ -6,127 +6,108 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
 import SelectInput from '../../components/SelectInput/SelectInput';
+import DatePickerInput from '../../components/DatePickerInput/DatePickerInput';
 import theme from '../../theme';
-
-// Hooks et services
-import { useAdminCollecteurs } from '../../hooks/useAdminCollecteurs';
-import { useAdminCommissions } from '../../hooks/useAdminCommissions';
+import { commissionService, collecteurService } from '../../services';
 
 const CommissionCalculationScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  
   // États
+  const [loading, setLoading] = useState(true);
+  const [calculating, setCalculating] = useState(false);
+  const [collecteurs, setCollecteurs] = useState([]);
   const [selectedCollecteur, setSelectedCollecteur] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('current_month');
-  const [dateDebut, setDateDebut] = useState('');
-  const [dateFin, setDateFin] = useState('');
-  const [results, setResults] = useState(null);
+  const [dateDebut, setDateDebut] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [dateFin, setDateFin] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [commissionResults, setCommissionResults] = useState(null);
   const [error, setError] = useState(null);
 
-  // Hooks
-  const { 
-    collecteurs, 
-    loading: collecteursLoading, 
-    fetchCollecteurs 
-  } = useAdminCollecteurs();
+  // Options de période
+  const periodOptions = [
+    { id: 'current_month', label: 'Mois en cours' },
+    { id: 'last_month', label: 'Mois dernier' },
+    { id: 'custom', label: 'Période personnalisée' },
+  ];
 
-  const { 
-    processCommissions, 
-    processing, 
-    simulationResult,
-    error: commissionError 
-  } = useAdminCommissions();
-
-  // Charger les collecteurs
+  // Charger les collecteurs au démarrage
   useEffect(() => {
-    fetchCollecteurs();
+    loadCollecteurs();
   }, []);
 
-  // Options des périodes
-  const currentDate = new Date();
-  const periodOptions = [
-    {
-      label: 'Mois en cours',
-      value: 'current_month',
-      debut: format(startOfMonth(currentDate), 'yyyy-MM-dd'),
-      fin: format(endOfMonth(currentDate), 'yyyy-MM-dd')
-    },
-    {
-      label: 'Mois précédent',
-      value: 'previous_month',
-      debut: format(startOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd'),
-      fin: format(endOfMonth(subMonths(currentDate, 1)), 'yyyy-MM-dd')
-    },
-    {
-      label: 'Il y a 2 mois',
-      value: 'two_months_ago',
-      debut: format(startOfMonth(subMonths(currentDate, 2)), 'yyyy-MM-dd'),
-      fin: format(endOfMonth(subMonths(currentDate, 2)), 'yyyy-MM-dd')
-    },
-    {
-      label: 'Il y a 3 mois',
-      value: 'three_months_ago',
-      debut: format(startOfMonth(subMonths(currentDate, 3)), 'yyyy-MM-dd'),
-      fin: format(endOfMonth(subMonths(currentDate, 3)), 'yyyy-MM-dd')
-    }
-  ];
+  // Mettre à jour les dates selon la période sélectionnée
+  useEffect(() => {
+    updateDatesForPeriod();
+  }, [selectedPeriod]);
 
-  // Options des collecteurs
-  const collecteurOptions = [
-    { label: 'Tous les collecteurs', value: 'all' },
-    ...collecteurs.map(collecteur => ({
-      label: `${collecteur.prenom} ${collecteur.nom}`,
-      value: collecteur.id,
-      data: collecteur
-    }))
-  ];
-
-  // Gérer le changement de période
-  const handlePeriodChange = (period) => {
-    setSelectedPeriod(period);
-    const selectedOption = periodOptions.find(opt => opt.value === period);
-    if (selectedOption) {
-      setDateDebut(selectedOption.debut);
-      setDateFin(selectedOption.fin);
+  const loadCollecteurs = async () => {
+    try {
+      setLoading(true);
+      const response = await collecteurService.getAllCollecteurs();
+      
+      if (response.success) {
+        const collecteursData = Array.isArray(response.data) ? response.data : [];
+        // Filtrer uniquement les collecteurs actifs
+        const activeCollecteurs = collecteursData.filter(c => c && c.active);
+        setCollecteurs(activeCollecteurs);
+      } else {
+        setError('Erreur lors du chargement des collecteurs');
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement:', err);
+      setError('Impossible de charger les collecteurs');
+    } finally {
+      setLoading(false);
     }
-    setResults(null);
-    setError(null);
   };
 
-  // Initialiser les dates
-  useEffect(() => {
-    const defaultPeriod = periodOptions.find(opt => opt.value === 'current_month');
-    if (defaultPeriod) {
-      setDateDebut(defaultPeriod.debut);
-      setDateFin(defaultPeriod.fin);
+  const updateDatesForPeriod = () => {
+    const now = new Date();
+    
+    switch (selectedPeriod) {
+      case 'current_month':
+        setDateDebut(format(startOfMonth(now), 'yyyy-MM-dd'));
+        setDateFin(format(endOfMonth(now), 'yyyy-MM-dd'));
+        break;
+      case 'last_month':
+        const lastMonth = subMonths(now, 1);
+        setDateDebut(format(startOfMonth(lastMonth), 'yyyy-MM-dd'));
+        setDateFin(format(endOfMonth(lastMonth), 'yyyy-MM-dd'));
+        break;
+      // 'custom' ne modifie pas les dates
     }
-  }, []);
+  };
 
-  // Calculer les commissions
-  const handleCalculateCommissions = () => {
-    if (!selectedCollecteur || !dateDebut || !dateFin) {
-      setError('Veuillez sélectionner un collecteur et une période');
+  const handleCalculate = async () => {
+    // Validation
+    if (!dateDebut || !dateFin) {
+      Alert.alert('Erreur', 'Veuillez sélectionner une période');
       return;
     }
 
-    const periodLabel = periodOptions.find(opt => opt.value === selectedPeriod)?.label;
-    const collecteurLabel = selectedCollecteur === 'all' 
-      ? 'tous les collecteurs' 
-      : collecteurOptions.find(opt => opt.value === selectedCollecteur)?.label;
+    if (new Date(dateDebut) > new Date(dateFin)) {
+      Alert.alert('Erreur', 'La date de début doit être antérieure à la date de fin');
+      return;
+    }
 
     Alert.alert(
-      'Confirmation',
-      `Calculer les commissions pour ${collecteurLabel} sur la période "${periodLabel}" ?`,
+      'Calculer les commissions',
+      `Calculer les commissions ${
+        selectedCollecteur ? 'du collecteur sélectionné' : 'de tous les collecteurs'
+      } pour la période du ${format(new Date(dateDebut), 'dd/MM/yyyy', { locale: fr })} au ${format(new Date(dateFin), 'dd/MM/yyyy', { locale: fr })} ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Calculer', onPress: executeCalculation }
@@ -134,218 +115,286 @@ const CommissionCalculationScreen = ({ navigation }) => {
     );
   };
 
-  // Exécuter le calcul
   const executeCalculation = async () => {
     try {
+      setCalculating(true);
       setError(null);
-      setResults(null);
+      setCommissionResults(null);
 
-      let calculationResults;
-
-      if (selectedCollecteur === 'all') {
-        // Calculer pour tous les collecteurs
-        calculationResults = [];
-        for (const collecteur of collecteurs) {
-          const result = await processCommissions(
-            collecteur.id, 
-            dateDebut, 
-            dateFin, 
-            false // pas de force recalcul par défaut
-          );
-          
-          if (result.success) {
-            calculationResults.push({
-              collecteur: collecteur,
-              ...result.data
-            });
-          }
-        }
-      } else {
+      let response;
+      
+      if (selectedCollecteur) {
         // Calculer pour un collecteur spécifique
-        const result = await processCommissions(
-          selectedCollecteur, 
-          dateDebut, 
-          dateFin, 
-          false
+        response = await commissionService.calculateCollecteurCommissions(
+          selectedCollecteur,
+          dateDebut,
+          dateFin
         );
-        
-        if (result.success) {
-          const collecteurData = collecteurOptions.find(opt => opt.value === selectedCollecteur)?.data;
-          calculationResults = [{
-            collecteur: collecteurData,
-            ...result.data
-          }];
-        }
+      } else {
+        // Calculer pour toute l'agence
+        response = await commissionService.calculateAgenceCommissions(
+          dateDebut,
+          dateFin
+        );
       }
 
-      setResults(calculationResults);
-      
-      Alert.alert(
-        'Succès',
-        'Le calcul des commissions a été effectué avec succès.',
-        [{ text: 'OK' }]
-      );
-
+      if (response.success) {
+        setCommissionResults(response.data);
+        Alert.alert(
+          'Succès',
+          'Les commissions ont été calculées avec succès',
+          [
+            {
+              text: 'Voir les détails',
+              onPress: () => {
+                // Navigation vers les détails si nécessaire
+              }
+            },
+            { text: 'OK' }
+          ]
+        );
+      } else {
+        setError(response.error || 'Erreur lors du calcul');
+      }
     } catch (err) {
-      console.error('Erreur calcul commissions:', err);
+      console.error('Erreur lors du calcul:', err);
       setError(err.message || 'Erreur lors du calcul des commissions');
+    } finally {
+      setCalculating(false);
     }
   };
 
-  // Formater la devise
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '0 FCFA';
-    return `${new Intl.NumberFormat('fr-FR').format(amount)} FCFA`;
-  };
+  const renderCommissionItem = ({ item }) => {
+    if (!item) return null;
 
-  // Rendu d'un résultat de commission
-  const renderCommissionResult = (result, index) => (
-    <Card key={index} style={styles.resultCard}>
-      <View style={styles.resultHeader}>
-        <Text style={styles.collecteurName}>
-          {result.collecteur ? `${result.collecteur.prenom} ${result.collecteur.nom}` : 'Collecteur inconnu'}
-        </Text>
-        <View style={[
-          styles.statusBadge,
-          result.success ? styles.successBadge : styles.errorBadge
-        ]}>
-          <Text style={styles.statusText}>
-            {result.success ? 'Calculé' : 'Erreur'}
+    return (
+      <View style={styles.commissionItem}>
+        <View style={styles.commissionInfo}>
+          <Text style={styles.collecteurName}>
+            {item.collecteurNom || 'Collecteur inconnu'}
+          </Text>
+          <Text style={styles.clientCount}>
+            {item.nombreClients || 0} clients traités
+          </Text>
+        </View>
+        <View style={styles.commissionAmount}>
+          <Text style={styles.amountLabel}>Commission</Text>
+          <Text style={styles.amountValue}>
+            {new Intl.NumberFormat('fr-FR').format(item.montantCommission || 0)} FCFA
           </Text>
         </View>
       </View>
+    );
+  };
 
-      {result.success && result.totalCommission !== undefined && (
-        <View style={styles.resultDetails}>
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Commission totale:</Text>
-            <Text style={styles.resultValue}>
-              {formatCurrency(result.totalCommission)}
-            </Text>
-          </View>
-
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Nombre de transactions:</Text>
-            <Text style={styles.resultValue}>
-              {result.nombreTransactions || 0}
-            </Text>
-          </View>
-
-          <View style={styles.resultRow}>
-            <Text style={styles.resultLabel}>Montant traité:</Text>
-            <Text style={styles.resultValue}>
-              {formatCurrency(result.montantTraite || 0)}
-            </Text>
-          </View>
-
-          {result.message && (
-            <View style={styles.messageContainer}>
-              <Text style={styles.messageText}>{result.message}</Text>
-            </View>
-          )}
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Header
+          title="Calcul des commissions"
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
         </View>
-      )}
-
-      {!result.success && result.error && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={16} color={theme.colors.error} />
-          <Text style={styles.errorText}>{result.error}</Text>
-        </View>
-      )}
-    </Card>
-  );
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Header
         title="Calcul des commissions"
         onBackPress={() => navigation.goBack()}
       />
-
-      <ScrollView style={styles.content}>
-        {/* Formulaire de paramètres */}
-        <Card style={styles.parametersCard}>
+      
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Sélection des paramètres */}
+        <Card style={styles.card}>
           <Text style={styles.cardTitle}>Paramètres de calcul</Text>
-
-          <SelectInput
-            label="Collecteur"
-            placeholder="Sélectionner un collecteur"
-            value={selectedCollecteur}
-            options={collecteurOptions}
-            onChange={setSelectedCollecteur}
-            disabled={collecteursLoading}
-            required
-          />
-
-          <SelectInput
-            label="Période"
-            placeholder="Sélectionner une période"
-            value={selectedPeriod}
-            options={periodOptions}
-            onChange={handlePeriodChange}
-            required
-          />
-
-          <View style={styles.dateInfo}>
-            <Text style={styles.dateLabel}>
-              Du {dateDebut ? format(new Date(dateDebut), 'dd/MM/yyyy') : ''} 
-              au {dateFin ? format(new Date(dateFin), 'dd/MM/yyyy') : ''}
+          
+          {/* Sélection du collecteur */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Collecteur (optionnel)</Text>
+            <SelectInput
+              value={selectedCollecteur}
+              options={[
+                { label: 'Tous les collecteurs', value: null },
+                ...collecteurs.map(c => ({
+                  label: `${c.prenom} ${c.nom}`,
+                  value: c.id
+                }))
+              ]}
+              onChange={setSelectedCollecteur}
+              placeholder="Sélectionner un collecteur"
+            />
+            <Text style={styles.helperText}>
+              Laissez vide pour calculer les commissions de toute l'agence
             </Text>
           </View>
 
-          {(error || commissionError) && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
-              <Text style={styles.errorText}>{error || commissionError}</Text>
+          {/* Sélection de la période */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Période</Text>
+            <View style={styles.periodButtons}>
+              {periodOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.periodButton,
+                    selectedPeriod === option.id && styles.activePeriodButton
+                  ]}
+                  onPress={() => setSelectedPeriod(option.id)}
+                >
+                  <Text style={[
+                    styles.periodButtonText,
+                    selectedPeriod === option.id && styles.activePeriodButtonText
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+          </View>
+
+          {/* Dates personnalisées */}
+          {selectedPeriod === 'custom' && (
+            <>
+              <DatePickerInput
+                label="Date de début"
+                value={dateDebut}
+                onChange={setDateDebut}
+                maximumDate={new Date()}
+              />
+              
+              <DatePickerInput
+                label="Date de fin"
+                value={dateFin}
+                onChange={setDateFin}
+                minimumDate={dateDebut ? new Date(dateDebut) : undefined}
+                maximumDate={new Date()}
+              />
+            </>
           )}
 
-          <Button
-            title="Calculer les commissions"
-            onPress={handleCalculateCommissions}
-            loading={processing}
-            disabled={processing || !selectedCollecteur || !dateDebut || !dateFin}
-            style={styles.calculateButton}
-          />
+          {/* Affichage de la période sélectionnée */}
+          <View style={styles.periodSummary}>
+            <Text style={styles.periodSummaryLabel}>Période sélectionnée :</Text>
+            <Text style={styles.periodSummaryText}>
+              Du {format(new Date(dateDebut), 'dd MMMM yyyy', { locale: fr })} au {format(new Date(dateFin), 'dd MMMM yyyy', { locale: fr })}
+            </Text>
+          </View>
         </Card>
 
-        {/* Résultats */}
-        {processing && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Calcul des commissions en cours...</Text>
+        {/* Informations importantes */}
+        <Card style={styles.infoCard}>
+          <View style={styles.infoHeader}>
+            <Ionicons name="information-circle" size={24} color={theme.colors.primary} />
+            <Text style={styles.infoTitle}>Comment fonctionne le calcul ?</Text>
           </View>
+          <Text style={styles.infoText}>
+            Le calcul des commissions utilise la hiérarchie suivante :
+          </Text>
+          <View style={styles.hierarchyList}>
+            <Text style={styles.hierarchyItem}>1. Paramètres du client (priorité haute)</Text>
+            <Text style={styles.hierarchyItem}>2. Paramètres du collecteur</Text>
+            <Text style={styles.hierarchyItem}>3. Paramètres de l'agence (par défaut)</Text>
+          </View>
+          <Text style={styles.infoText}>
+            Les commissions sont calculées sur le montant total épargné par chaque client durant la période sélectionnée.
+          </Text>
+        </Card>
+
+        {/* Résultats des commissions */}
+        {commissionResults && (
+          <Card style={styles.card}>
+            <Text style={styles.cardTitle}>Résultats du calcul</Text>
+            
+            {/* Résumé */}
+            <View style={styles.resultSummary}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Total commissions</Text>
+                <Text style={styles.summaryValue}>
+                  {new Intl.NumberFormat('fr-FR').format(commissionResults.totalCommissions || 0)} FCFA
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Collecteurs traités</Text>
+                <Text style={styles.summaryValue}>
+                  {commissionResults.nombreCollecteurs || 0}
+                </Text>
+              </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Clients traités</Text>
+                <Text style={styles.summaryValue}>
+                  {commissionResults.nombreClientsTotal || 0}
+                </Text>
+              </View>
+            </View>
+
+            {/* Détails par collecteur */}
+            {commissionResults.details && commissionResults.details.length > 0 && (
+              <>
+                <Text style={styles.detailsTitle}>Détails par collecteur</Text>
+                <FlatList
+                  data={commissionResults.details}
+                  renderItem={renderCommissionItem}
+                  keyExtractor={(item) => item.collecteurId?.toString() || Math.random().toString()}
+                  scrollEnabled={false}
+                />
+              </>
+            )}
+
+            {/* Actions */}
+            <View style={styles.resultActions}>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => {
+                  // Exporter ou enregistrer les résultats
+                  Alert.alert('Information', 'Fonctionnalité d\'export en développement');
+                }}
+              >
+                <Ionicons name="download-outline" size={20} color={theme.colors.primary} />
+                <Text style={styles.actionButtonText}>Exporter</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => {
+                  // Valider et enregistrer les commissions
+                  Alert.alert('Information', 'Validation des commissions en développement');
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.success} />
+                <Text style={[styles.actionButtonText, { color: theme.colors.success }]}>
+                  Valider
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
         )}
 
-        {results && results.length > 0 && (
-          <View style={styles.resultsContainer}>
-            <Text style={styles.resultsTitle}>Résultats du calcul</Text>
-            {results.map((result, index) => renderCommissionResult(result, index))}
-            
-            {/* Résumé global si plusieurs collecteurs */}
-            {results.length > 1 && (
-              <Card style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Résumé global</Text>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total des commissions:</Text>
-                  <Text style={styles.summaryValue}>
-                    {formatCurrency(
-                      results.reduce((sum, result) => sum + (result.totalCommission || 0), 0)
-                    )}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Collecteurs traités:</Text>
-                  <Text style={styles.summaryValue}>
-                    {results.filter(r => r.success).length} / {results.length}
-                  </Text>
-                </View>
-              </Card>
-            )}
-          </View>
+        {/* Erreur */}
+        {error && (
+          <Card style={[styles.card, styles.errorCard]}>
+            <View style={styles.errorContent}>
+              <Ionicons name="alert-circle" size={24} color={theme.colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          </Card>
         )}
+
+        {/* Bouton de calcul */}
+        <Button
+          title="Calculer les commissions"
+          onPress={handleCalculate}
+          loading={calculating}
+          style={styles.calculateButton}
+          disabled={!dateDebut || !dateFin}
+        />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -359,148 +408,212 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 16,
-  },
-  parametersCard: {
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  dateInfo: {
-    backgroundColor: theme.colors.lightGray,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 16,
-  },
-  dateLabel: {
-    fontSize: 14,
-    color: theme.colors.text,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${theme.colors.error}15`,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 16,
-  },
-  errorText: {
-    marginLeft: 8,
-    color: theme.colors.error,
-    flex: 1,
-  },
-  calculateButton: {
-    marginTop: 16,
   },
   loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 32,
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: 12,
     fontSize: 16,
     color: theme.colors.textLight,
   },
-  resultsContainer: {
-    marginTop: 16,
+  card: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 20,
   },
-  resultsTitle: {
+  cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: theme.colors.text,
     marginBottom: 16,
   },
-  resultCard: {
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  periodButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  periodButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: theme.colors.lightGray,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  activePeriodButton: {
+    backgroundColor: theme.colors.primary,
+  },
+  periodButtonText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  activePeriodButtonText: {
+    color: theme.colors.white,
+  },
+  periodSummary: {
+    backgroundColor: theme.colors.lightGray,
     padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  periodSummaryLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 4,
+  },
+  periodSummaryText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  infoCard: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 20,
+    backgroundColor: 'rgba(46, 125, 50, 0.05)',
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  resultHeader: {
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginLeft: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  hierarchyList: {
+    marginVertical: 8,
+    paddingLeft: 16,
+  },
+  hierarchyItem: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  resultSummary: {
+    backgroundColor: theme.colors.lightGray,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  detailsTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  commissionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  commissionInfo: {
+    flex: 1,
   },
   collecteurName: {
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
-    flex: 1,
+    marginBottom: 2,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  successBadge: {
-    backgroundColor: theme.colors.success + '20',
-  },
-  errorBadge: {
-    backgroundColor: theme.colors.error + '20',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  resultDetails: {
-    marginTop: 8,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  resultLabel: {
+  clientCount: {
     fontSize: 14,
     color: theme.colors.textLight,
   },
-  resultValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
+  commissionAmount: {
+    alignItems: 'flex-end',
   },
-  messageContainer: {
-    backgroundColor: theme.colors.lightGray,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
+  amountLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginBottom: 2,
   },
-  messageText: {
-    fontSize: 14,
-    color: theme.colors.text,
-  },
-  summaryCard: {
-    padding: 16,
-    marginTop: 16,
-    backgroundColor: theme.colors.primary + '10',
-  },
-  summaryTitle: {
+  amountValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: theme.colors.text,
-  },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: theme.colors.primary,
+  },
+  resultActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  errorCard: {
+    backgroundColor: 'rgba(255, 59, 48, 0.05)',
+  },
+  errorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: theme.colors.error,
+    marginLeft: 8,
+    flex: 1,
+  },
+  calculateButton: {
+    marginHorizontal: 20,
+    marginVertical: 20,
   },
 });
 

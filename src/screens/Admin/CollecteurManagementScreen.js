@@ -1,4 +1,4 @@
-// src/screens/Admin/CollecteurManagementScreen.js - VERSION CORRIGÉE
+// src/screens/Admin/CollecteurManagementScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -19,16 +19,16 @@ import theme from '../../theme';
 import { collecteurService } from '../../services';
 
 const CollecteurManagementScreen = ({ navigation }) => {
-  // États pour les données
-  const [collecteurs, setCollecteurs] = useState([]); // ✅ INITIALISATION CORRECTE
-  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]); // ✅ INITIALISATION CORRECTE
+  // États pour les données - INITIALISATION SÉCURISÉE
+  const [collecteurs, setCollecteurs] = useState([]);
+  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
   // États pour les filtres
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('all'); // all, active, inactive
   const [totalElements, setTotalElements] = useState(0);
 
   // Charger les collecteurs au démarrage
@@ -49,18 +49,18 @@ const CollecteurManagementScreen = ({ navigation }) => {
       const response = await collecteurService.getAllCollecteurs();
       
       if (response.success) {
-        // ✅ VÉRIFICATION AVANT ASSIGNATION
+        // VÉRIFICATION AVANT ASSIGNATION
         const collecteursData = Array.isArray(response.data) ? response.data : [];
         setCollecteurs(collecteursData);
         setTotalElements(collecteursData.length);
       } else {
         setError(response.error || 'Erreur lors du chargement des collecteurs');
-        setCollecteurs([]); // ✅ FALLBACK SÉCURISÉ
+        setCollecteurs([]); // FALLBACK SÉCURISÉ
       }
     } catch (err) {
       console.error('Erreur lors du chargement des collecteurs:', err);
       setError(err.message || 'Erreur lors du chargement des collecteurs');
-      setCollecteurs([]); // ✅ FALLBACK SÉCURISÉ
+      setCollecteurs([]); // FALLBACK SÉCURISÉ
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -68,13 +68,13 @@ const CollecteurManagementScreen = ({ navigation }) => {
   };
 
   const filterCollecteurs = () => {
-    // ✅ VÉRIFICATION AVANT FILTER
+    // VÉRIFICATION AVANT FILTER
     if (!Array.isArray(collecteurs)) {
       setFilteredCollecteurs([]);
       return;
     }
 
-    let filtered = [...collecteurs]; // ✅ COPIE SÉCURISÉE
+    let filtered = [...collecteurs]; // COPIE SÉCURISÉE
 
     // Filtrer par statut
     if (filter !== 'all') {
@@ -107,13 +107,16 @@ const CollecteurManagementScreen = ({ navigation }) => {
   };
 
   const handleAddCollecteur = () => {
-    navigation.navigate('CollecteurCreationScreen');
+    navigation.navigate('CollecteurCreationScreen', {
+      onRefresh: () => loadCollecteurs(false)
+    });
   };
 
   const handleEditCollecteur = (collecteur) => {
     navigation.navigate('CollecteurCreationScreen', { 
       mode: 'edit', 
-      collecteur 
+      collecteur,
+      onRefresh: () => loadCollecteurs(false)
     });
   };
 
@@ -153,9 +156,9 @@ const CollecteurManagementScreen = ({ navigation }) => {
     navigation.navigate('CollecteurDetailScreen', { collecteur });
   };
 
-  // ✅ VÉRIFICATION SÉCURISÉE POUR LE RENDU
+  // RENDU SÉCURISÉ DES COLLECTEURS
   const renderCollecteurItem = ({ item }) => {
-    // ✅ VÉRIFICATION DE L'ITEM
+    // VÉRIFICATION DE L'ITEM
     if (!item) return null;
 
     return (
@@ -179,24 +182,14 @@ const CollecteurManagementScreen = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.collecteurDetails}>
-          <View style={styles.detailItem}>
-            <Ionicons name="call" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              {item.telephone || 'Non renseigné'}
-            </Text>
+        <View style={styles.collecteurStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Clients</Text>
+            <Text style={styles.statValue}>{item.totalClients || 0}</Text>
           </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="business" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              {item.agence?.nomAgence || 'Agence non définie'}
-            </Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Ionicons name="cash" size={16} color={theme.colors.gray} />
-            <Text style={styles.detailText}>
-              Montant max: {item.montantMaxRetrait || 0} FCFA
-            </Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Montant max retrait</Text>
+            <Text style={styles.statValue}>{item.montantMaxRetrait || 0} FCFA</Text>
           </View>
         </View>
 
@@ -205,7 +198,7 @@ const CollecteurManagementScreen = ({ navigation }) => {
             style={styles.actionButton}
             onPress={() => handleViewDetails(item)}
           >
-            <Ionicons name="eye" size={16} color={theme.colors.primary} />
+            <Ionicons name="eye-outline" size={20} color={theme.colors.primary} />
             <Text style={styles.actionButtonText}>Détails</Text>
           </TouchableOpacity>
           
@@ -213,7 +206,7 @@ const CollecteurManagementScreen = ({ navigation }) => {
             style={styles.actionButton}
             onPress={() => handleEditCollecteur(item)}
           >
-            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
             <Text style={styles.actionButtonText}>Modifier</Text>
           </TouchableOpacity>
           
@@ -222,8 +215,8 @@ const CollecteurManagementScreen = ({ navigation }) => {
             onPress={() => handleToggleStatus(item)}
           >
             <Ionicons 
-              name={item.active ? "pause" : "play"} 
-              size={16} 
+              name={item.active ? "pause-circle-outline" : "play-circle-outline"} 
+              size={20} 
               color={item.active ? theme.colors.warning : theme.colors.success} 
             />
             <Text style={[
@@ -238,86 +231,112 @@ const CollecteurManagementScreen = ({ navigation }) => {
     );
   };
 
-  // ✅ RENDU CONDITIONNEL AVEC GESTION D'ERREUR
-  if (error && !loading) {
+  // Gestion des états de chargement et d'erreur
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Header 
+      <View style={styles.container}>
+        <Header
           title="Gestion des collecteurs"
-          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Chargement des collecteurs...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error && !refreshing) {
+    return (
+      <View style={styles.container}>
+        <Header
+          title="Gestion des collecteurs"
           onBackPress={() => navigation.goBack()}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={64} color={theme.colors.error} />
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() => loadCollecteurs()}
-          >
+          <TouchableOpacity style={styles.retryButton} onPress={() => loadCollecteurs()}>
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
+      <Header
         title="Gestion des collecteurs"
-        showBackButton={true}
         onBackPress={() => navigation.goBack()}
         rightComponent={
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddCollecteur}
-          >
+          <TouchableOpacity onPress={handleAddCollecteur}>
             <Ionicons name="add" size={24} color={theme.colors.white} />
           </TouchableOpacity>
         }
       />
       
-      <View style={styles.contentContainer}>
+      <View style={styles.content}>
         {/* Barre de recherche */}
         <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={20} color={theme.colors.gray} style={styles.searchIcon} />
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color={theme.colors.textLight} />
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher un collecteur..."
               value={searchQuery}
               onChangeText={setSearchQuery}
+              placeholderTextColor={theme.colors.textLight}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color={theme.colors.gray} />
+                <Ionicons name="close-circle" size={20} color={theme.colors.textLight} />
               </TouchableOpacity>
             )}
           </View>
         </View>
-        
+
+        {/* Statistiques */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{totalElements}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statNumber, { color: theme.colors.success }]}>
+              {collecteurs.filter(c => c && c.active).length}
+            </Text>
+            <Text style={styles.statLabel}>Actifs</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statNumber, { color: theme.colors.error }]}>
+              {collecteurs.filter(c => c && !c.active).length}
+            </Text>
+            <Text style={styles.statLabel}>Inactifs</Text>
+          </View>
+        </View>
+
         {/* Filtres */}
         <View style={styles.filterContainer}>
           <TouchableOpacity
-            style={[styles.filterButton, filter === 'all' && styles.activeFilterButton]}
+            style={[styles.filterButton, filter === 'all' && styles.activeFilter]}
             onPress={() => setFilter('all')}
           >
             <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
-              Tous ({totalElements})
+              Tous
             </Text>
           </TouchableOpacity>
-          
           <TouchableOpacity
-            style={[styles.filterButton, filter === 'active' && styles.activeFilterButton]}
+            style={[styles.filterButton, filter === 'active' && styles.activeFilter]}
             onPress={() => setFilter('active')}
           >
             <Text style={[styles.filterText, filter === 'active' && styles.activeFilterText]}>
               Actifs
             </Text>
           </TouchableOpacity>
-          
           <TouchableOpacity
-            style={[styles.filterButton, filter === 'inactive' && styles.activeFilterButton]}
+            style={[styles.filterButton, filter === 'inactive' && styles.activeFilter]}
             onPress={() => setFilter('inactive')}
           >
             <Text style={[styles.filterText, filter === 'inactive' && styles.activeFilterText]}>
@@ -325,44 +344,32 @@ const CollecteurManagementScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
         </View>
-        
+
         {/* Liste des collecteurs */}
-        {loading && collecteurs.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement des collecteurs...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredCollecteurs} // ✅ TOUJOURS UN TABLEAU
-            renderItem={renderCollecteurItem}
-            keyExtractor={item => item?.id?.toString() || Math.random().toString()} // ✅ FALLBACK SÉCURISÉ
-            contentContainerStyle={styles.collecteursList}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[theme.colors.primary]}
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people" size={64} color={theme.colors.gray} />
-                <Text style={styles.emptyText}>
-                  {searchQuery.trim() !== '' 
-                    ? 'Aucun collecteur ne correspond à votre recherche' 
-                    : 'Aucun collecteur disponible'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={handleAddCollecteur}
-                >
-                  <Text style={styles.emptyButtonText}>Ajouter un collecteur</Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        )}
+        <FlatList
+          data={filteredCollecteurs}
+          renderItem={renderCollecteurItem}
+          keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+            />
+          }
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="people-outline" size={64} color={theme.colors.textLight} />
+              <Text style={styles.emptyText}>
+                {searchQuery ? 'Aucun collecteur trouvé' : 'Aucun collecteur enregistré'}
+              </Text>
+              <TouchableOpacity style={styles.emptyButton} onPress={handleAddCollecteur}>
+                <Text style={styles.emptyButtonText}>Ajouter un collecteur</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
       </View>
     </SafeAreaView>
   );
@@ -373,36 +380,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.primary,
   },
-  contentContainer: {
+  content: {
     flex: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
-  addButton: {
-    padding: 8,
-  },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 10,
+    padding: 16,
   },
-  searchInputContainer: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    ...theme.shadows.small,
-  },
-  searchIcon: {
-    marginRight: 8,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
   },
   searchInput: {
     flex: 1,
+    marginLeft: 8,
     fontSize: 16,
-    height: 40,
+    color: theme.colors.text,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  statCard: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    minWidth: 100,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 4,
   },
   filterContainer: {
     flexDirection: 'row',
@@ -410,53 +437,54 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   filterButton: {
-    paddingVertical: 8,
     paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 8,
     backgroundColor: theme.colors.lightGray,
+    marginRight: 8,
   },
-  activeFilterButton: {
+  activeFilter: {
     backgroundColor: theme.colors.primary,
   },
   filterText: {
-    color: theme.colors.textLight,
+    fontSize: 14,
+    color: theme.colors.text,
     fontWeight: '500',
   },
   activeFilterText: {
     color: theme.colors.white,
   },
-  collecteursList: {
+  listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   collecteurCard: {
-    marginBottom: 16,
+    marginBottom: 12,
+    padding: 16,
   },
   collecteurHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 12,
   },
   collecteurInfo: {
     flex: 1,
   },
   collecteurName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   collecteurEmail: {
     fontSize: 14,
     color: theme.colors.textLight,
   },
   statusBadge: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    marginLeft: 8,
+    alignSelf: 'flex-start',
   },
   activeBadge: {
     backgroundColor: 'rgba(52, 199, 89, 0.2)',
@@ -466,33 +494,27 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: theme.colors.text,
+    fontWeight: '600',
   },
-  collecteurDetails: {
-    marginBottom: 12,
-  },
-  detailItem: {
+  collecteurStats: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: theme.colors.lightGray,
   },
-  detailText: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginLeft: 8,
+  statItem: {
+    flex: 1,
   },
   actionButtons: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderColor: theme.colors.lightGray,
-    paddingTop: 12,
+    justifyContent: 'space-around',
   },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 8,
   },
   actionButtonText: {
@@ -504,6 +526,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
   },
   loadingText: {
     marginTop: 12,

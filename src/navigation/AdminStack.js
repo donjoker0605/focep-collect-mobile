@@ -1,35 +1,35 @@
-// src/navigation/AdminStack.js - NAVIGATION COMPLÈTE AVEC TOUS LES ÉCRANS
+// src/navigation/AdminStack.js
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-// ✅ ÉCRANS ADMIN PRINCIPAUX
+// ÉCRANS ADMIN PRINCIPAUX
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
 import ClientManagementScreen from '../screens/Admin/ClientManagementScreen';
 import ReportsScreen from '../screens/Admin/ReportsScreen';
 import ProfileScreen from '../screens/Collecteur/ProfileScreen';
 
-// ✅ ÉCRANS DE DÉTAILS ET CRÉATION
+// ÉCRANS DE DÉTAILS ET CRÉATION
 import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
 import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
 import ClientDetailScreen from '../screens/Admin/ClientDetailScreen';
 import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
 
-// ✅ ÉCRANS OUTILS ADMINISTRATIFS
+// ÉCRANS OUTILS ADMINISTRATIFS
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
 import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
 
-// ✅ ÉCRANS COMMUNS
-import NotificationsScreen from '../screens/Comon/NotificationsScreen';
+// ÉCRANS COMMUNS
+import NotificationsScreen from '../screens/Common/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// ✅ NAVIGATION PAR ONGLETS ADMIN
+// Navigation par onglets
 function AdminTabs() {
   return (
     <Tab.Navigator
@@ -119,7 +119,7 @@ function AdminTabs() {
   );
 }
 
-// ✅ STACK PRINCIPAL ADMIN AVEC TOUS LES ÉCRANS
+// Stack principal avec tous les écrans
 export default function AdminStack() {
   return (
     <Stack.Navigator
@@ -129,14 +129,38 @@ export default function AdminStack() {
         animation: 'slide_from_right',
       }}
     >
-      {/* ✅ ÉCRAN PRINCIPAL AVEC ONGLETS */}
+      {/* Écran principal avec onglets */}
       <Stack.Screen 
         name="AdminTabs" 
         component={AdminTabs}
         options={{ headerShown: false }}
       />
       
-      {/* ✅ ÉCRANS DE GESTION DES COLLECTEURS */}
+      {/* TOUS LES ÉCRANS DE NAVIGATION */}
+      <Stack.Screen 
+        name="CollecteurManagementScreen" 
+        component={CollecteurManagementScreen}
+        options={{
+          title: 'Gestion des collecteurs',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="ClientManagementScreen" 
+        component={ClientManagementScreen}
+        options={{
+          title: 'Gestion des clients',
+        }}
+      />
+      
+      <Stack.Screen 
+        name="ReportsScreen" 
+        component={ReportsScreen}
+        options={{
+          title: 'Rapports',
+        }}
+      />
+      
       <Stack.Screen 
         name="CollecteurCreationScreen" 
         component={CollecteurCreationScreen}
@@ -154,7 +178,6 @@ export default function AdminStack() {
         }}
       />
       
-      {/* ✅ ÉCRANS DE GESTION DES CLIENTS */}
       <Stack.Screen 
         name="ClientDetailScreen" 
         component={ClientDetailScreen}
@@ -163,7 +186,6 @@ export default function AdminStack() {
         }}
       />
       
-      {/* ✅ ÉCRANS DE TRANSACTIONS */}
       <Stack.Screen 
         name="TransactionDetailScreen" 
         component={TransactionDetailScreen}
@@ -172,7 +194,6 @@ export default function AdminStack() {
         }}
       />
       
-      {/* ✅ ÉCRANS OUTILS ADMINISTRATIFS */}
       <Stack.Screen 
         name="CommissionParametersScreen" 
         component={CommissionParametersScreen}
@@ -205,7 +226,6 @@ export default function AdminStack() {
         }}
       />
       
-      {/* ✅ ÉCRANS COMMUNS */}
       <Stack.Screen 
         name="NotificationsScreen" 
         component={NotificationsScreen}

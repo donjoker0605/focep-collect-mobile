@@ -5,356 +5,462 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  Alert,
-  SafeAreaView,
+  TouchableOpacity,
+  Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useForm, Controller } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as yup from 'yup';
 import Header from '../../components/Header/Header';
+import Card from '../../components/Card/Card';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
 import theme from '../../theme';
+import { collecteurService, commissionService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 
-// Schéma de validation
-const collecteurSchema = yup.object().shape({
-  nom: yup
-    .string()
-    .required('Le nom est requis'),
-  prenom: yup
-    .string()
-    .required('Le prénom est requis'),
-  adresseMail: yup
-    .string()
-    .email('Veuillez entrer un email valide')
-    .required('L\'email est requis'),
-  numeroCni: yup
-    .string()
-    .required('Le numéro CNI est requis'),
-  telephone: yup
-    .string()
-    .matches(/^(\+237|237)?[ ]?[6-9][0-9]{8}$/, 'Numéro de téléphone invalide')
-    .required('Le numéro de téléphone est requis'),
-  montantMaxRetrait: yup
-    .number()
-    .typeError('Le montant doit être un nombre')
-    .min(1000, 'Le montant minimal autorisé est de 1 000 FCFA')
-    .max(500000, 'Le montant maximal autorisé est de 500 000 FCFA')
-    .required('Le montant maximal de retrait est requis'),
-  password: yup
-    .string()
-    .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
-    .required('Le mot de passe est requis'),
-  confirmPassword: yup
-    .string()
-    .oneOf([yup.ref('password'), null], 'Les mots de passe doivent correspondre')
-    .required('La confirmation du mot de passe est requise'),
-});
-
 const CollecteurCreationScreen = ({ navigation, route }) => {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const isEditMode = route.params?.mode === 'edit';
-  const collecteurToEdit = route.params?.collecteur;
+  const existingCollecteur = route.params?.collecteur;
+
+  // États du formulaire
+  const [formData, setFormData] = useState({
+    nom: '',
+    prenom: '',
+    adresseMail: '',
+    telephone: '',
+    numeroCni: '',
+    password: '',
+    confirmPassword: '',
+    montantMaxRetrait: '100000',
+    active: true,
+  });
+
+  // États des paramètres de commission
+  const [defineCommission, setDefineCommission] = useState(false);
+  const [commissionParams, setCommissionParams] = useState({
+    tauxCommission: '2.5',
+    typeCalcul: 'pourcentage',
+    periodicite: 'mensuelle',
+    montantMinimum: '',
+    montantMaximum: '',
+  });
+
   const [loading, setLoading] = useState(false);
-  const [secureTextEntry, setSecureTextEntry] = useState({
-    password: true,
-    confirmPassword: true,
-  });
-  const [agence, setAgence] = useState(null);
+  const [errors, setErrors] = useState({});
 
-  // Pour les super-admins, nous pouvons continuer à proposer une sélection d'agence
-  // Pour les admins standard, l'agence est automatiquement celle de l'admin
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm({
-    resolver: yupResolver(collecteurSchema),
-    defaultValues: isEditMode ? {
-      nom: collecteurToEdit?.nom || '',
-      prenom: collecteurToEdit?.prenom || '',
-      adresseMail: collecteurToEdit?.adresseMail || '',
-      numeroCni: collecteurToEdit?.numeroCni || '',
-      telephone: collecteurToEdit?.telephone || '',
-      montantMaxRetrait: collecteurToEdit?.montantMaxRetrait?.toString() || '',
-      password: '',
-      confirmPassword: '',
-    } : {
-      nom: '',
-      prenom: '',
-      adresseMail: '',
-      telephone: '',
-      numeroCni: '',
-      montantMaxRetrait: '150000',
-      password: '',
-      confirmPassword: '',
-    }
-  });
-
+  // Charger les données en mode édition
   useEffect(() => {
-    // En mode édition, utiliser l'agence du collecteur
-    if (isEditMode && collecteurToEdit?.agence) {
-      setAgence(collecteurToEdit.agence);
-    } 
-    // Pour un admin ordinaire, utiliser automatiquement son agence
-    else if (!isSuperAdmin && user?.agence) {
-      setAgence(user.agence);
-    }
-    // Si un agenceId est fourni en paramètre (depuis un détail d'agence par exemple)
-    else if (route.params?.agenceId) {
-      // Simuler la récupération des détails de l'agence
-      // En production, ce serait un appel API
-      setAgence({ 
-        id: route.params.agenceId,
-        nomAgence: 'Agence sélectionnée' // Ce serait remplacé par une vraie requête
+    if (isEditMode && existingCollecteur) {
+      setFormData({
+        nom: existingCollecteur.nom || '',
+        prenom: existingCollecteur.prenom || '',
+        adresseMail: existingCollecteur.adresseMail || '',
+        telephone: existingCollecteur.telephone || '',
+        numeroCni: existingCollecteur.numeroCni || '',
+        montantMaxRetrait: existingCollecteur.montantMaxRetrait?.toString() || '100000',
+        active: existingCollecteur.active ?? true,
+        password: '',
+        confirmPassword: '',
       });
     }
-  }, [isEditMode, collecteurToEdit, user, isSuperAdmin, route.params]);
+  }, [isEditMode, existingCollecteur]);
 
-  const toggleSecureEntry = (field) => {
-    setSecureTextEntry({
-      ...secureTextEntry,
-      [field]: !secureTextEntry[field],
-    });
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Validation des champs obligatoires
+    if (!formData.nom.trim()) newErrors.nom = 'Le nom est obligatoire';
+    if (!formData.prenom.trim()) newErrors.prenom = 'Le prénom est obligatoire';
+    if (!formData.telephone.trim()) {
+      newErrors.telephone = 'Le téléphone est obligatoire';
+    } else if (!/^6[0-9]{8}$/.test(formData.telephone)) {
+      newErrors.telephone = 'Format invalide (ex: 600000000)';
+    }
+    if (!formData.numeroCni.trim()) {
+      newErrors.numeroCni = 'Le numéro CNI est obligatoire';
+    } else if (formData.numeroCni.length < 10) {
+      newErrors.numeroCni = 'Le numéro CNI doit avoir au moins 10 caractères';
+    }
+
+    // Validation email
+    if (!isEditMode || formData.adresseMail !== existingCollecteur?.adresseMail) {
+      if (!formData.adresseMail.trim()) {
+        newErrors.adresseMail = 'L\'email est obligatoire';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.adresseMail)) {
+        newErrors.adresseMail = 'Format d\'email invalide';
+      }
+    }
+
+    // Validation mot de passe (uniquement en création)
+    if (!isEditMode) {
+      if (!formData.password) {
+        newErrors.password = 'Le mot de passe est obligatoire';
+      } else if (formData.password.length < 6) {
+        newErrors.password = 'Le mot de passe doit avoir au moins 6 caractères';
+      }
+      if (formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+      }
+    }
+
+    // Validation montant max retrait
+    const montantMax = parseFloat(formData.montantMaxRetrait);
+    if (isNaN(montantMax) || montantMax <= 0) {
+      newErrors.montantMaxRetrait = 'Le montant doit être supérieur à 0';
+    }
+
+    // Validation paramètres commission si activés
+    if (defineCommission) {
+      const taux = parseFloat(commissionParams.tauxCommission);
+      if (isNaN(taux) || taux <= 0) {
+        newErrors.tauxCommission = 'Le taux doit être supérieur à 0';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const onSubmit = (data) => {
-    // Si aucune agence n'est sélectionnée
-    if (!agence) {
-      Alert.alert("Erreur", "Aucune agence n'est sélectionnée pour ce collecteur.");
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      Alert.alert('Erreur', 'Veuillez corriger les erreurs du formulaire');
       return;
     }
 
-    setLoading(true);
-    
-    // Ajouter l'ID de l'agence aux données à envoyer
-    const submitData = {
-      ...data,
-      agenceId: agence.id
-    };
-    
-    // Simuler un appel API
-    setTimeout(() => {
-      setLoading(false);
-      
+    Alert.alert(
+      isEditMode ? 'Confirmation' : 'Créer un collecteur',
+      isEditMode 
+        ? 'Voulez-vous enregistrer les modifications ?'
+        : `Créer le collecteur ${formData.prenom} ${formData.nom} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Confirmer', onPress: executeSubmit }
+      ]
+    );
+  };
+
+  const executeSubmit = async () => {
+    try {
+      setLoading(true);
+
+      // Préparer les données
+      const submitData = {
+        nom: formData.nom.trim(),
+        prenom: formData.prenom.trim(),
+        adresseMail: formData.adresseMail.trim().toLowerCase(),
+        telephone: formData.telephone.trim(),
+        numeroCni: formData.numeroCni.trim(),
+        montantMaxRetrait: parseFloat(formData.montantMaxRetrait),
+        active: formData.active,
+        // NE PAS envoyer l'agenceId - elle sera assignée automatiquement côté backend
+      };
+
+      // Ajouter le mot de passe uniquement en création
+      if (!isEditMode) {
+        submitData.password = formData.password;
+      }
+
+      let response;
       if (isEditMode) {
+        response = await collecteurService.updateCollecteur(existingCollecteur.id, submitData);
+      } else {
+        response = await collecteurService.createCollecteur(submitData);
+      }
+
+      if (response.success) {
+        // Si paramètres de commission définis et en mode création
+        if (!isEditMode && defineCommission && response.data?.id) {
+          try {
+            await commissionService.updateCollecteurCommissionParams(response.data.id, {
+              tauxCommission: parseFloat(commissionParams.tauxCommission),
+              typeCalcul: commissionParams.typeCalcul,
+              periodicite: commissionParams.periodicite,
+              montantMinimum: commissionParams.montantMinimum ? parseFloat(commissionParams.montantMinimum) : null,
+              montantMaximum: commissionParams.montantMaximum ? parseFloat(commissionParams.montantMaximum) : null,
+            });
+          } catch (commissionError) {
+            console.error('Erreur lors de la définition des commissions:', commissionError);
+            // Ne pas bloquer la création du collecteur
+          }
+        }
+
         Alert.alert(
-          "Succès",
-          `Le collecteur ${data.prenom} ${data.nom} a été mis à jour avec succès.`,
-          [{ text: "OK", onPress: () => navigation.goBack() }]
+          'Succès',
+          isEditMode 
+            ? 'Collecteur modifié avec succès'
+            : 'Collecteur créé avec succès',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.goBack();
+                // Rafraîchir la liste si nécessaire
+                if (route.params?.onRefresh) {
+                  route.params.onRefresh();
+                }
+              }
+            }
+          ]
         );
       } else {
-        Alert.alert(
-          "Succès",
-          `Le collecteur ${data.prenom} ${data.nom} a été créé avec succès.`,
-          [{ text: "OK", onPress: () => navigation.goBack() }]
-        );
+        Alert.alert('Erreur', response.error || 'Une erreur est survenue');
       }
-    }, 1500);
+    } catch (error) {
+      console.error('Erreur lors de la soumission:', error);
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Effacer l'erreur lors de la modification
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: null }));
+    }
+  };
+
+  const handleCommissionParamChange = (field, value) => {
+    setCommissionParams(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: null }));
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView 
+      style={[styles.container, { paddingBottom: insets.bottom }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <Header
-        title={isEditMode ? "Modifier un collecteur" : "Créer un collecteur"}
+        title={isEditMode ? 'Modifier collecteur' : 'Nouveau collecteur'}
         onBackPress={() => navigation.goBack()}
       />
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView style={styles.content}>
-          <View style={styles.form}>
-            <Text style={styles.sectionTitle}>Informations personnelles</Text>
-            
-            <Controller
-              control={control}
-              name="nom"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Nom"
-                  placeholder="Entrez le nom"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.nom?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            <Controller
-              control={control}
-              name="prenom"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Prénom"
-                  placeholder="Entrez le prénom"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.prenom?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            <Controller
-              control={control}
-              name="adresseMail"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Adresse e-mail"
-                  placeholder="exemple@email.com"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  error={errors.adresseMail?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            <Controller
-              control={control}
-              name="numeroCni"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Numéro CNI"
-                  placeholder="Entrez le numéro CNI"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.numeroCni?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            <Controller
-              control={control}
-              name="telephone"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Téléphone"
-                  placeholder="+237 6XX XX XX XX"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="phone-pad"
-                  error={errors.telephone?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            <Text style={styles.sectionTitle}>Paramètres du collecteur</Text>
-            
-            {/* Affichage de l'agence (non modifiable pour les admins standard) */}
-            <View style={styles.input}>
-              <Text style={styles.inputLabel}>Agence</Text>
-              {agence ? (
-                <View style={styles.agenceDisplay}>
-                  <Ionicons name="business-outline" size={20} color={theme.colors.primary} />
-                  <Text style={styles.agenceText}>
-                    {agence.nomAgence}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.agenceWarning}>
-                  <Ionicons name="warning-outline" size={20} color={theme.colors.warning} />
-                  <Text style={styles.agenceWarningText}>
-                    Aucune agence sélectionnée. Veuillez contacter un administrateur.
-                  </Text>
-                </View>
-              )}
+        {/* Informations personnelles */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Informations personnelles</Text>
+          
+          <Input
+            label="Nom"
+            value={formData.nom}
+            onChangeText={(value) => handleInputChange('nom', value)}
+            error={errors.nom}
+            placeholder="Nom du collecteur"
+            required
+          />
+          
+          <Input
+            label="Prénom"
+            value={formData.prenom}
+            onChangeText={(value) => handleInputChange('prenom', value)}
+            error={errors.prenom}
+            placeholder="Prénom du collecteur"
+            required
+          />
+          
+          <Input
+            label="Numéro CNI"
+            value={formData.numeroCni}
+            onChangeText={(value) => handleInputChange('numeroCni', value)}
+            error={errors.numeroCni}
+            placeholder="Ex: 123456789012"
+            keyboardType="numeric"
+            required
+          />
+          
+          <Input
+            label="Téléphone"
+            value={formData.telephone}
+            onChangeText={(value) => handleInputChange('telephone', value)}
+            error={errors.telephone}
+            placeholder="Ex: 600000000"
+            keyboardType="phone-pad"
+            required
+          />
+        </Card>
+
+        {/* Informations de connexion */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Informations de connexion</Text>
+          
+          <Input
+            label="Adresse email"
+            value={formData.adresseMail}
+            onChangeText={(value) => handleInputChange('adresseMail', value)}
+            error={errors.adresseMail}
+            placeholder="email@collectfocep.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            editable={!isEditMode}
+            required
+          />
+          
+          {!isEditMode && (
+            <>
+              <Input
+                label="Mot de passe"
+                value={formData.password}
+                onChangeText={(value) => handleInputChange('password', value)}
+                error={errors.password}
+                placeholder="Minimum 6 caractères"
+                secureTextEntry
+                required
+              />
+              
+              <Input
+                label="Confirmer le mot de passe"
+                value={formData.confirmPassword}
+                onChangeText={(value) => handleInputChange('confirmPassword', value)}
+                error={errors.confirmPassword}
+                placeholder="Retapez le mot de passe"
+                secureTextEntry
+                required
+              />
+            </>
+          )}
+        </Card>
+
+        {/* Paramètres du compte */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Paramètres du compte</Text>
+          
+          {/* Information sur l'agence */}
+          <View style={styles.infoBox}>
+            <Ionicons name="business" size={20} color={theme.colors.primary} />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoLabel}>Agence</Text>
+              <Text style={styles.infoValue}>
+                {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
+              </Text>
+              <Text style={styles.infoNote}>
+                Assignée automatiquement
+              </Text>
             </View>
-            
-            <Controller
-              control={control}
-              name="montantMaxRetrait"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Montant maximal de retrait (FCFA)"
-                  placeholder="Entrez le montant"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  keyboardType="number-pad"
-                  error={errors.montantMaxRetrait?.message}
-                  style={styles.input}
-                />
-              )}
-            />
-            
-            {!isEditMode && (
-              <>
-                <Text style={styles.sectionTitle}>Identifiants de connexion</Text>
-                
-                <Controller
-                  control={control}
-                  name="password"
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <Input
-                      label="Mot de passe"
-                      placeholder="Entrez le mot de passe"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      secureTextEntry={secureTextEntry.password}
-                      error={errors.password?.message}
-                      style={styles.input}
-                      rightIcon={secureTextEntry.password ? "eye-off" : "eye"}
-                      onRightIconPress={() => toggleSecureEntry('password')}
-                    />
-                  )}
-                />
-                
-                <Controller
-                  control={control}
-                  name="confirmPassword"
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <Input
-                      label="Confirmer le mot de passe"
-                      placeholder="Confirmez le mot de passe"
-                      value={value}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                      secureTextEntry={secureTextEntry.confirmPassword}
-                      error={errors.confirmPassword?.message}
-                      style={styles.input}
-                      rightIcon={secureTextEntry.confirmPassword ? "eye-off" : "eye"}
-                      onRightIconPress={() => toggleSecureEntry('confirmPassword')}
-                    />
-                  )}
-                />
-              </>
-            )}
-            
-            <Button
-              title={isEditMode ? "Mettre à jour" : "Créer le collecteur"}
-              onPress={handleSubmit(onSubmit)}
-              loading={loading}
-              style={styles.submitButton}
-              disabled={!agence}
-            />
-            
-            <Button
-              title="Annuler"
-              onPress={() => navigation.goBack()}
-              variant="outlined"
-              style={styles.cancelButton}
+          </View>
+          
+          <Input
+            label="Montant maximum de retrait (FCFA)"
+            value={formData.montantMaxRetrait}
+            onChangeText={(value) => handleInputChange('montantMaxRetrait', value)}
+            error={errors.montantMaxRetrait}
+            placeholder="Ex: 100000"
+            keyboardType="numeric"
+            required
+          />
+          
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>Compte actif</Text>
+            <Switch
+              value={formData.active}
+              onValueChange={(value) => handleInputChange('active', value)}
+              trackColor={{ false: theme.colors.lightGray, true: theme.colors.primary }}
+              thumbColor={formData.active ? theme.colors.white : theme.colors.gray}
             />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </Card>
+
+        {/* Paramètres de commission (uniquement en création) */}
+        {!isEditMode && (
+          <Card style={styles.card}>
+            <View style={styles.commissionHeader}>
+              <Text style={styles.sectionTitle}>Paramètres de commission</Text>
+              <Switch
+                value={defineCommission}
+                onValueChange={setDefineCommission}
+                trackColor={{ false: theme.colors.lightGray, true: theme.colors.primary }}
+                thumbColor={defineCommission ? theme.colors.white : theme.colors.gray}
+              />
+            </View>
+            
+            {defineCommission && (
+              <>
+                <Text style={styles.commissionNote}>
+                  Définir des paramètres spécifiques pour ce collecteur
+                </Text>
+                
+                <View style={styles.radioGroup}>
+                  <Text style={styles.label}>Type de calcul</Text>
+                  <View style={styles.radioOptions}>
+                    <TouchableOpacity
+                      style={styles.radioButton}
+                      onPress={() => handleCommissionParamChange('typeCalcul', 'pourcentage')}
+                    >
+                      <View style={[styles.radio, commissionParams.typeCalcul === 'pourcentage' && styles.radioActive]}>
+                        {commissionParams.typeCalcul === 'pourcentage' && (
+                          <View style={styles.radioInner} />
+                        )}
+                      </View>
+                      <Text style={styles.radioText}>Pourcentage</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={styles.radioButton}
+                      onPress={() => handleCommissionParamChange('typeCalcul', 'fixe')}
+                    >
+                      <View style={[styles.radio, commissionParams.typeCalcul === 'fixe' && styles.radioActive]}>
+                        {commissionParams.typeCalcul === 'fixe' && (
+                          <View style={styles.radioInner} />
+                        )}
+                      </View>
+                      <Text style={styles.radioText}>Montant fixe</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                <Input
+                  label={commissionParams.typeCalcul === 'pourcentage' ? "Taux (%)" : "Montant (FCFA)"}
+                  value={commissionParams.tauxCommission}
+                  onChangeText={(value) => handleCommissionParamChange('tauxCommission', value)}
+                  error={errors.tauxCommission}
+                  placeholder={commissionParams.typeCalcul === 'pourcentage' ? "Ex: 2.5" : "Ex: 5000"}
+                  keyboardType="numeric"
+                />
+                
+                {commissionParams.typeCalcul === 'pourcentage' && (
+                  <>
+                    <Input
+                      label="Montant minimum (FCFA)"
+                      value={commissionParams.montantMinimum}
+                      onChangeText={(value) => handleCommissionParamChange('montantMinimum', value)}
+                      placeholder="Optionnel"
+                      keyboardType="numeric"
+                    />
+                    
+                    <Input
+                      label="Montant maximum (FCFA)"
+                      value={commissionParams.montantMaximum}
+                      onChangeText={(value) => handleCommissionParamChange('montantMaximum', value)}
+                      placeholder="Optionnel"
+                      keyboardType="numeric"
+                    />
+                  </>
+                )}
+              </>
+            )}
+          </Card>
+        )}
+
+        {/* Bouton de soumission */}
+        <Button
+          title={isEditMode ? "Enregistrer les modifications" : "Créer le collecteur"}
+          onPress={handleSubmit}
+          loading={loading}
+          style={styles.submitButton}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -363,77 +469,120 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.primary,
   },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
   content: {
     flex: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
-  form: {
-    padding: 16,
+  card: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: theme.colors.text,
-    marginTop: 20,
     marginBottom: 16,
   },
-  input: {
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
   },
-  inputLabel: {
+  infoTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginTop: 2,
+  },
+  infoNote: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+    marginTop: 16,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: theme.colors.text,
+  },
+  commissionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  commissionNote: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  radioGroup: {
+    marginBottom: 16,
+  },
+  label: {
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
     marginBottom: 8,
   },
-  agenceDisplay: {
+  radioOptions: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  radioButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 50,
+    marginRight: 24,
   },
-  agenceText: {
-    marginLeft: 8,
-    color: theme.colors.text,
-    fontSize: 16,
-  },
-  agenceWarning: {
-    flexDirection: 'row',
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+    marginRight: 8,
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 204, 0, 0.1)',
-    borderWidth: 1,
-    borderColor: theme.colors.warning,
-    borderRadius: 8,
-    padding: 12,
+    justifyContent: 'center',
   },
-  agenceWarningText: {
-    marginLeft: 8,
-    color: theme.colors.textDark,
+  radioActive: {
+    borderColor: theme.colors.primary,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
+  },
+  radioText: {
     fontSize: 14,
-  },
-  inputError: {
-    borderColor: theme.colors.error,
-  },
-  errorText: {
-    color: theme.colors.error,
-    fontSize: 12,
-    marginTop: 4,
+    color: theme.colors.text,
   },
   submitButton: {
-    marginTop: 24,
-  },
-  cancelButton: {
-    marginTop: 12,
-    marginBottom: 32,
+    marginHorizontal: 20,
+    marginVertical: 20,
   },
 });
 

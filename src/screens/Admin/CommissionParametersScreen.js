@@ -6,446 +6,431 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
-  SafeAreaView,
+  ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
+import SelectInput from '../../components/SelectInput/SelectInput';
 import Input from '../../components/Input/Input';
 import theme from '../../theme';
-import { useAuth } from '../../hooks/useAuth';
+import { commissionService, collecteurService, clientService } from '../../services';
 
-const CommissionParametersScreen = ({ navigation, route }) => {
-  const { user } = useAuth();
-  const { entityType, entityId, entityName } = route.params || {};
-  const [loading, setLoading] = useState(false);
-  const [loadingData, setLoadingData] = useState(true);
-  const [commissionType, setCommissionType] = useState('PERCENTAGE'); // FIXED, PERCENTAGE, TIER
-  const [fixedAmount, setFixedAmount] = useState('');
-  const [percentageValue, setPercentageValue] = useState('5'); // Default 5%
-  const [tiers, setTiers] = useState([
-    { id: 1, min: 0, max: 50000, rate: 5 },
-    { id: 2, min: 50001, max: 100000, rate: 4 },
-    { id: 3, min: 100001, max: 999999999, rate: 3 },
-  ]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isActive, setIsActive] = useState(true);
-  const [commissionParams, setCommissionParams] = useState(null);
+const CommissionParametersScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  
+  // États
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [entityType, setEntityType] = useState('agence'); // agence, collecteur, client
+  const [selectedCollecteur, setSelectedCollecteur] = useState(null);
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [collecteurs, setCollecteurs] = useState([]);
+  const [clients, setClients] = useState([]);
+  
+  // Paramètres de commission
+  const [commissionParams, setCommissionParams] = useState({
+    tauxCommission: '',
+    montantMinimum: '',
+    montantMaximum: '',
+    typeCalcul: 'pourcentage', // pourcentage ou fixe
+    periodicite: 'mensuelle', // mensuelle, hebdomadaire, journaliere
+    conditions: []
+  });
 
-  // Charger les paramètres de commission existants
+  // Charger les données initiales
   useEffect(() => {
-    if (entityType && entityId) {
-      fetchCommissionParameters();
-    } else {
-      setLoadingData(false);
-    }
-  }, [entityType, entityId]);
+    loadInitialData();
+  }, []);
 
-  const fetchCommissionParameters = () => {
-    setLoadingData(true);
-    
-    // Simuler une requête API
-    setTimeout(() => {
-      // Simuler l'absence de paramètres personnalisés
-      if (Math.random() > 0.5) {
-        setCommissionParams(null);
-        setIsEditing(false);
-        // Utiliser les valeurs par défaut
-        setLoadingData(false);
-        return;
+  // Charger les paramètres quand l'entité change
+  useEffect(() => {
+    if (entityType === 'agence' || 
+        (entityType === 'collecteur' && selectedCollecteur) ||
+        (entityType === 'client' && selectedClient)) {
+      loadCommissionParams();
+    }
+  }, [entityType, selectedCollecteur, selectedClient]);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      
+      // Charger les collecteurs
+      const collecteursResponse = await collecteurService.getAllCollecteurs();
+      if (collecteursResponse.success) {
+        setCollecteurs(collecteursResponse.data || []);
       }
       
-      setIsEditing(true);
-      setLoadingData(false);
-    }, 1000);
+      // Charger les paramètres de l'agence par défaut
+      await loadCommissionParams();
+      
+    } catch (error) {
+      console.error('Erreur lors du chargement:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSelectType = (type) => {
-    setCommissionType(type);
+  const loadCommissionParams = async () => {
+    try {
+      let response;
+      
+      switch (entityType) {
+        case 'agence':
+          response = await commissionService.getAgenceCommissionParams();
+          break;
+        case 'collecteur':
+          if (selectedCollecteur) {
+            response = await commissionService.getCollecteurCommissionParams(selectedCollecteur);
+          }
+          break;
+        case 'client':
+          if (selectedClient) {
+            response = await commissionService.getClientCommissionParams(selectedClient);
+          }
+          break;
+      }
+      
+      if (response?.success && response.data) {
+        setCommissionParams({
+          tauxCommission: response.data.tauxCommission?.toString() || '',
+          montantMinimum: response.data.montantMinimum?.toString() || '',
+          montantMaximum: response.data.montantMaximum?.toString() || '',
+          typeCalcul: response.data.typeCalcul || 'pourcentage',
+          periodicite: response.data.periodicite || 'mensuelle',
+          conditions: response.data.conditions || []
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des paramètres:', error);
+    }
   };
 
-  const handleAddTier = () => {
-    // Trouver le max de l'entité la plus élevée
-    const maxTier = tiers.reduce((max, tier) => Math.max(max, tier.max), 0);
-    
-    const newTier = {
-      id: Date.now(),
-      min: maxTier + 1,
-      max: maxTier + 50000,
-      rate: 2,
-    };
-    
-    setTiers([...tiers, newTier]);
+  const loadClientsForCollecteur = async (collecteurId) => {
+    try {
+      const response = await clientService.getClientsByCollecteur(collecteurId);
+      if (response.success) {
+        setClients(response.data || []);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des clients:', error);
+    }
   };
 
-  const handleRemoveTier = (id) => {
-    // Vérifier qu'il reste au moins un tier
-    if (tiers.length <= 1) {
-      Alert.alert("Erreur", "Vous devez conserver au moins un palier.");
+  const handleEntityTypeChange = (type) => {
+    setEntityType(type);
+    setSelectedCollecteur(null);
+    setSelectedClient(null);
+    setClients([]);
+  };
+
+  const handleCollecteurChange = (collecteurId) => {
+    setSelectedCollecteur(collecteurId);
+    setSelectedClient(null);
+    if (collecteurId && entityType === 'client') {
+      loadClientsForCollecteur(collecteurId);
+    }
+  };
+
+  const handleSave = async () => {
+    // Validation
+    if (!commissionParams.tauxCommission || parseFloat(commissionParams.tauxCommission) <= 0) {
+      Alert.alert('Erreur', 'Le taux de commission doit être supérieur à 0');
       return;
     }
-    
-    const updatedTiers = tiers.filter(tier => tier.id !== id);
-    
-    // Ajuster les bornes des tiers restants
-    if (updatedTiers.length > 0) {
-      updatedTiers.sort((a, b) => a.min - b.min);
-      
-      for (let i = 0; i < updatedTiers.length - 1; i++) {
-        updatedTiers[i + 1].min = updatedTiers[i].max + 1;
-      }
-      
-      // S'assurer que le dernier tier va jusqu'à l'infini
-      if (updatedTiers.length > 0) {
-        updatedTiers[updatedTiers.length - 1].max = 999999999;
-      }
-    }
-    
-    setTiers(updatedTiers);
+
+    Alert.alert(
+      'Confirmation',
+      `Êtes-vous sûr de vouloir enregistrer ces paramètres pour ${
+        entityType === 'agence' ? "l'agence" :
+        entityType === 'collecteur' ? 'le collecteur sélectionné' :
+        'le client sélectionné'
+      } ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Confirmer', onPress: executeSave }
+      ]
+    );
   };
 
-  const handleUpdateTier = (id, field, value) => {
-    const numericValue = parseFloat(value);
-    if (isNaN(numericValue) && field !== 'max') return;
-    
-    const updatedTiers = tiers.map(tier => {
-      if (tier.id === id) {
-        // Pour le champ "max" spécial "∞"
-        if (field === 'max' && value === '∞') {
-          return { ...tier, max: 999999999 };
+  const executeSave = async () => {
+    try {
+      setSaving(true);
+      
+      const params = {
+        tauxCommission: parseFloat(commissionParams.tauxCommission),
+        montantMinimum: commissionParams.montantMinimum ? parseFloat(commissionParams.montantMinimum) : null,
+        montantMaximum: commissionParams.montantMaximum ? parseFloat(commissionParams.montantMaximum) : null,
+        typeCalcul: commissionParams.typeCalcul,
+        periodicite: commissionParams.periodicite,
+        conditions: commissionParams.conditions
+      };
+
+      let response;
+      
+      switch (entityType) {
+        case 'agence':
+          response = await commissionService.updateAgenceCommissionParams(params);
+          break;
+        case 'collecteur':
+          response = await commissionService.updateCollecteurCommissionParams(selectedCollecteur, params);
+          break;
+        case 'client':
+          response = await commissionService.updateClientCommissionParams(selectedClient, params);
+          break;
+      }
+
+      if (response.success) {
+        Alert.alert('Succès', 'Paramètres enregistrés avec succès');
+      } else {
+        Alert.alert('Erreur', response.error || 'Erreur lors de l\'enregistrement');
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'enregistrement:', error);
+      Alert.alert('Erreur', 'Impossible d\'enregistrer les paramètres');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addCondition = () => {
+    Alert.prompt(
+      'Nouvelle condition',
+      'Entrez la condition (ex: montant > 100000)',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Ajouter',
+          onPress: (text) => {
+            if (text && text.trim()) {
+              setCommissionParams(prev => ({
+                ...prev,
+                conditions: [...prev.conditions, text.trim()]
+              }));
+            }
+          }
         }
-        return { ...tier, [field]: numericValue };
-      }
-      return tier;
-    });
-    
-    // Trier les tiers par min
-    updatedTiers.sort((a, b) => a.min - b.min);
-    
-    // Ajuster les bornes des tiers pour éviter les chevauchements
-    for (let i = 0; i < updatedTiers.length - 1; i++) {
-      // Si la borne max du tier actuel est supérieure à la borne min du tier suivant
-      if (updatedTiers[i].max >= updatedTiers[i + 1].min) {
-        // Ajuster la borne min du tier suivant
-        updatedTiers[i + 1].min = updatedTiers[i].max + 1;
-      }
-    }
-    
-    setTiers(updatedTiers);
+      ],
+      'plain-text'
+    );
   };
 
-  const handleSave = () => {
-    setLoading(true);
-    
-    let commissionData = {
-      entityType,
-      entityId,
-      isActive,
-      type: commissionType,
-    };
-    
-    if (commissionType === 'FIXED') {
-      commissionData.value = parseFloat(fixedAmount) || 0;
-    } else if (commissionType === 'PERCENTAGE') {
-      commissionData.value = parseFloat(percentageValue) || 0;
-    } else if (commissionType === 'TIER') {
-      commissionData.tiers = tiers;
-    }
-    
-    // Si on édite, inclure l'ID existant
-    if (isEditing && commissionParams && commissionParams.id) {
-      commissionData.id = commissionParams.id;
-    }
-    
-    // Simuler un appel API
-    setTimeout(() => {
-      setLoading(false);
-      
-      Alert.alert(
-        "Succès",
-        isEditing
-          ? "Les paramètres de commission ont été mis à jour avec succès."
-          : "Les paramètres de commission ont été créés avec succès.",
-        [{ text: "OK", onPress: () => navigation.goBack() }]
-      );
-    }, 1500);
+  const removeCondition = (index) => {
+    setCommissionParams(prev => ({
+      ...prev,
+      conditions: prev.conditions.filter((_, i) => i !== index)
+    }));
   };
 
-  const handleToggleStatus = () => {
-    setIsActive(!isActive);
-  };
-
-  const formatCurrency = (value) => {
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return "0";
-    return numValue.toLocaleString('fr-FR');
-  };
-
-  // Formatage du titre en fonction du type d'entité
-  const getTitle = () => {
-    if (entityType === 'client') {
-      return `Commissions - ${entityName || 'Client'}`;
-    } else if (entityType === 'collecteur') {
-      return `Commissions - ${entityName || 'Collecteur'}`;
-    } else if (entityType === 'agence') {
-      return `Commissions - ${entityName || 'Agence'}`;
-    }
-    return "Paramètres de commission";
-  };
-
-  if (loadingData) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header
-          title={getTitle()}
+          title="Paramètres de commission"
           onBackPress={() => navigation.goBack()}
         />
-        <View style={[styles.content, styles.loadingContainer]}>
-          <Text style={styles.loadingText}>Chargement des paramètres...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Header
-        title={getTitle()}
+        title="Paramètres de commission"
         onBackPress={() => navigation.goBack()}
       />
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardAvoidingView}
-      >
-        <ScrollView style={styles.content}>
-          <View style={styles.contentContainer}>
-            <Card style={styles.card}>
-              <View style={styles.statusContainer}>
-                <Text style={styles.sectionTitle}>Statut</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.statusToggle,
-                    isActive ? styles.statusActive : styles.statusInactive
-                  ]}
-                  onPress={handleToggleStatus}
-                >
-                  <View style={[
-                    styles.statusIndicator,
-                    isActive ? styles.indicatorActive : styles.indicatorInactive
-                  ]} />
-                  <Text style={[
-                    styles.statusText,
-                    isActive ? styles.textActive : styles.textInactive
-                  ]}>
-                    {isActive ? 'Actif' : 'Inactif'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.sectionTitle}>Type de commission</Text>
-              
-              <View style={styles.typeContainer}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    commissionType === 'FIXED' && styles.selectedType
-                  ]}
-                  onPress={() => handleSelectType('FIXED')}
-                >
-                  <Ionicons
-                    name="cash-outline"
-                    size={24}
-                    color={commissionType === 'FIXED' ? theme.colors.white : theme.colors.primary}
-                  />
-                  <Text style={[
-                    styles.typeText,
-                    commissionType === 'FIXED' && styles.selectedTypeText
-                  ]}>
-                    Montant fixe
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    commissionType === 'PERCENTAGE' && styles.selectedType
-                  ]}
-                  onPress={() => handleSelectType('PERCENTAGE')}
-                >
-                  <Ionicons
-                    name="trending-up-outline"
-                    size={24}
-                    color={commissionType === 'PERCENTAGE' ? theme.colors.white : theme.colors.primary}
-                  />
-                  <Text style={[
-                    styles.typeText,
-                    commissionType === 'PERCENTAGE' && styles.selectedTypeText
-                  ]}>
-                    Pourcentage
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.typeButton,
-                    commissionType === 'TIER' && styles.selectedType
-                  ]}
-                  onPress={() => handleSelectType('TIER')}
-                >
-                  <Ionicons
-                    name="stats-chart-outline"
-                    size={24}
-                    color={commissionType === 'TIER' ? theme.colors.white : theme.colors.primary}
-                  />
-                  <Text style={[
-                    styles.typeText,
-                    commissionType === 'TIER' && styles.selectedTypeText
-                  ]}>
-                    Paliers
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              
-              {commissionType === 'FIXED' && (
-                <View style={styles.configSection}>
-                  <Text style={styles.configTitle}>Montant fixe (FCFA)</Text>
-                  <View style={styles.fixedInputContainer}>
-                    <TextInput
-                      style={styles.fixedInput}
-                      value={fixedAmount}
-                      onChangeText={setFixedAmount}
-                      keyboardType="numeric"
-                      placeholder="Ex: 1000"
-                    />
-                    <Text style={styles.currencyText}>FCFA</Text>
-                  </View>
-                  
-                  <View style={styles.descriptionBox}>
-                    <Text style={styles.descriptionText}>
-                      Un montant fixe de <Text style={styles.highlightText}>{formatCurrency(fixedAmount)} FCFA</Text> sera prélevé comme commission sur chaque période de calcul.
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              {commissionType === 'PERCENTAGE' && (
-                <View style={styles.configSection}>
-                  <Text style={styles.configTitle}>Pourcentage</Text>
-                  <View style={styles.fixedInputContainer}>
-                    <TextInput
-                      style={styles.fixedInput}
-                      value={percentageValue}
-                      onChangeText={setPercentageValue}
-                      keyboardType="numeric"
-                      placeholder="Ex: 5"
-                    />
-                    <Text style={styles.currencyText}>%</Text>
-                  </View>
-                  
-                  <View style={styles.descriptionBox}>
-                    <Text style={styles.descriptionText}>
-                      Un pourcentage de <Text style={styles.highlightText}>{percentageValue}%</Text> sera appliqué au montant total collecté pour calculer la commission.
-                    </Text>
-                  </View>
-                </View>
-              )}
-              
-              {commissionType === 'TIER' && (
-                <View style={styles.configSection}>
-                  <Text style={styles.configTitle}>Paliers</Text>
-                  
-                  <View style={styles.tierHeader}>
-                    <Text style={[styles.tierHeaderText, styles.tierMin]}>Minimum</Text>
-                    <Text style={[styles.tierHeaderText, styles.tierMax]}>Maximum</Text>
-                    <Text style={[styles.tierHeaderText, styles.tierRate]}>Taux (%)</Text>
-                    <Text style={[styles.tierHeaderText, styles.tierAction]}></Text>
-                  </View>
-                  
-                  {tiers.map((tier, index) => (
-                    <View key={tier.id} style={styles.tierRow}>
-                      <View style={styles.tierMin}>
-                        <TextInput
-                          style={styles.tierInput}
-                          value={tier.min.toString()}
-                          onChangeText={(value) => handleUpdateTier(tier.id, 'min', value)}
-                          keyboardType="numeric"
-                          editable={index === 0 ? false : true} // Premier palier commence toujours à 0
-                        />
-                      </View>
-                      
-                      <View style={styles.tierMax}>
-                        <TextInput
-                          style={styles.tierInput}
-                          value={index === tiers.length - 1 ? '∞' : tier.max.toString()}
-                          onChangeText={(value) => handleUpdateTier(tier.id, 'max', value)}
-                          keyboardType="numeric"
-                          editable={index === tiers.length - 1 ? false : true} // Dernier palier va jusqu'à l'infini
-                        />
-                      </View>
-                      
-                      <View style={styles.tierRate}>
-                        <TextInput
-                          style={styles.tierInput}
-                          value={tier.rate.toString()}
-                          onChangeText={(value) => handleUpdateTier(tier.id, 'rate', value)}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      
-                      <TouchableOpacity
-                        style={styles.tierAction}
-                        onPress={() => handleRemoveTier(tier.id)}
-                        disabled={tiers.length <= 1}
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={24}
-                          color={tiers.length <= 1 ? theme.colors.gray : theme.colors.error}
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  
-                  <TouchableOpacity
-                    style={styles.addTierButton}
-                    onPress={handleAddTier}
-                  >
-                    <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
-                    <Text style={styles.addTierText}>Ajouter un palier</Text>
-                  </TouchableOpacity>
-                  
-                  <View style={styles.descriptionBox}>
-                    <Text style={styles.descriptionText}>
-                      Le taux de commission varie selon le montant total collecté. Le taux correspondant sera appliqué à l'intégralité de la somme.
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </Card>
-            
-            <Button
-              title={isEditing ? "Mettre à jour" : "Enregistrer"}
-              onPress={handleSave}
-              loading={loading}
-              style={styles.saveButton}
-            />
-            
-            <Button
-              title="Annuler"
-              onPress={() => navigation.goBack()}
-              variant="outlined"
-              style={styles.cancelButton}
-            />
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Sélection du niveau */}
+        <Card style={styles.card}>
+          <Text style={styles.cardTitle}>Niveau de paramétrage</Text>
+          <Text style={styles.infoText}>
+            Hiérarchie: Client > Collecteur > Agence
+          </Text>
+          
+          <View style={styles.entityTypeContainer}>
+            {['agence', 'collecteur', 'client'].map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.entityTypeButton,
+                  entityType === type && styles.activeEntityType
+                ]}
+                onPress={() => handleEntityTypeChange(type)}
+              >
+                <Text style={[
+                  styles.entityTypeText,
+                  entityType === type && styles.activeEntityTypeText
+                ]}>
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {/* Sélection collecteur */}
+          {(entityType === 'collecteur' || entityType === 'client') && (
+            <View style={styles.selectContainer}>
+              <Text style={styles.label}>Sélectionner un collecteur</Text>
+              <SelectInput
+                value={selectedCollecteur}
+                options={collecteurs.map(c => ({
+                  label: `${c.prenom} ${c.nom}`,
+                  value: c.id
+                }))}
+                onChange={handleCollecteurChange}
+                placeholder="Choisir un collecteur"
+              />
+            </View>
+          )}
+
+          {/* Sélection client */}
+          {entityType === 'client' && selectedCollecteur && (
+            <View style={styles.selectContainer}>
+              <Text style={styles.label}>Sélectionner un client</Text>
+              <SelectInput
+                value={selectedClient}
+                options={clients.map(c => ({
+                  label: `${c.prenom} ${c.nom}`,
+                  value: c.id
+                }))}
+                onChange={setSelectedClient}
+                placeholder="Choisir un client"
+                disabled={!selectedCollecteur}
+              />
+            </View>
+          )}
+        </Card>
+
+        {/* Paramètres de commission */}
+        {((entityType === 'agence') || 
+          (entityType === 'collecteur' && selectedCollecteur) ||
+          (entityType === 'client' && selectedClient)) && (
+          <Card style={styles.card}>
+            <Text style={styles.cardTitle}>Paramètres de commission</Text>
+            
+            {/* Type de calcul */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Type de calcul</Text>
+              <View style={styles.radioGroup}>
+                <TouchableOpacity
+                  style={styles.radioButton}
+                  onPress={() => setCommissionParams(prev => ({ ...prev, typeCalcul: 'pourcentage' }))}
+                >
+                  <View style={[styles.radio, commissionParams.typeCalcul === 'pourcentage' && styles.radioActive]}>
+                    {commissionParams.typeCalcul === 'pourcentage' && (
+                      <View style={styles.radioInner} />
+                    )}
+                  </View>
+                  <Text style={styles.radioText}>Pourcentage</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.radioButton}
+                  onPress={() => setCommissionParams(prev => ({ ...prev, typeCalcul: 'fixe' }))}
+                >
+                  <View style={[styles.radio, commissionParams.typeCalcul === 'fixe' && styles.radioActive]}>
+                    {commissionParams.typeCalcul === 'fixe' && (
+                      <View style={styles.radioInner} />
+                    )}
+                  </View>
+                  <Text style={styles.radioText}>Montant fixe</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Taux ou montant */}
+            <Input
+              label={commissionParams.typeCalcul === 'pourcentage' ? "Taux de commission (%)" : "Montant fixe (FCFA)"}
+              value={commissionParams.tauxCommission}
+              onChangeText={(text) => setCommissionParams(prev => ({ ...prev, tauxCommission: text }))}
+              keyboardType="numeric"
+              placeholder={commissionParams.typeCalcul === 'pourcentage' ? "Ex: 2.5" : "Ex: 5000"}
+            />
+
+            {/* Montants min/max */}
+            {commissionParams.typeCalcul === 'pourcentage' && (
+              <>
+                <Input
+                  label="Montant minimum épargne (FCFA)"
+                  value={commissionParams.montantMinimum}
+                  onChangeText={(text) => setCommissionParams(prev => ({ ...prev, montantMinimum: text }))}
+                  keyboardType="numeric"
+                  placeholder="Ex: 10000"
+                />
+                
+                <Input
+                  label="Montant maximum épargne (FCFA)"
+                  value={commissionParams.montantMaximum}
+                  onChangeText={(text) => setCommissionParams(prev => ({ ...prev, montantMaximum: text }))}
+                  keyboardType="numeric"
+                  placeholder="Ex: 1000000"
+                />
+              </>
+            )}
+
+            {/* Périodicité */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Périodicité de calcul</Text>
+              <SelectInput
+                value={commissionParams.periodicite}
+                options={[
+                  { label: 'Journalière', value: 'journaliere' },
+                  { label: 'Hebdomadaire', value: 'hebdomadaire' },
+                  { label: 'Mensuelle', value: 'mensuelle' }
+                ]}
+                onChange={(value) => setCommissionParams(prev => ({ ...prev, periodicite: value }))}
+              />
+            </View>
+
+            {/* Conditions spéciales */}
+            <View style={styles.conditionsContainer}>
+              <View style={styles.conditionsHeader}>
+                <Text style={styles.label}>Conditions spéciales</Text>
+                <TouchableOpacity onPress={addCondition}>
+                  <Ionicons name="add-circle" size={24} color={theme.colors.primary} />
+                </TouchableOpacity>
+              </View>
+              
+              {commissionParams.conditions.map((condition, index) => (
+                <View key={index} style={styles.conditionItem}>
+                  <Text style={styles.conditionText}>{condition}</Text>
+                  <TouchableOpacity onPress={() => removeCondition(index)}>
+                    <Ionicons name="close-circle" size={20} color={theme.colors.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              {commissionParams.conditions.length === 0 && (
+                <Text style={styles.noConditionsText}>Aucune condition spéciale</Text>
+              )}
+            </View>
+          </Card>
+        )}
+
+        {/* Bouton enregistrer */}
+        {((entityType === 'agence') || 
+          (entityType === 'collecteur' && selectedCollecteur) ||
+          (entityType === 'client' && selectedClient)) && (
+          <Button
+            title="Enregistrer les paramètres"
+            onPress={handleSave}
+            loading={saving}
+            style={styles.saveButton}
+          />
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
@@ -454,195 +439,140 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.primary,
   },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
   content: {
     flex: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    padding: 20,
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
   },
   loadingText: {
+    marginTop: 12,
     fontSize: 16,
     color: theme.colors.textLight,
-    marginTop: 20,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
   },
   card: {
     marginBottom: 20,
+    padding: 20,
   },
-  statusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  sectionTitle: {
+  cardTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  statusToggle: {
+  infoText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 16,
+    fontStyle: 'italic',
+  },
+  entityTypeContainer: {
     flexDirection: 'row',
+    marginBottom: 16,
+  },
+  entityTypeButton: {
+    flex: 1,
+    paddingVertical: 10,
     alignItems: 'center',
     backgroundColor: theme.colors.lightGray,
-    borderRadius: 24,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    marginHorizontal: 4,
+    borderRadius: 8,
   },
-  statusIndicator: {
+  activeEntityType: {
+    backgroundColor: theme.colors.primary,
+  },
+  entityTypeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  activeEntityTypeText: {
+    color: theme.colors.white,
+  },
+  selectContainer: {
+    marginTop: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  radioGroup: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  radioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 24,
+  },
+  radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
     marginRight: 8,
-  },
-  indicatorActive: {
-    backgroundColor: theme.colors.success,
-  },
-  indicatorInactive: {
-    backgroundColor: theme.colors.error,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '500',
-    paddingRight: 8,
-  },
-  textActive: {
-    color: theme.colors.success,
-  },
-  textInactive: {
-    color: theme.colors.error,
-  },
-  typeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  typeButton: {
-    flex: 1,
-    backgroundColor: 'rgba(1, 71, 169, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  selectedType: {
-    backgroundColor: theme.colors.primary,
-  },
-  typeText: {
-    fontSize: 12,
-    color: theme.colors.primary,
-    marginTop: 8,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  selectedTypeText: {
-    color: theme.colors.white,
-  },
-  configSection: {
-    marginTop: 8,
-  },
-  configTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 12,
-  },
-  fixedInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  fixedInput: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 12,
-  },
-  currencyText: {
-    fontSize: 16,
-    color: theme.colors.textLight,
-  },
-  descriptionBox: {
-    backgroundColor: 'rgba(0, 136, 204, 0.1)',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: theme.colors.textDark,
-    lineHeight: 20,
-  },
-  highlightText: {
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-  },
-  tierHeader: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  tierHeaderText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.textLight,
-  },
-  tierRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  tierMin: {
-    flex: 2,
-    marginRight: 8,
-  },
-  tierMax: {
-    flex: 2,
-    marginRight: 8,
-  },
-  tierRate: {
-    flex: 1,
-    marginRight: 8,
-  },
-  tierAction: {
-    width: 36,
-    alignItems: 'center',
-  },
-  tierInput: {
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 14,
-  },
-  addTierButton: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    marginVertical: 12,
   },
-  addTierText: {
+  radioActive: {
+    borderColor: theme.colors.primary,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
+  },
+  radioText: {
     fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '500',
-    marginLeft: 8,
+    color: theme.colors.text,
   },
-  saveButton: {
-    marginTop: 8,
+  conditionsContainer: {
+    marginTop: 16,
+  },
+  conditionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  cancelButton: {
+  conditionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  conditionText: {
+    flex: 1,
+    fontSize: 14,
+    color: theme.colors.text,
+    marginRight: 8,
+  },
+  noConditionsText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  saveButton: {
     marginBottom: 20,
   },
 });

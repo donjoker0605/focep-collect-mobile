@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.js - VERSION CORRIGÉE
+// src/screens/Admin/AdminDashboardScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -6,18 +6,25 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
-import StatsCard from '../../components/StatsCard/StatsCard'; // ✅ CORRECTION: StatsCard au lieu de StatCard
 import theme from '../../theme';
 import { adminService } from '../../services';
+import { useAuth } from '../../hooks/useAuth';
 
 const AdminDashboardScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,11 +34,9 @@ const AdminDashboardScreen = ({ navigation }) => {
     loadDashboardStats();
   }, []);
 
-  const loadDashboardStats = async (showRefresh = false) => {
+  const loadDashboardStats = async (showLoading = true) => {
     try {
-      if (showRefresh) setRefreshing(true);
-      else setLoading(true);
-      
+      if (showLoading) setLoading(true);
       setError(null);
       
       const response = await adminService.getDashboardStats();
@@ -42,8 +47,8 @@ const AdminDashboardScreen = ({ navigation }) => {
         setError(response.error || 'Erreur lors du chargement des statistiques');
       }
     } catch (err) {
-      console.error('Erreur dashboard admin:', err);
-      setError(err.message || 'Erreur lors du chargement des données');
+      console.error('Erreur lors du chargement:', err);
+      setError('Impossible de charger les statistiques');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,56 +56,8 @@ const AdminDashboardScreen = ({ navigation }) => {
   };
 
   const onRefresh = () => {
-    loadDashboardStats(true);
-  };
-
-  // Fonctions de navigation
-  const handleNavigateToCollecteurs = () => {
-    navigation.navigate('CollecteurManagementScreen');
-  };
-
-  const handleNavigateToClients = () => {
-    navigation.navigate('ClientManagementScreen');
-  };
-
-  const handleNavigateToReports = () => {
-    navigation.navigate('ReportsScreen');
-  };
-
-  const handleNavigateToCommissions = () => {
-    navigation.navigate('CommissionParametersScreen');
-  };
-
-  const handleNavigateToTransferts = () => {
-    navigation.navigate('TransfertCompteScreen');
-  };
-
-  const handleNavigateToJournalCloture = () => {
-    navigation.navigate('JournalClotureScreen');
-  };
-
-  const handleNavigateToCommissionCalculation = () => {
-    navigation.navigate('CommissionCalculationScreen');
-  };
-
-  const handleCreateCollecteur = () => {
-    navigation.navigate('CollecteurCreationScreen');
-  };
-
-  const handleQuickAction = (action) => {
-    switch (action) {
-      case 'newTransaction':
-        Alert.alert('Information', 'Redirection vers les transactions en cours de développement');
-        break;
-      case 'viewNotifications':
-        navigation.navigate('NotificationsScreen');
-        break;
-      case 'backup':
-        Alert.alert('Information', 'Sauvegarde en cours de développement');
-        break;
-      default:
-        break;
-    }
+    setRefreshing(true);
+    loadDashboardStats(false);
   };
 
   // Cartes de gestion principales
@@ -108,42 +65,32 @@ const AdminDashboardScreen = ({ navigation }) => {
     {
       id: 'collecteurs',
       title: 'Gérer les collecteurs',
-      description: 'Créer, modifier et gérer vos collecteurs',
       icon: 'people',
       color: theme.colors.primary,
-      onPress: handleNavigateToCollecteurs,
       count: stats?.totalCollecteurs || 0,
-      subtitle: `${stats?.collecteursActifs || 0} actifs`
+      onPress: () => navigation.navigate('CollecteurManagementScreen'),
     },
     {
       id: 'clients',
       title: 'Gérer les clients',
-      description: 'Voir et gérer tous les clients de votre agence',
       icon: 'person-add',
-      color: theme.colors.success,
-      onPress: handleNavigateToClients,
+      color: theme.colors.secondary,
       count: stats?.totalClients || 0,
-      subtitle: `${stats?.clientsValides || 0} validés`
+      onPress: () => navigation.navigate('ClientManagementScreen'),
     },
     {
       id: 'reports',
       title: 'Rapports',
-      description: 'Générer et consulter les rapports',
       icon: 'bar-chart',
       color: theme.colors.warning,
-      onPress: handleNavigateToReports,
-      count: stats?.commissionsEnAttente || 0,
-      subtitle: 'En attente'
+      onPress: () => navigation.navigate('ReportsScreen'),
     },
     {
       id: 'commissions',
       title: 'Paramètres de commissions',
-      description: 'Configurer les commissions des collecteurs',
-      icon: 'settings',
-      color: theme.colors.secondary,
-      onPress: handleNavigateToCommissions,
-      count: null,
-      subtitle: 'Configuration'
+      icon: 'calculator',
+      color: theme.colors.info,
+      onPress: () => navigation.navigate('CommissionParametersScreen'),
     }
   ];
 
@@ -152,26 +99,23 @@ const AdminDashboardScreen = ({ navigation }) => {
     {
       id: 'transferts',
       title: 'Transferts de comptes',
-      description: 'Transférer des clients entre collecteurs',
       icon: 'swap-horizontal',
-      color: theme.colors.primary,
-      onPress: handleNavigateToTransferts
+      color: theme.colors.purple,
+      onPress: () => navigation.navigate('TransfertCompteScreen'),
     },
     {
       id: 'journal',
       title: 'Journal & Clôture',
-      description: 'Gérer les journaux et les clôtures',
       icon: 'journal',
-      color: theme.colors.info,
-      onPress: handleNavigateToJournalCloture
+      color: theme.colors.orange,
+      onPress: () => navigation.navigate('JournalClotureScreen'),
     },
     {
       id: 'commission-calc',
       title: 'Calcul des commissions',
-      description: 'Calculer et traiter les commissions',
-      icon: 'calculator',
-      color: theme.colors.success,
-      onPress: handleNavigateToCommissionCalculation
+      icon: 'calculator-outline',
+      color: theme.colors.teal,
+      onPress: () => navigation.navigate('CommissionCalculationScreen'),
     }
   ];
 
@@ -182,33 +126,76 @@ const AdminDashboardScreen = ({ navigation }) => {
       title: 'Nouveau collecteur',
       icon: 'person-add',
       color: theme.colors.primary,
-      onPress: handleCreateCollecteur
+      onPress: () => navigation.navigate('CollecteurCreationScreen'),
     },
     {
       id: 'notifications',
       title: 'Notifications',
       icon: 'notifications',
-      color: theme.colors.warning,
-      onPress: () => handleQuickAction('viewNotifications')
+      color: theme.colors.info,
+      onPress: () => navigation.navigate('NotificationsScreen'),
     },
     {
       id: 'backup',
       title: 'Sauvegarde',
       icon: 'cloud-upload',
-      color: theme.colors.info,
-      onPress: () => handleQuickAction('backup')
+      color: theme.colors.success,
+      onPress: () => Alert.alert('Information', 'Sauvegarde en cours de développement'),
     }
   ];
 
+  const formatCurrency = (amount) => {
+    return `${new Intl.NumberFormat('fr-FR').format(amount || 0)} FCFA`;
+  };
+
+  const renderStatCard = (title, value, icon, color, subtitle) => (
+    <Card style={styles.statCard}>
+      <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={24} color={color} />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statTitle}>{title}</Text>
+      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+    </Card>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Header title="Tableau de bord Admin" hideBackButton />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Chargement des données...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
-      <Header 
-        title="Tableau de bord Admin"
-        showBackButton={false}
-      />
-      
-      <ScrollView 
-        style={styles.contentContainer}
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+      <LinearGradient
+        colors={[theme.colors.primary, theme.colors.primaryDark]}
+        style={styles.headerGradient}
+      >
+        <Header 
+          title="Tableau de bord Admin" 
+          hideBackButton 
+          style={styles.header}
+        />
+        
+        {/* Informations utilisateur */}
+        <View style={styles.userInfo}>
+          <Text style={styles.welcomeText}>Bienvenue,</Text>
+          <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
+          <Text style={styles.agenceName}>
+            {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
+          </Text>
+        </View>
+      </LinearGradient>
+
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -216,363 +203,375 @@ const AdminDashboardScreen = ({ navigation }) => {
             colors={[theme.colors.primary]}
           />
         }
-        showsVerticalScrollIndicator={false}
       >
-        {error ? (
-          <Card style={styles.errorCard}>
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => loadDashboardStats()}
-              >
-                <Text style={styles.retryButtonText}>Réessayer</Text>
-              </TouchableOpacity>
+        {/* Vue d'ensemble financière */}
+        <View style={styles.overviewSection}>
+          <Text style={styles.sectionTitle}>Vue d'ensemble financière</Text>
+          <Card style={styles.financeCard}>
+            <View style={styles.financeRow}>
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>Total Épargne</Text>
+                <Text style={[styles.financeValue, { color: theme.colors.success }]}>
+                  {formatCurrency(stats?.totalEpargne)}
+                </Text>
+              </View>
+              <View style={styles.financeDivider} />
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>Total Retraits</Text>
+                <Text style={[styles.financeValue, { color: theme.colors.error }]}>
+                  {formatCurrency(stats?.totalRetrait)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.netBalanceContainer}>
+              <Text style={styles.netBalanceLabel}>Solde Net</Text>
+              <Text style={styles.netBalanceValue}>
+                {formatCurrency(stats?.soldeNet)}
+              </Text>
             </View>
           </Card>
-        ) : (
-          <>
-            {/* ✅ STATISTIQUES PRINCIPALES CORRIGÉES */}
-            <View style={styles.statsContainer}>
-              <StatsCard
-                title="Collecteurs"
-                value={stats?.totalCollecteurs || 0}
-                icon="people"
-                iconColor={theme.colors.primary}
-                style={styles.statCard}
-              />
-              
-              <StatsCard
-                title="Clients"
-                value={stats?.totalClients || 0}
-                icon="person-add"
-                iconColor={theme.colors.success}
-                style={styles.statCard}
-              />
-              
-              <StatsCard
-                title="Épargnes"
-                value={stats?.totalEpargnes ? `${(stats.totalEpargnes / 1000000).toFixed(1)}M` : '0'}
-                unit="FCFA"
-                icon="trending-up"
-                iconColor={theme.colors.info}
-                style={styles.statCard}
-              />
-              
-              <StatsCard
-                title="Retraits"
-                value={stats?.totalRetraits ? `${(stats.totalRetraits / 1000000).toFixed(1)}M` : '0'}
-                unit="FCFA"
-                icon="trending-down"
-                iconColor={theme.colors.warning}
-                style={styles.statCard}
-              />
-            </View>
+        </View>
 
-            {/* Gestion principale */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Gestion principale</Text>
-              <View style={styles.cardsGrid}>
-                {managementCards.map((card) => (
-                  <TouchableOpacity
-                    key={card.id}
-                    style={styles.managementCard}
-                    onPress={card.onPress}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.cardIcon, { backgroundColor: `${card.color}20` }]}>
-                      <Ionicons name={card.icon} size={28} color={card.color} />
-                    </View>
-                    <View style={styles.cardContent}>
-                      <Text style={styles.cardTitle}>{card.title}</Text>
-                      <Text style={styles.cardDescription}>{card.description}</Text>
-                      {card.count !== null && (
-                        <View style={styles.cardStats}>
-                          <Text style={styles.cardCount}>{card.count}</Text>
-                          <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={theme.colors.gray} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Outils administratifs */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Outils administratifs</Text>
-              <View style={styles.toolsGrid}>
-                {adminTools.map((tool) => (
-                  <TouchableOpacity
-                    key={tool.id}
-                    style={styles.toolCard}
-                    onPress={tool.onPress}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.toolIcon, { backgroundColor: tool.color }]}>
-                      <Ionicons name={tool.icon} size={24} color={theme.colors.white} />
-                    </View>
-                    <Text style={styles.toolTitle}>{tool.title}</Text>
-                    <Text style={styles.toolDescription}>{tool.description}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Actions rapides */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Actions rapides</Text>
-              <View style={styles.quickActionsContainer}>
-                {quickActions.map((action) => (
-                  <TouchableOpacity
-                    key={action.id}
-                    style={styles.quickActionButton}
-                    onPress={action.onPress}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
-                      <Ionicons name={action.icon} size={20} color={theme.colors.white} />
-                    </View>
-                    <Text style={styles.quickActionText}>{action.title}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Résumé des commissions */}
-            {stats && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Commissions</Text>
-                <Card style={styles.commissionsCard}>
-                  <View style={styles.commissionRow}>
-                    <View style={styles.commissionItem}>
-                      <Text style={styles.commissionLabel}>En attente</Text>
-                      <Text style={styles.commissionValue}>{stats.commissionsEnAttente || 0}</Text>
-                    </View>
-                    <View style={styles.commissionItem}>
-                      <Text style={styles.commissionLabel}>Total généré</Text>
-                      <Text style={styles.commissionValue}>
-                        {stats.totalCommissions ? 
-                          `${(stats.totalCommissions / 1000).toFixed(0)}K` : 
-                          '0'
-                        } FCFA
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.viewCommissionsButton}
-                    onPress={handleNavigateToCommissionCalculation}
-                  >
-                    <Text style={styles.viewCommissionsText}>Gérer les commissions</Text>
-                    <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
-                  </TouchableOpacity>
-                </Card>
-              </View>
+        {/* Statistiques rapides */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Statistiques</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.statsScroll}
+          >
+            {renderStatCard(
+              'Collecteurs',
+              stats?.totalCollecteurs || 0,
+              'people',
+              theme.colors.primary,
+              `${stats?.collecteursActifs || 0} actifs`
             )}
-          </>
+            {renderStatCard(
+              'Clients',
+              stats?.totalClients || 0,
+              'person',
+              theme.colors.secondary,
+              `${stats?.clientsActifs || 0} actifs`
+            )}
+            {renderStatCard(
+              'Commissions',
+              stats?.commissionsEnAttente || 0,
+              'cash',
+              theme.colors.warning,
+              'En attente'
+            )}
+            {renderStatCard(
+              'Agences',
+              stats?.agencesActives || 1,
+              'business',
+              theme.colors.info,
+              'Actives'
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Cartes de gestion */}
+        <View style={styles.managementSection}>
+          <Text style={styles.sectionTitle}>Gestion</Text>
+          <View style={styles.cardsGrid}>
+            {managementCards.map((card) => (
+              <TouchableOpacity
+                key={card.id}
+                style={styles.managementCard}
+                onPress={card.onPress}
+                activeOpacity={0.8}
+              >
+                <Card style={[styles.managementCardContent, { borderTopColor: card.color }]}>
+                  <View style={[styles.cardIconContainer, { backgroundColor: `${card.color}20` }]}>
+                    <Ionicons name={card.icon} size={28} color={card.color} />
+                  </View>
+                  <Text style={styles.cardTitle}>{card.title}</Text>
+                  {card.count !== undefined && (
+                    <Text style={styles.cardCount}>{card.count}</Text>
+                  )}
+                </Card>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Outils administratifs */}
+        <View style={styles.toolsSection}>
+          <Text style={styles.sectionTitle}>Outils administratifs</Text>
+          {adminTools.map((tool) => (
+            <TouchableOpacity
+              key={tool.id}
+              onPress={tool.onPress}
+              activeOpacity={0.8}
+            >
+              <Card style={styles.toolCard}>
+                <View style={[styles.toolIconContainer, { backgroundColor: `${tool.color}20` }]}>
+                  <Ionicons name={tool.icon} size={24} color={tool.color} />
+                </View>
+                <Text style={styles.toolTitle}>{tool.title}</Text>
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.textLight} />
+              </Card>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Actions rapides */}
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitle}>Actions rapides</Text>
+          <View style={styles.quickActionsGrid}>
+            {quickActions.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={styles.quickAction}
+                onPress={action.onPress}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}20` }]}>
+                  <Ionicons name={action.icon} size={24} color={action.color} />
+                </View>
+                <Text style={styles.quickActionText}>{action.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Dernière mise à jour */}
+        {stats?.lastUpdate && (
+          <Text style={styles.lastUpdate}>
+            Dernière mise à jour: {format(new Date(stats.lastUpdate), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+          </Text>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.background,
   },
-  contentContainer: {
+  headerGradient: {
+    paddingBottom: 20,
+  },
+  header: {
+    backgroundColor: 'transparent',
+  },
+  userInfo: {
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  welcomeText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: theme.colors.white,
+    marginTop: 4,
+  },
+  agenceName: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
+  },
+  content: {
     flex: 1,
+    marginTop: -20,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 16,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 24,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statCard: {
-    width: '48%',
-    marginBottom: 12,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: theme.colors.textLight,
   },
-  section: {
-    marginBottom: 24,
+  overviewSection: {
+    padding: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginBottom: 12,
-  },
-  cardsGrid: {
-    gap: 12,
-  },
-  managementCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    padding: 16,
-    borderRadius: 12,
-    ...theme.shadows.small,
-  },
-  cardIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 2,
+    marginBottom: 16,
   },
-  cardDescription: {
-    fontSize: 13,
-    color: theme.colors.textLight,
-    marginBottom: 4,
+  financeCard: {
+    padding: 20,
   },
-  cardStats: {
+  financeRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardCount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-    marginRight: 4,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-  },
-  toolsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    marginBottom: 20,
   },
-  toolCard: {
-    width: '48%',
-    backgroundColor: theme.colors.white,
-    padding: 16,
-    borderRadius: 12,
+  financeItem: {
+    flex: 1,
     alignItems: 'center',
-    ...theme.shadows.small,
   },
-  toolIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+  financeDivider: {
+    width: 1,
+    backgroundColor: theme.colors.lightGray,
+    marginHorizontal: 20,
+  },
+  financeLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
     marginBottom: 8,
   },
-  toolTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  financeValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  netBalanceContainer: {
+    backgroundColor: theme.colors.primary,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  netBalanceLabel: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 8,
+  },
+  netBalanceValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: theme.colors.white,
+  },
+  statsSection: {
+    marginBottom: 20,
+  },
+  statsScroll: {
+    paddingHorizontal: 20,
+  },
+  statCard: {
+    padding: 16,
+    marginRight: 12,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: theme.colors.text,
-    textAlign: 'center',
     marginBottom: 4,
   },
-  toolDescription: {
+  statTitle: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+  },
+  statSubtitle: {
     fontSize: 12,
     color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  managementSection: {
+    padding: 20,
+  },
+  cardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+  },
+  managementCard: {
+    width: '50%',
+    padding: 8,
+  },
+  managementCardContent: {
+    padding: 16,
+    alignItems: 'center',
+    borderTopWidth: 3,
+  },
+  cardIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
     textAlign: 'center',
   },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: theme.colors.white,
-    padding: 16,
-    borderRadius: 12,
-    ...theme.shadows.small,
+  cardCount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    marginTop: 8,
   },
-  quickActionButton: {
+  toolsSection: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  toolCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 12,
+  },
+  toolIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  toolTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  quickActionsSection: {
+    padding: 20,
+    paddingTop: 0,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickAction: {
     alignItems: 'center',
     flex: 1,
   },
   quickActionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
-    marginBottom: 6,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   quickActionText: {
     fontSize: 12,
     color: theme.colors.text,
     textAlign: 'center',
-    fontWeight: '500',
   },
-  commissionsCard: {
-    padding: 16,
-  },
-  commissionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  commissionItem: {
-    alignItems: 'center',
-  },
-  commissionLabel: {
+  lastUpdate: {
     fontSize: 12,
     color: theme.colors.textLight,
-    marginBottom: 4,
-  },
-  commissionValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
-  },
-  viewCommissionsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.lightGray,
-  },
-  viewCommissionsText: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '500',
-    marginRight: 4,
-  },
-  errorCard: {
-    margin: 16,
-  },
-  errorContainer: {
-    alignItems: 'center',
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: theme.colors.error,
     textAlign: 'center',
-    marginVertical: 12,
-  },
-  retryButton: {
-    backgroundColor: theme.colors.primary,
+    marginBottom: 20,
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: theme.colors.white,
-    fontWeight: '600',
   },
 });
 
