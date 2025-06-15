@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.js - VERSION COMPLÈTE AVEC TOUS LES BOUTONS
+// src/screens/Admin/AdminDashboardScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
-import StatCard from '../../components/StatCard/StatCard';
+import StatsCard from '../../components/StatsCard/StatsCard'; // ✅ CORRECTION: StatsCard au lieu de StatCard
 import theme from '../../theme';
 import { adminService } from '../../services';
 
@@ -54,7 +54,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     loadDashboardStats(true);
   };
 
-  // ✅ FONCTIONS DE NAVIGATION COMPLÈTES
+  // Fonctions de navigation
   const handleNavigateToCollecteurs = () => {
     navigation.navigate('CollecteurManagementScreen');
   };
@@ -103,7 +103,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   };
 
-  // ✅ CARTES DE GESTION PRINCIPALES
+  // Cartes de gestion principales
   const managementCards = [
     {
       id: 'collecteurs',
@@ -147,7 +147,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   ];
 
-  // ✅ OUTILS ADMINISTRATIFS
+  // Outils administratifs
   const adminTools = [
     {
       id: 'transferts',
@@ -175,7 +175,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     }
   ];
 
-  // ✅ ACTIONS RAPIDES
+  // Actions rapides
   const quickActions = [
     {
       id: 'new-collecteur',
@@ -233,42 +233,40 @@ const AdminDashboardScreen = ({ navigation }) => {
           </Card>
         ) : (
           <>
-            {/* Statistiques principales */}
+            {/* ✅ STATISTIQUES PRINCIPALES CORRIGÉES */}
             <View style={styles.statsContainer}>
-              <StatCard
+              <StatsCard
                 title="Collecteurs"
                 value={stats?.totalCollecteurs || 0}
-                subtitle={`${stats?.collecteursActifs || 0} actifs`}
                 icon="people"
-                color={theme.colors.primary}
-                loading={loading}
+                iconColor={theme.colors.primary}
+                style={styles.statCard}
               />
               
-              <StatCard
+              <StatsCard
                 title="Clients"
                 value={stats?.totalClients || 0}
-                subtitle={`${stats?.clientsValides || 0} validés`}
                 icon="person-add"
-                color={theme.colors.success}
-                loading={loading}
+                iconColor={theme.colors.success}
+                style={styles.statCard}
               />
               
-              <StatCard
+              <StatsCard
                 title="Épargnes"
                 value={stats?.totalEpargnes ? `${(stats.totalEpargnes / 1000000).toFixed(1)}M` : '0'}
-                subtitle="FCFA"
+                unit="FCFA"
                 icon="trending-up"
-                color={theme.colors.info}
-                loading={loading}
+                iconColor={theme.colors.info}
+                style={styles.statCard}
               />
               
-              <StatCard
+              <StatsCard
                 title="Retraits"
                 value={stats?.totalRetraits ? `${(stats.totalRetraits / 1000000).toFixed(1)}M` : '0'}
-                subtitle="FCFA"
+                unit="FCFA"
                 icon="trending-down"
-                color={theme.colors.warning}
-                loading={loading}
+                iconColor={theme.colors.warning}
+                style={styles.statCard}
               />
             </View>
 
@@ -397,6 +395,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 24,
+  },
+  statCard: {
+    width: '48%',
+    marginBottom: 12,
   },
   section: {
     marginBottom: 24,

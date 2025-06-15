@@ -1,19 +1,26 @@
-// src/api/authService.js - VERSION CORRIGÉE
+// src/api/authService.js - VERSION DÉFINITIVEMENT CORRIGÉE
 import axiosInstance from './axiosConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../config/apiConfig';
 import { jwtDecode } from 'jwt-decode';
 
 export const authService = {
-  // Connexion utilisateur - FONCTION CORRIGÉE
+  // ✅ FONCTION LOGIN COMPLÈTEMENT RÉÉCRITE ET CORRIGÉE
   login: async (email, password) => {
     try {
       console.log('🚀 Tentative de connexion:', { email });
       
-      const requestData = { email, password };
+      // ✅ CORRECTION CRITIQUE: Créer un objet simple et propre
+      const requestData = {
+        email: email.trim(), // Nettoyer l'email
+        password: password.trim() // Nettoyer le mot de passe
+      };
+      
       console.log('📤 Données envoyées:', requestData);
       
+      // ✅ CORRECTION: Envoyer directement l'objet, pas de sérialisation manuelle
       const response = await axiosInstance.post('/auth/login', requestData);
+      
       console.log('📥 Réponse reçue:', response.data);
       
       const { token, role } = response.data;
@@ -32,7 +39,7 @@ export const authService = {
         // Construire un objet utilisateur cohérent
         const user = {
           id: decodedToken.userId || decodedToken.sub || 0,
-          email: email,
+          email: email.trim(), // ✅ Utiliser l'email nettoyé
           role: role || decodedToken.role,
           agenceId: decodedToken.agenceId || 0,
           nom: decodedToken.nom || '',
@@ -50,6 +57,7 @@ export const authService = {
         await AsyncStorage.setItem('lastLoginAt', new Date().toISOString());
         
         return { success: true, user, token };
+        
       } catch (decodeError) {
         console.error('❌ Erreur de décodage JWT:', decodeError);
         return { 
@@ -72,23 +80,50 @@ export const authService = {
     }
   },
 
-  // Récupération mot de passe
-  forgotPassword: async (email) => {
+  // ✅ MÉTHODE DE VÉRIFICATION D'AUTHENTIFICATION
+  isAuthenticated: async () => {
     try {
-      const response = await axiosInstance.post('/auth/forgot-password', { email });
-      console.log('Réponse brute du serveur:', JSON.stringify(response));
-      console.log('Données de la réponse:', JSON.stringify(response.data));
-      return { success: true };
-    } catch (error) {
-      console.error('Détails complets de l\'erreur:', JSON.stringify(error, null, 2));
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
+      if (!token) {
+        return { isAuthenticated: false, token: null, userData: null };
+      }
+      
+      // Vérifier si le token est expiré
+      const decoded = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      
+      if (decoded.exp <= currentTime) {
+        // Token expiré, nettoyer le stockage
+        await authService.logout();
+        return { isAuthenticated: false, token: null, userData: null };
+      }
+      
+      // Récupérer les données utilisateur
+      const userData = await authService.getCurrentUser();
+      
       return { 
-        success: false, 
-        error: error.response?.data?.message || 'Erreur' 
+        isAuthenticated: true, 
+        token: token, 
+        userData: userData 
       };
+    } catch (error) {
+      console.error('Erreur lors de la vérification de l\'authentification:', error);
+      return { isAuthenticated: false, token: null, userData: null };
     }
   },
 
-  // Déconnexion - MÉTHODE CORRIGÉE
+  // Récupération utilisateur actuel
+  getCurrentUser: async () => {
+    try {
+      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
+      return userData ? JSON.parse(userData) : null;
+    } catch (error) {
+      console.error('Erreur récupération données utilisateur:', error);
+      return null;
+    }
+  },
+
+  // Déconnexion
   logout: async () => {
     try {
       // Tenter d'appeler l'endpoint de logout
@@ -101,98 +136,41 @@ export const authService = {
       // Nettoyage des données locales
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.JWT_TOKEN,
-        STORAGE_KEYS.USER_DATA,
         STORAGE_KEYS.REFRESH_TOKEN,
+        STORAGE_KEYS.USER_DATA,
         'lastLoginAt'
       ]);
       
       return { success: true };
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
-      
-      // Même en cas d'erreur, essayer de nettoyer les données locales
-      try {
-        await AsyncStorage.multiRemove([
-          STORAGE_KEYS.JWT_TOKEN,
-          STORAGE_KEYS.USER_DATA,
-          STORAGE_KEYS.REFRESH_TOKEN,
-          'lastLoginAt'
-        ]);
-      } catch (cleanupError) {
-        console.error('Erreur lors du nettoyage:', cleanupError);
-      }
-      
+      console.error('Erreur de déconnexion:', error);
+      // Même en cas d'erreur, nettoyer les données locales
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.JWT_TOKEN,
+        STORAGE_KEYS.REFRESH_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        'lastLoginAt'
+      ]);
       return { success: false, error: error.message };
     }
   },
 
-  // Vérifier si l'utilisateur est connecté - MÉTHODE CORRIGÉE
-  isAuthenticated: async () => {
+  // Mot de passe oublié
+  forgotPassword: async (email) => {
     try {
-      const token = await AsyncStorage.getItem(STORAGE_KEYS.JWT_TOKEN);
-      if (!token) return { token: null, userData: null };
-      
-      try {
-        const decodedToken = jwtDecode(token);
-        const currentTime = Date.now() / 1000;
-        
-        if (decodedToken.exp && decodedToken.exp < currentTime) {
-          console.log('Token expiré, nettoyage...');
-          // Utiliser la méthode logout de manière sécurisée
-          await authService.logout();
-          return { token: null, userData: null };
-        }
-      } catch (decodeError) {
-        console.error('Erreur lors du décodage du token:', decodeError);
-        await authService.logout();
-        return { token: null, userData: null };
-      }
-      
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      return { token, userData: userData ? JSON.parse(userData) : null };
+      const response = await axiosInstance.post('/auth/forgot-password', { 
+        email: email.trim() // ✅ Nettoyer l'email
+      });
+      return { success: true };
     } catch (error) {
-      console.error('Erreur vérification authentification:', error);
-      return { token: null, userData: null };
+      console.error('Erreur mot de passe oublié:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Erreur' 
+      };
     }
   },
-  
-  // Vérifier l'activité de la session
-  checkSessionActivity: async (maxInactivityMinutes = 30) => {
-    try {
-      const lastLoginString = await AsyncStorage.getItem('lastLoginAt');
-      if (!lastLoginString) {
-        return false;
-      }
-      
-      const lastLogin = new Date(lastLoginString);
-      const now = new Date();
-      const diffMinutes = (now - lastLogin) / (1000 * 60);
-      
-      if (diffMinutes > maxInactivityMinutes) {
-        await authService.logout();
-        return false;
-      }
-      
-      // Mettre à jour le timestamp d'activité
-      await AsyncStorage.setItem('lastLoginAt', now.toISOString());
-      return true;
-    } catch (error) {
-      console.error('Erreur vérification activité session:', error);
-      return false;
-    }
-  },
-  
-  // Récupérer les données utilisateur actuelles
-  getCurrentUser: async () => {
-    try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.USER_DATA);
-      return userData ? JSON.parse(userData) : null;
-    } catch (error) {
-      console.error('Erreur récupération données utilisateur:', error);
-      return null;
-    }
-  },
-  
+
   // Rafraîchir le token
   refreshToken: async () => {
     try {

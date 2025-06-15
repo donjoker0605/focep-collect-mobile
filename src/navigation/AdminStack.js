@@ -24,7 +24,7 @@ import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
 
 // ✅ ÉCRANS COMMUNS
-import NotificationsScreen from '../screens/Common/NotificationsScreen';
+import NotificationsScreen from '../screens/Comon/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
