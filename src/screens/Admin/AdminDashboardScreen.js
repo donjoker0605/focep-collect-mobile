@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.js - VERSION CORRIGÉE
+// src/screens/Admin/AdminDashboardScreen.js - VERSION COMPLÈTE AVEC TOUS LES BOUTONS
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -6,623 +6,571 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   RefreshControl,
-  ActivityIndicator,
+  SafeAreaView,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
+import StatCard from '../../components/StatCard/StatCard';
 import theme from '../../theme';
-import { useAdmin } from '../../hooks/useAdmin';
+import { adminService } from '../../services';
 
 const AdminDashboardScreen = ({ navigation }) => {
-  const { 
-    dashboardStats, 
-    dashboardLoading, 
-    error,
-    loadDashboard,
-    isAdmin,
-    isSuperAdmin 
-  } = useAdmin();
-  
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  // ✅ REDIRECTION SI PAS ADMIN
   useEffect(() => {
-    if (!isAdmin) {
-      Alert.alert(
-        'Accès non autorisé',
-        'Vous n\'avez pas les droits d\'administrateur.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+    loadDashboardStats();
+  }, []);
+
+  const loadDashboardStats = async (showRefresh = false) => {
+    try {
+      if (showRefresh) setRefreshing(true);
+      else setLoading(true);
+      
+      setError(null);
+      
+      const response = await adminService.getDashboardStats();
+      
+      if (response.success) {
+        setStats(response.data);
+      } else {
+        setError(response.error || 'Erreur lors du chargement des statistiques');
+      }
+    } catch (err) {
+      console.error('Erreur dashboard admin:', err);
+      setError(err.message || 'Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  }, [isAdmin, navigation]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadDashboard();
-    setRefreshing(false);
   };
 
-  // ✅ FORMATAGE CURRENCY CORRIGÉ
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '0 FCFA';
-    return `${new Intl.NumberFormat('fr-FR', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)} FCFA`;
+  const onRefresh = () => {
+    loadDashboardStats(true);
   };
 
-  const formatNumber = (number) => {
-    if (!number && number !== 0) return '0';
-    return new Intl.NumberFormat('fr-FR').format(number);
+  // ✅ FONCTIONS DE NAVIGATION COMPLÈTES
+  const handleNavigateToCollecteurs = () => {
+    navigation.navigate('CollecteurManagementScreen');
   };
 
-  // ✅ DONNÉES PAR DÉFAUT SÉCURISÉES
-  const stats = dashboardStats || {
-    totalCollecteurs: 0,
-    totalClients: 0,
-    totalEpargne: 0,
-    totalRetrait: 0,
-    collecteursActifs: 0,
-    collecteursInactifs: 0,
-    clientsActifs: 0,
-    clientsInactifs: 0,
-    agencesActives: 0,
-    commissionsEnAttente: 0
+  const handleNavigateToClients = () => {
+    navigation.navigate('ClientManagementScreen');
   };
 
-  // ✅ GESTION DES ERREURS
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header
-          title="Tableau de bord"
-          showBackButton={false}
-        />
-        <View style={styles.errorContainer}>
-          <Ionicons name="warning-outline" size={48} color={theme.colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
-            <Text style={styles.retryButtonText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleNavigateToReports = () => {
+    navigation.navigate('ReportsScreen');
+  };
+
+  const handleNavigateToCommissions = () => {
+    navigation.navigate('CommissionParametersScreen');
+  };
+
+  const handleNavigateToTransferts = () => {
+    navigation.navigate('TransfertCompteScreen');
+  };
+
+  const handleNavigateToJournalCloture = () => {
+    navigation.navigate('JournalClotureScreen');
+  };
+
+  const handleNavigateToCommissionCalculation = () => {
+    navigation.navigate('CommissionCalculationScreen');
+  };
+
+  const handleCreateCollecteur = () => {
+    navigation.navigate('CollecteurCreationScreen');
+  };
+
+  const handleQuickAction = (action) => {
+    switch (action) {
+      case 'newTransaction':
+        Alert.alert('Information', 'Redirection vers les transactions en cours de développement');
+        break;
+      case 'viewNotifications':
+        navigation.navigate('NotificationsScreen');
+        break;
+      case 'backup':
+        Alert.alert('Information', 'Sauvegarde en cours de développement');
+        break;
+      default:
+        break;
+    }
+  };
+
+  // ✅ CARTES DE GESTION PRINCIPALES
+  const managementCards = [
+    {
+      id: 'collecteurs',
+      title: 'Gérer les collecteurs',
+      description: 'Créer, modifier et gérer vos collecteurs',
+      icon: 'people',
+      color: theme.colors.primary,
+      onPress: handleNavigateToCollecteurs,
+      count: stats?.totalCollecteurs || 0,
+      subtitle: `${stats?.collecteursActifs || 0} actifs`
+    },
+    {
+      id: 'clients',
+      title: 'Gérer les clients',
+      description: 'Voir et gérer tous les clients de votre agence',
+      icon: 'person-add',
+      color: theme.colors.success,
+      onPress: handleNavigateToClients,
+      count: stats?.totalClients || 0,
+      subtitle: `${stats?.clientsValides || 0} validés`
+    },
+    {
+      id: 'reports',
+      title: 'Rapports',
+      description: 'Générer et consulter les rapports',
+      icon: 'bar-chart',
+      color: theme.colors.warning,
+      onPress: handleNavigateToReports,
+      count: stats?.commissionsEnAttente || 0,
+      subtitle: 'En attente'
+    },
+    {
+      id: 'commissions',
+      title: 'Paramètres de commissions',
+      description: 'Configurer les commissions des collecteurs',
+      icon: 'settings',
+      color: theme.colors.secondary,
+      onPress: handleNavigateToCommissions,
+      count: null,
+      subtitle: 'Configuration'
+    }
+  ];
+
+  // ✅ OUTILS ADMINISTRATIFS
+  const adminTools = [
+    {
+      id: 'transferts',
+      title: 'Transferts de comptes',
+      description: 'Transférer des clients entre collecteurs',
+      icon: 'swap-horizontal',
+      color: theme.colors.primary,
+      onPress: handleNavigateToTransferts
+    },
+    {
+      id: 'journal',
+      title: 'Journal & Clôture',
+      description: 'Gérer les journaux et les clôtures',
+      icon: 'journal',
+      color: theme.colors.info,
+      onPress: handleNavigateToJournalCloture
+    },
+    {
+      id: 'commission-calc',
+      title: 'Calcul des commissions',
+      description: 'Calculer et traiter les commissions',
+      icon: 'calculator',
+      color: theme.colors.success,
+      onPress: handleNavigateToCommissionCalculation
+    }
+  ];
+
+  // ✅ ACTIONS RAPIDES
+  const quickActions = [
+    {
+      id: 'new-collecteur',
+      title: 'Nouveau collecteur',
+      icon: 'person-add',
+      color: theme.colors.primary,
+      onPress: handleCreateCollecteur
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      icon: 'notifications',
+      color: theme.colors.warning,
+      onPress: () => handleQuickAction('viewNotifications')
+    },
+    {
+      id: 'backup',
+      title: 'Sauvegarde',
+      icon: 'cloud-upload',
+      color: theme.colors.info,
+      onPress: () => handleQuickAction('backup')
+    }
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header
-        title="Dashboard Admin"
+      <Header 
+        title="Tableau de bord Admin"
         showBackButton={false}
-        rightComponent={
-          <TouchableOpacity
-            style={styles.notificationButton}
-            onPress={() => navigation.navigate('Notifications')}
-          >
-            <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-        }
       />
-
-      <ScrollView
-        style={styles.content}
+      
+      <ScrollView 
+        style={styles.contentContainer}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+          />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {dashboardLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement des statistiques...</Text>
-          </View>
+        {error ? (
+          <Card style={styles.errorCard}>
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => loadDashboardStats()}
+              >
+                <Text style={styles.retryButtonText}>Réessayer</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
         ) : (
-          <View style={styles.statsContainer}>
-            {/* ✅ CARTE STATISTIQUES PRINCIPALES */}
-            <Card style={styles.statsCard}>
-              <Text style={styles.statsTitle}>Vue d'ensemble</Text>
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Ionicons name="people" size={24} color={theme.colors.primary} />
-                  <Text style={styles.statValue}>{formatNumber(stats.totalCollecteurs)}</Text>
-                  <Text style={styles.statLabel}>Collecteurs</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Ionicons name="person" size={24} color={theme.colors.secondary} />
-                  <Text style={styles.statValue}>{formatNumber(stats.totalClients)}</Text>
-                  <Text style={styles.statLabel}>Clients</Text>
-                </View>
-              </View>
+          <>
+            {/* Statistiques principales */}
+            <View style={styles.statsContainer}>
+              <StatCard
+                title="Collecteurs"
+                value={stats?.totalCollecteurs || 0}
+                subtitle={`${stats?.collecteursActifs || 0} actifs`}
+                icon="people"
+                color={theme.colors.primary}
+                loading={loading}
+              />
               
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Ionicons name="arrow-down" size={24} color={theme.colors.success} />
-                  <Text style={styles.statValue}>{formatCurrency(stats.totalEpargne)}</Text>
-                  <Text style={styles.statLabel}>Total Épargne</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Ionicons name="arrow-up" size={24} color={theme.colors.error} />
-                  <Text style={styles.statValue}>{formatCurrency(stats.totalRetrait)}</Text>
-                  <Text style={styles.statLabel}>Total Retrait</Text>
-                </View>
-              </View>
-            </Card>
+              <StatCard
+                title="Clients"
+                value={stats?.totalClients || 0}
+                subtitle={`${stats?.clientsValides || 0} validés`}
+                icon="person-add"
+                color={theme.colors.success}
+                loading={loading}
+              />
+              
+              <StatCard
+                title="Épargnes"
+                value={stats?.totalEpargnes ? `${(stats.totalEpargnes / 1000000).toFixed(1)}M` : '0'}
+                subtitle="FCFA"
+                icon="trending-up"
+                color={theme.colors.info}
+                loading={loading}
+              />
+              
+              <StatCard
+                title="Retraits"
+                value={stats?.totalRetraits ? `${(stats.totalRetraits / 1000000).toFixed(1)}M` : '0'}
+                subtitle="FCFA"
+                icon="trending-down"
+                color={theme.colors.warning}
+                loading={loading}
+              />
+            </View>
 
-            {/* ✅ ACTIONS RAPIDES ADMIN */}
-            <View style={styles.quickActions}>
-              <Text style={styles.sectionTitle}>Actions administrateur</Text>
-              <View style={styles.actionButtons}>
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('CollecteurManagement')}
-                >
-                  <View style={styles.actionIconContainer}>
-                    <Ionicons name="people" size={24} color={theme.colors.white} />
-                  </View>
-                  <Text style={styles.actionButtonText}>Gérer collecteurs</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('CommissionParametersScreen')}
-                >
-                  <View style={styles.actionIconContainer}>
-                    <Ionicons name="settings" size={24} color={theme.colors.white} />
-                  </View>
-                  <Text style={styles.actionButtonText}>Paramètres commission</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('TransfertCompteScreen')}
-                >
-                  <View style={styles.actionIconContainer}>
-                    <Ionicons name="swap-horizontal" size={24} color={theme.colors.white} />
-                  </View>
-                  <Text style={styles.actionButtonText}>Transferts comptes</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.actionButton}
-                  onPress={() => navigation.navigate('Reports')}
-                >
-                  <View style={styles.actionIconContainer}>
-                    <Ionicons name="document-text" size={24} color={theme.colors.white} />
-                  </View>
-                  <Text style={styles.actionButtonText}>Rapports</Text>
-                </TouchableOpacity>
+            {/* Gestion principale */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Gestion principale</Text>
+              <View style={styles.cardsGrid}>
+                {managementCards.map((card) => (
+                  <TouchableOpacity
+                    key={card.id}
+                    style={styles.managementCard}
+                    onPress={card.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.cardIcon, { backgroundColor: `${card.color}20` }]}>
+                      <Ionicons name={card.icon} size={28} color={card.color} />
+                    </View>
+                    <View style={styles.cardContent}>
+                      <Text style={styles.cardTitle}>{card.title}</Text>
+                      <Text style={styles.cardDescription}>{card.description}</Text>
+                      {card.count !== null && (
+                        <View style={styles.cardStats}>
+                          <Text style={styles.cardCount}>{card.count}</Text>
+                          <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.gray} />
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
 
-            {/* ✅ ÉTAT DES COLLECTEURS */}
-            <Card style={styles.collecteursCard}>
-              <Text style={styles.cardTitle}>État des collecteurs</Text>
-              <View style={styles.statusRow}>
-                <View style={styles.statusItem}>
-                  <View style={[styles.statusDot, styles.activeStatus]} />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusValue}>{formatNumber(stats.collecteursActifs)}</Text>
-                    <Text style={styles.statusLabel}>Actifs</Text>
-                  </View>
-                </View>
-                <View style={styles.statusItem}>
-                  <View style={[styles.statusDot, styles.inactiveStatus]} />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusValue}>{formatNumber(stats.collecteursInactifs)}</Text>
-                    <Text style={styles.statusLabel}>Inactifs</Text>
-                  </View>
-                </View>
+            {/* Outils administratifs */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Outils administratifs</Text>
+              <View style={styles.toolsGrid}>
+                {adminTools.map((tool) => (
+                  <TouchableOpacity
+                    key={tool.id}
+                    style={styles.toolCard}
+                    onPress={tool.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.toolIcon, { backgroundColor: tool.color }]}>
+                      <Ionicons name={tool.icon} size={24} color={theme.colors.white} />
+                    </View>
+                    <Text style={styles.toolTitle}>{tool.title}</Text>
+                    <Text style={styles.toolDescription}>{tool.description}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              
-              {/* ✅ POURCENTAGE D'ACTIVITÉ */}
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressLabel}>Taux d'activité</Text>
-                <View style={styles.progressBar}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        width: `${stats.totalCollecteurs > 0 
-                          ? (stats.collecteursActifs / stats.totalCollecteurs) * 100 
-                          : 0}%` 
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {stats.totalCollecteurs > 0 
-                    ? `${Math.round((stats.collecteursActifs / stats.totalCollecteurs) * 100)}%`
-                    : '0%'}
-                </Text>
-              </View>
-            </Card>
+            </View>
 
-            {/* ✅ ÉTAT DES CLIENTS */}
-            <Card style={styles.clientsCard}>
-              <Text style={styles.cardTitle}>État des clients</Text>
-              <View style={styles.statusRow}>
-                <View style={styles.statusItem}>
-                  <View style={[styles.statusDot, styles.activeStatus]} />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusValue}>{formatNumber(stats.clientsActifs)}</Text>
-                    <Text style={styles.statusLabel}>Actifs</Text>
-                  </View>
-                </View>
-                <View style={styles.statusItem}>
-                  <View style={[styles.statusDot, styles.inactiveStatus]} />
-                  <View style={styles.statusTextContainer}>
-                    <Text style={styles.statusValue}>{formatNumber(stats.clientsInactifs)}</Text>
-                    <Text style={styles.statusLabel}>Inactifs</Text>
-                  </View>
-                </View>
+            {/* Actions rapides */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Actions rapides</Text>
+              <View style={styles.quickActionsContainer}>
+                {quickActions.map((action) => (
+                  <TouchableOpacity
+                    key={action.id}
+                    style={styles.quickActionButton}
+                    onPress={action.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
+                      <Ionicons name={action.icon} size={20} color={theme.colors.white} />
+                    </View>
+                    <Text style={styles.quickActionText}>{action.title}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
-              
-              {/* ✅ POURCENTAGE D'ACTIVITÉ CLIENTS */}
-              <View style={styles.progressContainer}>
-                <Text style={styles.progressLabel}>Taux d'activité clients</Text>
-                <View style={styles.progressBar}>
-                  <View 
-                    style={[
-                      styles.progressFill, 
-                      { 
-                        width: `${stats.totalClients > 0 
-                          ? (stats.clientsActifs / stats.totalClients) * 100 
-                          : 0}%` 
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {stats.totalClients > 0 
-                    ? `${Math.round((stats.clientsActifs / stats.totalClients) * 100)}%`
-                    : '0%'}
-                </Text>
-              </View>
-            </Card>
+            </View>
 
-            {/* ✅ SOLDE NET */}
-            <Card style={styles.soldeCard}>
-              <Text style={styles.cardTitle}>Solde net</Text>
-              <View style={styles.soldeContainer}>
-                <Ionicons 
-                  name="wallet-outline" 
-                  size={32} 
-                  color={theme.colors.primary} 
-                />
-                <View style={styles.soldeTextContainer}>
-                  <Text style={styles.soldeValue}>
-                    {formatCurrency((stats.totalEpargne || 0) - (stats.totalRetrait || 0))}
-                  </Text>
-                  <Text style={styles.soldeLabel}>Épargne - Retraits</Text>
-                </View>
+            {/* Résumé des commissions */}
+            {stats && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Commissions</Text>
+                <Card style={styles.commissionsCard}>
+                  <View style={styles.commissionRow}>
+                    <View style={styles.commissionItem}>
+                      <Text style={styles.commissionLabel}>En attente</Text>
+                      <Text style={styles.commissionValue}>{stats.commissionsEnAttente || 0}</Text>
+                    </View>
+                    <View style={styles.commissionItem}>
+                      <Text style={styles.commissionLabel}>Total généré</Text>
+                      <Text style={styles.commissionValue}>
+                        {stats.totalCommissions ? 
+                          `${(stats.totalCommissions / 1000).toFixed(0)}K` : 
+                          '0'
+                        } FCFA
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.viewCommissionsButton}
+                    onPress={handleNavigateToCommissionCalculation}
+                  >
+                    <Text style={styles.viewCommissionsText}>Gérer les commissions</Text>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </Card>
               </View>
-            </Card>
-
-            {/* ✅ ALERTES SYSTÈME */}
-            {stats.commissionsEnAttente > 0 && (
-              <Card style={[styles.alertCard, styles.warningCard]}>
-                <View style={styles.alertHeader}>
-                  <Ionicons name="warning" size={24} color={theme.colors.warning} />
-                  <Text style={styles.alertTitle}>Commissions en attente</Text>
-                </View>
-                <Text style={styles.alertMessage}>
-                  {formatNumber(stats.commissionsEnAttente)} commissions en attente de traitement
-                </Text>
-                <TouchableOpacity 
-                  style={styles.alertButton}
-                  onPress={() => navigation.navigate('CommissionParametersScreen')}
-                >
-                  <Text style={styles.alertButtonText}>Traiter</Text>
-                </TouchableOpacity>
-              </Card>
             )}
-
-            {/* ✅ RACCOURCIS RAPIDES */}
-            <Card style={styles.shortcutsCard}>
-              <Text style={styles.cardTitle}>Raccourcis rapides</Text>
-              <View style={styles.shortcutsGrid}>
-                <TouchableOpacity 
-                  style={styles.shortcutItem}
-                  onPress={() => navigation.navigate('CollecteurManagement')}
-                >
-                  <Ionicons name="person-add" size={20} color={theme.colors.primary} />
-                  <Text style={styles.shortcutText}>Nouveau collecteur</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.shortcutItem}
-                  onPress={() => navigation.navigate('Reports')}
-                >
-                  <Ionicons name="download" size={20} color={theme.colors.primary} />
-                  <Text style={styles.shortcutText}>Télécharger rapport</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.shortcutItem}
-                  onPress={() => navigation.navigate('TransfertCompteScreen')}
-                >
-                  <Ionicons name="repeat" size={20} color={theme.colors.primary} />
-                  <Text style={styles.shortcutText}>Transfert comptes</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={styles.shortcutItem}
-                  onPress={() => navigation.navigate('Notifications')}
-                >
-                  <Ionicons name="notifications" size={20} color={theme.colors.primary} />
-                  <Text style={styles.shortcutText}>Notifications</Text>
-                </TouchableOpacity>
-              </View>
-            </Card>
-          </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-// ✅ STYLES COMPLETS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.primary,
   },
-  content: {
+  contentContainer: {
     flex: 1,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     padding: 16,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 50,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  errorText: {
-    fontSize: 16,
-    color: theme.colors.error,
-    textAlign: 'center',
-    marginVertical: 16,
-  },
-  retryButton: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: theme.colors.white,
-    fontWeight: '600',
-  },
-  notificationButton: {
-    padding: 8,
-  },
   statsContainer: {
-    gap: 16,
-  },
-  statsCard: {
-    padding: 20,
-  },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  statsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 24,
   },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginTop: 4,
-    textAlign: 'center',
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: theme.colors.text,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  quickActions: {
-    marginVertical: 8,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  cardsGrid: {
     gap: 12,
   },
-  actionButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 12,
-    padding: 16,
+  managementCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minWidth: '48%',
-    flexGrow: 1,
+    backgroundColor: theme.colors.white,
+    padding: 16,
+    borderRadius: 12,
+    ...theme.shadows.small,
   },
-  actionIconContainer: {
-    marginBottom: 8,
+  cardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  actionButtonText: {
-    color: theme.colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  collecteursCard: {
-    padding: 20,
-  },
-  clientsCard: {
-    padding: 20,
+  cardContent: {
+    flex: 1,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.text,
-    marginBottom: 16,
+    marginBottom: 2,
   },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
+  cardDescription: {
+    fontSize: 13,
+    color: theme.colors.textLight,
+    marginBottom: 4,
   },
-  statusItem: {
+  cardStats: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  activeStatus: {
-    backgroundColor: theme.colors.success,
-  },
-  inactiveStatus: {
-    backgroundColor: theme.colors.error,
-  },
-  statusTextContainer: {
-    alignItems: 'center',
-  },
-  statusValue: {
-    fontSize: 18,
+  cardCount: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: theme.colors.text,
+    color: theme.colors.primary,
+    marginRight: 4,
   },
-  statusLabel: {
+  cardSubtitle: {
     fontSize: 12,
     color: theme.colors.textLight,
   },
-  progressContainer: {
-    marginTop: 16,
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  progressLabel: {
+  toolCard: {
+    width: '48%',
+    backgroundColor: theme.colors.white,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    ...theme.shadows.small,
+  },
+  toolIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  toolTitle: {
     fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  toolDescription: {
+    fontSize: 12,
     color: theme.colors.textLight,
-    marginBottom: 8,
+    textAlign: 'center',
   },
-  progressBar: {
-    height: 8,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
+  quickActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: theme.colors.white,
+    padding: 16,
+    borderRadius: 12,
+    ...theme.shadows.small,
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: theme.colors.success,
+  quickActionButton: {
+    alignItems: 'center',
+    flex: 1,
   },
-  progressText: {
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  quickActionText: {
     fontSize: 12,
     color: theme.colors.text,
     textAlign: 'center',
+    fontWeight: '500',
   },
-  soldeCard: {
-    padding: 20,
+  commissionsCard: {
+    padding: 16,
   },
-  soldeContainer: {
+  commissionRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  commissionItem: {
     alignItems: 'center',
   },
-  soldeTextContainer: {
-    marginLeft: 16,
-    flex: 1,
+  commissionLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginBottom: 4,
   },
-  soldeValue: {
-    fontSize: 24,
+  commissionValue: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: theme.colors.primary,
   },
-  soldeLabel: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginTop: 4,
-  },
-  alertCard: {
-    padding: 20,
-  },
-  warningCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.warning,
-  },
-  alertHeader: {
+  viewCommissionsButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
   },
-  alertTitle: {
+  viewCommissionsText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  errorCard: {
+    margin: 16,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.warning,
-    marginLeft: 8,
-  },
-  alertMessage: {
-    fontSize: 14,
-    color: theme.colors.text,
-    marginBottom: 16,
-  },
-  alertButton: {
-    backgroundColor: theme.colors.warning,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  alertButtonText: {
-    color: theme.colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  shortcutsCard: {
-    padding: 20,
-  },
-  shortcutsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  shortcutItem: {
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    minWidth: '48%',
-    flexGrow: 1,
-  },
-  shortcutText: {
-    fontSize: 12,
-    color: theme.colors.text,
-    marginTop: 8,
+    color: theme.colors.error,
     textAlign: 'center',
+    marginVertical: 12,
+  },
+  retryButton: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: theme.colors.white,
+    fontWeight: '600',
   },
 });
 

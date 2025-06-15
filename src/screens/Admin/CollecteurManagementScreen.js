@@ -16,64 +16,94 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
-
-// MODIFICATION: Importer le hook au lieu des données mockées
-import { useAdminCollecteurs } from '../../hooks/useAdminCollecteurs';
+import { collecteurService } from '../../services';
 
 const CollecteurManagementScreen = ({ navigation }) => {
-  // MODIFICATION: Utiliser le hook au lieu des données mockées
-  const {
-    collecteurs,
-    loading,
-    error,
-    hasMore,
-    totalElements,
-    refreshing,
-    fetchCollecteurs,
-    createCollecteur,
-    updateCollecteur,
-    toggleCollecteurStatus,
-    refreshCollecteurs,
-    loadMoreCollecteurs,
-    clearError,
-  } = useAdminCollecteurs();
-
-  // États locaux pour les filtres
-  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
+  // États pour les données
+  const [collecteurs, setCollecteurs] = useState([]); // ✅ INITIALISATION CORRECTE
+  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]); // ✅ INITIALISATION CORRECTE
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // États pour les filtres
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState('all'); // all, active, inactive
+  const [filter, setFilter] = useState('all');
+  const [totalElements, setTotalElements] = useState(0);
 
-  // MODIFICATION: Utiliser les collecteurs du hook
+  // Charger les collecteurs au démarrage
+  useEffect(() => {
+    loadCollecteurs();
+  }, []);
+
+  // Filtrer quand les données ou filtres changent
   useEffect(() => {
     filterCollecteurs();
   }, [searchQuery, filter, collecteurs]);
 
+  const loadCollecteurs = async (showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true);
+      setError(null);
+      
+      const response = await collecteurService.getAllCollecteurs();
+      
+      if (response.success) {
+        // ✅ VÉRIFICATION AVANT ASSIGNATION
+        const collecteursData = Array.isArray(response.data) ? response.data : [];
+        setCollecteurs(collecteursData);
+        setTotalElements(collecteursData.length);
+      } else {
+        setError(response.error || 'Erreur lors du chargement des collecteurs');
+        setCollecteurs([]); // ✅ FALLBACK SÉCURISÉ
+      }
+    } catch (err) {
+      console.error('Erreur lors du chargement des collecteurs:', err);
+      setError(err.message || 'Erreur lors du chargement des collecteurs');
+      setCollecteurs([]); // ✅ FALLBACK SÉCURISÉ
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   const filterCollecteurs = () => {
-    let filtered = collecteurs;
+    // ✅ VÉRIFICATION AVANT FILTER
+    if (!Array.isArray(collecteurs)) {
+      setFilteredCollecteurs([]);
+      return;
+    }
+
+    let filtered = [...collecteurs]; // ✅ COPIE SÉCURISÉE
 
     // Filtrer par statut
     if (filter !== 'all') {
       filtered = filtered.filter(collecteur => 
-        filter === 'active' ? collecteur.active : !collecteur.active
+        collecteur && (filter === 'active' ? collecteur.active : !collecteur.active)
       );
     }
 
     // Filtrer par recherche
     if (searchQuery.trim()) {
-      filtered = filtered.filter(collecteur =>
-        collecteur.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        collecteur.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        collecteur.adresseMail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (collecteur.telephone && collecteur.telephone.includes(searchQuery))
-      );
+      filtered = filtered.filter(collecteur => {
+        if (!collecteur) return false;
+        
+        const searchLower = searchQuery.toLowerCase();
+        return (
+          (collecteur.nom || '').toLowerCase().includes(searchLower) ||
+          (collecteur.prenom || '').toLowerCase().includes(searchLower) ||
+          (collecteur.adresseMail || '').toLowerCase().includes(searchLower) ||
+          (collecteur.telephone || '').includes(searchQuery)
+        );
+      });
     }
 
     setFilteredCollecteurs(filtered);
   };
 
-  // MODIFICATION: Utiliser la fonction du hook
   const onRefresh = () => {
-    refreshCollecteurs();
+    setRefreshing(true);
+    loadCollecteurs(false);
   };
 
   const handleAddCollecteur = () => {
@@ -87,135 +117,142 @@ const CollecteurManagementScreen = ({ navigation }) => {
     });
   };
 
-  // MODIFICATION: Utiliser la fonction du hook
   const handleToggleStatus = async (collecteur) => {
+    if (!collecteur) return;
+    
     const newStatus = !collecteur.active;
     const action = newStatus ? 'activer' : 'désactiver';
-
+    
     Alert.alert(
-      `Confirmation`,
-      `Êtes-vous sûr de vouloir ${action} le compte de ${collecteur.prenom} ${collecteur.nom} ?`,
+      'Confirmation',
+      `Voulez-vous ${action} ${collecteur.prenom} ${collecteur.nom} ?`,
       [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
+        { text: 'Annuler', style: 'cancel' },
         {
           text: 'Confirmer',
           onPress: async () => {
-            const result = await toggleCollecteurStatus(collecteur.id, newStatus);
-            
-            if (result.success) {
-              const message = newStatus
-                ? `Le compte de ${collecteur.prenom} ${collecteur.nom} a été activé avec succès.`
-                : `Le compte de ${collecteur.prenom} ${collecteur.nom} a été désactivé avec succès.`;
-              
-              Alert.alert('Succès', message);
-            } else {
-              Alert.alert('Erreur', result.error || 'Une erreur est survenue');
+            try {
+              const response = await collecteurService.toggleStatus(collecteur.id, newStatus);
+              if (response.success) {
+                loadCollecteurs(false);
+                Alert.alert('Succès', `Collecteur ${action} avec succès`);
+              } else {
+                Alert.alert('Erreur', response.error || `Erreur lors de l'${action}ion`);
+              }
+            } catch (err) {
+              Alert.alert('Erreur', err.message || `Erreur lors de l'${action}ion`);
             }
-          },
-        },
+          }
+        }
       ]
     );
   };
 
-  const handleViewCollecteur = (collecteur) => {
+  const handleViewDetails = (collecteur) => {
+    if (!collecteur) return;
     navigation.navigate('CollecteurDetailScreen', { collecteur });
   };
 
-  const renderCollecteurItem = ({ item }) => (
-    <Card style={styles.collecteurCard}>
-      <View style={styles.collecteurHeader}>
-        <View style={styles.collecteurInfo}>
-          <Text style={styles.collecteurName}>{item.prenom} {item.nom}</Text>
-          <Text style={styles.collecteurEmail}>{item.adresseMail}</Text>
-        </View>
-        <View style={[
-          styles.statusBadge, 
-          item.active ? styles.activeBadge : styles.inactiveBadge
-        ]}>
-          <Text style={styles.statusText}>
-            {item.active ? 'Actif' : 'Inactif'}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.collecteurDetails}>
-        <View style={styles.detailItem}>
-          <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.telephone || 'Non renseigné'}</Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="business-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>
-            {item.agence?.nomAgence || 'Agence non définie'}
-          </Text>
-        </View>
-        <View style={styles.detailItem}>
-          <Ionicons name="people-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>
-            {item.totalClients || 0} client{(item.totalClients || 0) !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      </View>
-      
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleViewCollecteur(item)}
-        >
-          <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Voir</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleEditCollecteur(item)}
-        >
-          <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Modifier</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleToggleStatus(item)}
-        >
-          <Ionicons 
-            name={item.active ? "close-circle-outline" : "checkmark-circle-outline"} 
-            size={18} 
-            color={item.active ? theme.colors.error : theme.colors.success} 
-          />
-          <Text 
-            style={[
-              styles.actionButtonText, 
-              { color: item.active ? theme.colors.error : theme.colors.success }
-            ]}
-          >
-            {item.active ? 'Désactiver' : 'Activer'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </Card>
-  );
+  // ✅ VÉRIFICATION SÉCURISÉE POUR LE RENDU
+  const renderCollecteurItem = ({ item }) => {
+    // ✅ VÉRIFICATION DE L'ITEM
+    if (!item) return null;
 
-  // MODIFICATION: Gestion d'erreur du hook
-  if (error) {
+    return (
+      <Card style={styles.collecteurCard}>
+        <View style={styles.collecteurHeader}>
+          <View style={styles.collecteurInfo}>
+            <Text style={styles.collecteurName}>
+              {`${item.prenom || ''} ${item.nom || ''}`.trim() || 'Nom inconnu'}
+            </Text>
+            <Text style={styles.collecteurEmail}>
+              {item.adresseMail || 'Email non renseigné'}
+            </Text>
+          </View>
+          <View style={[
+            styles.statusBadge,
+            item.active ? styles.activeBadge : styles.inactiveBadge
+          ]}>
+            <Text style={styles.statusText}>
+              {item.active ? 'Actif' : 'Inactif'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.collecteurDetails}>
+          <View style={styles.detailItem}>
+            <Ionicons name="call" size={16} color={theme.colors.gray} />
+            <Text style={styles.detailText}>
+              {item.telephone || 'Non renseigné'}
+            </Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="business" size={16} color={theme.colors.gray} />
+            <Text style={styles.detailText}>
+              {item.agence?.nomAgence || 'Agence non définie'}
+            </Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="cash" size={16} color={theme.colors.gray} />
+            <Text style={styles.detailText}>
+              Montant max: {item.montantMaxRetrait || 0} FCFA
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleViewDetails(item)}
+          >
+            <Ionicons name="eye" size={16} color={theme.colors.primary} />
+            <Text style={styles.actionButtonText}>Détails</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditCollecteur(item)}
+          >
+            <Ionicons name="pencil" size={16} color={theme.colors.primary} />
+            <Text style={styles.actionButtonText}>Modifier</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleToggleStatus(item)}
+          >
+            <Ionicons 
+              name={item.active ? "pause" : "play"} 
+              size={16} 
+              color={item.active ? theme.colors.warning : theme.colors.success} 
+            />
+            <Text style={[
+              styles.actionButtonText,
+              { color: item.active ? theme.colors.warning : theme.colors.success }
+            ]}>
+              {item.active ? 'Désactiver' : 'Activer'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    );
+  };
+
+  // ✅ RENDU CONDITIONNEL AVEC GESTION D'ERREUR
+  if (error && !loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header
+        <Header 
           title="Gestion des collecteurs"
+          showBackButton={true}
           onBackPress={() => navigation.goBack()}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Ionicons name="alert-circle" size={64} color={theme.colors.error} />
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity
             style={styles.retryButton}
-            onPress={() => {
-              clearError();
-              fetchCollecteurs();
-            }}
+            onPress={() => loadCollecteurs()}
           >
             <Text style={styles.retryButtonText}>Réessayer</Text>
           </TouchableOpacity>
@@ -226,8 +263,9 @@ const CollecteurManagementScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header
+      <Header 
         title="Gestion des collecteurs"
+        showBackButton={true}
         onBackPress={() => navigation.goBack()}
         rightComponent={
           <TouchableOpacity
@@ -296,9 +334,9 @@ const CollecteurManagementScreen = ({ navigation }) => {
           </View>
         ) : (
           <FlatList
-            data={filteredCollecteurs}
+            data={filteredCollecteurs} // ✅ TOUJOURS UN TABLEAU
             renderItem={renderCollecteurItem}
-            keyExtractor={item => item.id.toString()}
+            keyExtractor={item => item?.id?.toString() || Math.random().toString()} // ✅ FALLBACK SÉCURISÉ
             contentContainerStyle={styles.collecteursList}
             refreshControl={
               <RefreshControl
@@ -306,15 +344,6 @@ const CollecteurManagementScreen = ({ navigation }) => {
                 onRefresh={onRefresh}
                 colors={[theme.colors.primary]}
               />
-            }
-            onEndReached={loadMoreCollecteurs}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              loading && collecteurs.length > 0 ? (
-                <View style={styles.footerLoading}>
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                </View>
-              ) : null
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
@@ -339,7 +368,6 @@ const CollecteurManagementScreen = ({ navigation }) => {
   );
 };
 
-// MODIFICATION: Ajout de styles pour l'état d'erreur
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -482,10 +510,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textLight,
   },
-  footerLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
   emptyContainer: {
     paddingVertical: 60,
     alignItems: 'center',
@@ -508,7 +532,6 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontWeight: '500',
   },
-  // MODIFICATION: Nouveaux styles pour l'état d'erreur
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
