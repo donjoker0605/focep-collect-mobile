@@ -72,7 +72,7 @@ export default function LoginScreen({ navigation }) {
       <TextInput
         label="Email"
         value={email}
-        onChangeText={setEmail} // ✅ Directement setEmail, pas de transformation
+        onChangeText={setEmail} 
         mode="outlined"
         style={styles.input}
         autoCapitalize="none"
@@ -84,7 +84,7 @@ export default function LoginScreen({ navigation }) {
       <TextInput
         label="Mot de passe"
         value={password}
-        onChangeText={setPassword} // ✅ Directement setPassword
+        onChangeText={setPassword} 
         mode="outlined"
         secureTextEntry
         style={styles.input}
