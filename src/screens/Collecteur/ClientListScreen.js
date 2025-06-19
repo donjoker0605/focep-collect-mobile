@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  TextInput,
   ActivityIndicator,
   SafeAreaView,
   RefreshControl,
@@ -16,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
-import Button from '../../components/Button/Button';
 import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { clientService } from '../../services';
@@ -27,10 +25,12 @@ const ClientListScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // NAVIGATION CORRIGÉE - SIMPLE ET DIRECTE
+  // Debug effect
+  useEffect(() => {
+    console.log('Current clients:', clients);
+  }, [clients]);
+
   const handleClientPress = (client) => {
-    console.log('🎯 Navigation vers client:', client.id);
-    
     navigation.navigate('ClientDetail', {
       client: client,
       clientId: client.id
@@ -42,11 +42,18 @@ const ClientListScreen = ({ navigation }) => {
       if (showRefreshing) setRefreshing(true);
       else setLoading(true);
       
-      const clientsData = await clientService.getClientsByCollecteur(user.id);
-      setClients(Array.isArray(clientsData) ? clientsData : []);
+      const response = await clientService.getClientsByCollecteur(user.id);
+      console.log('API Response:', response);
+      
+      // Convertir l'objet en tableau
+      const clientsData = response.data ? Object.values(response.data) : [];
+      console.log('Clients data:', clientsData);
+      
+      setClients(clientsData);
       
     } catch (err) {
       console.error('❌ Erreur chargement clients:', err);
+      Alert.alert('Erreur', 'Impossible de charger les clients');
       setClients([]);
     } finally {
       setLoading(false);
@@ -60,17 +67,20 @@ const ClientListScreen = ({ navigation }) => {
     }, [user?.id, loadClients])
   );
 
-  const renderClientItem = ({ item }) => (
-    <Card style={styles.clientCard}>
-      <TouchableOpacity onPress={() => handleClientPress(item)}>
-        <View style={styles.clientHeader}>
-          <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
-          <Text style={styles.clientAccount}>#{item.id}</Text>
-        </View>
-        <Text style={styles.clientCni}>{item.numeroCni}</Text>
-      </TouchableOpacity>
-    </Card>
-  );
+  const renderClientItem = ({ item }) => {
+    console.log('Rendering client:', item.id);
+    return (
+      <Card style={styles.clientCard}>
+        <TouchableOpacity onPress={() => handleClientPress(item)}>
+          <View style={styles.clientHeader}>
+            <Text style={styles.clientName}>{item.prenom} {item.nom}</Text>
+            <Text style={styles.clientAccount}>#{item.id}</Text>
+          </View>
+          <Text style={styles.clientCni}>{item.numeroCni}</Text>
+        </TouchableOpacity>
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -95,7 +105,13 @@ const ClientListScreen = ({ navigation }) => {
             renderItem={renderClientItem}
             keyExtractor={item => item.id.toString()}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => loadClients(true)} />
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={() => loadClients(true)} 
+              />
+            }
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>Aucun client trouvé</Text>
             }
           />
         )}
@@ -141,6 +157,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: theme.colors.textLight,
   },
 });
 

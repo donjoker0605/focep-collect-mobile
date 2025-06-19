@@ -79,15 +79,15 @@ class ClientService extends BaseApiService {
   /**
    * Récupérer les clients d'un collecteur
    */
-  async getClientsByCollecteur(collecteurId, params = {}) {
-    try {
-      console.log('📱 API: GET /collecteurs/clients/', collecteurId);
-      const response = await this.axios.get(`/collecteurs/${collecteurId}/clients`, { params });
-      return this.formatResponse(response, 'Clients du collecteur récupérés');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des clients');
-    }
-  }
+	 async getClientsByCollecteur(collecteurId, params = {}) {
+	  try {
+		console.log('📱 API: GET /clients/collecteur/', collecteurId);
+		const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
+		return this.formatResponse(response, 'Clients du collecteur récupérés');
+	  } catch (error) {
+		throw this.handleError(error, 'Erreur lors de la récupération des clients');
+	  }
+	}
 
   /**
    * Rechercher des clients
@@ -103,6 +103,16 @@ class ClientService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la recherche');
     }
   }
+  
+	async getClientWithTransactions(clientId) {
+		try {
+			console.log('📱 API: GET /clients/', clientId, '/with-transactions');
+			const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+			return this.formatResponse(response, 'Détails client récupérés');
+		} catch (error) {
+			throw this.handleError(error, 'Erreur lors de la récupération des détails du client');
+		}
+	}
 
   /**
    * Récupérer l'historique des transactions d'un client

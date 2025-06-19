@@ -1,68 +1,49 @@
-// app/client-detail.js ou src/screens/Collecteur/ClientDetailScreen.js - EXPO ROUTER VERSION
+// src/screens/Collecteur/ClientDetailScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
   RefreshControl,
+  FlatList,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-import { clientService } from '../../services';
+import Header from '../../components/Header/Header';
+import Card from '../../components/Card/Card';
+import Button from '../../components/Button/Button';
 import theme from '../../theme';
+import { clientService } from '../../services';
 import { formatCurrency } from '../../utils/formatters';
-import { formatDate, formatTime } from '../../utils/dateUtils';
 
 const ClientDetailScreen = () => {
-  // ✅ RÉCUPÉRATION DES PARAMÈTRES EXPO ROUTER
-  const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const route = useRoute();
   
-  console.log('🔍 ClientDetail Expo Router - Paramètres reçus:', params);
+  // Récupération des paramètres
+  const { client: initialClient, clientId } = route.params || {};
   
-  // ✅ EXTRACTION SÉCURISÉE DES PARAMÈTRES
-  const clientId = params.clientId ? parseInt(params.clientId) : null;
-  
-  // ✅ GESTION DES DONNÉES CLIENT DEPUIS LES PARAMÈTRES
-  let initialClient = null;
-  if (params.clientData) {
-    try {
-      initialClient = JSON.parse(params.clientData);
-      console.log('✅ Données client décodées:', initialClient);
-    } catch (error) {
-      console.error('❌ Erreur décodage clientData:', error);
-    }
-  }
-
-  // États
-  const [client, setClient] = useState(initialClient);
+  const [client, setClient] = useState(initialClient || null);
   const [transactions, setTransactions] = useState([]);
+  const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(!initialClient);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  
-  console.log('🎯 État initial:', {
-    clientId,
-    hasInitialClient: !!initialClient,
-    clientNom: initialClient?.nom
-  });
 
-  // ✅ FONCTION DE CHARGEMENT DES DÉTAILS COMPLETS
+  // Chargement des détails du client en une seule requête
   const loadClientDetails = useCallback(async (showRefreshing = false) => {
-    if (!clientId) {
-      console.error('❌ Aucun ID client fourni');
-      setError('Aucun client sélectionné');
-      setLoading(false);
-      return;
-    }
-
     try {
-      console.log('🔄 Chargement détails client:', clientId);
-      
+      const id = clientId || client?.id;
+      if (!id) throw new Error('Aucun ID client fourni');
+
       if (showRefreshing) {
         setRefreshing(true);
       } else {
@@ -71,373 +52,273 @@ const ClientDetailScreen = () => {
       
       setError(null);
 
-      const clientDetails = await clientService.getClientDetails(clientId);
-      
-      console.log('✅ Détails client récupérés:', clientDetails);
-      
-      if (clientDetails) {
-        setClient(clientDetails);
-        setTransactions(clientDetails.transactions || []);
+      // Une seule requête pour tout récupérer
+      const response = await clientService.getClientWithTransactions(id);
+
+      if (response.success) {
+        setClient(response.data);
+        setTransactions(response.data.transactions || []);
+        setBalance(response.data.soldeTotal || 0);
       } else {
-        throw new Error('Détails du client non trouvés');
+        throw new Error(response.message || 'Échec du chargement du client');
       }
       
     } catch (err) {
-      console.error('❌ Erreur chargement détails client:', err);
-      setError(err.message || 'Erreur lors du chargement des détails du client');
-      
-      // Garder les données initiales si disponibles
-      if (!client && initialClient) {
-        setClient(initialClient);
-      }
+      console.error('Erreur chargement détails client:', err);
+      setError(err.message || 'Erreur lors du chargement des détails');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [clientId, initialClient, client]);
+  }, [client?.id, clientId]);
 
-  // ✅ EFFET DE CHARGEMENT INITIAL
+  // Effet de chargement initial
   useEffect(() => {
-    console.log('🔄 useEffect ClientDetail - clientId:', clientId, 'initialClient:', !!initialClient);
-    
-    if (clientId && !initialClient) {
-      // Pas de données initiales, charger depuis l'API
+    if (!client && clientId) {
       loadClientDetails();
-    } else if (clientId && initialClient) {
-      // Données initiales disponibles, charger en arrière-plan
-      loadClientDetails();
-    } else {
-      // Aucun ID client
-      setError('Aucun client spécifié');
-      setLoading(false);
     }
   }, [clientId, loadClientDetails]);
 
-  // ✅ FONCTIONS D'ACTION
-  const handleRefresh = () => {
-    if (clientId) {
-      loadClientDetails(true);
+  // Gestion du rafraîchissement
+  const onRefresh = () => {
+    loadClientDetails(true);
+  };
+
+  // Navigation vers l'écran de transaction
+	const handleNewTransaction = (type) => {
+	  if (!client) return;
+	  
+	  navigation.navigate('TransactionForm', { 
+		client,
+		transactionType: type,
+		onSuccess: loadClientDetails
+	  });
+	};
+
+  // Navigation vers le détail d'une transaction
+	const handleViewTransaction = (transaction) => {
+	  navigation.navigate('TransactionDetail', { 
+		transaction,
+		clientId: client?.id 
+	  });
+	};
+
+  // Calcul des totaux (utilise les données directes du backend si disponibles)
+  const { totalEpargne = 0, totalRetraits = 0 } = client || {};
+  const calculatedTotals = calculateTotals();
+
+  function calculateTotals() {
+    // Si le backend fournit déjà les totaux, on les utilise
+    if (client?.totalEpargne !== undefined && client?.totalRetraits !== undefined) {
+      return {
+        totalEpargne: client.totalEpargne,
+        totalRetrait: client.totalRetraits
+      };
     }
-  };
 
-  const handleNewTransaction = (type) => {
-    if (!client) return;
+    // Sinon on calcule côté client
+    return transactions.reduce((totals, t) => {
+      if (t.sens?.toUpperCase() === 'EPARGNE') {
+        totals.totalEpargne += t.montant || 0;
+      } else {
+        totals.totalRetrait += t.montant || 0;
+      }
+      return totals;
+    }, { totalEpargne: 0, totalRetrait: 0 });
+  }
+
+  // Rendu d'une transaction
+  const renderTransactionItem = ({ item }) => {
+    if (!item) return null;
     
-    router.push({
-      pathname: '/collecte',
-      params: {
-        selectedTab: type,
-        preSelectedClientId: client.id,
-        preSelectedClientData: JSON.stringify(client)
-      }
-    });
-  };
-
-  const handleTransactionPress = (transaction) => {
-    router.push({
-      pathname: '/collecte-detail',
-      params: {
-        transactionId: transaction.id,
-        transactionData: JSON.stringify(transaction)
-      }
-    });
-  };
-
-  const handleGoBack = () => {
-    router.back();
-  };
-
-  // ✅ COMPOSANTS UI
-  const Header = ({ title, onBackPress }) => (
-    <View style={styles.headerContainer}>
-      <TouchableOpacity onPress={onBackPress} style={styles.backButton}>
-        <Ionicons name="arrow-back" size={24} color="white" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{title}</Text>
-      <View style={styles.headerSpacer} />
-    </View>
-  );
-
-  const Card = ({ children, style, title }) => (
-    <View style={[styles.card, style]}>
-      {title && <Text style={styles.cardTitle}>{title}</Text>}
-      {children}
-    </View>
-  );
-
-  const DetailRow = ({ label, value, icon, style }) => (
-    <View style={[styles.detailRow, style]}>
-      <View style={styles.detailLabelContainer}>
-        {icon && <Ionicons name={icon} size={16} color={theme.colors.textLight} />}
-        <Text style={[styles.detailLabel, icon && { marginLeft: 8 }]}>{label}</Text>
-      </View>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
-
-  // ✅ RENDU DES TRANSACTIONS
-  const renderTransaction = (transaction, index) => {
-    const isEpargne = transaction.typeMouvement === 'EPARGNE' || transaction.sens === 'epargne';
-    const date = new Date(transaction.dateOperation);
+    const isEpargne = item.sens?.toUpperCase() === 'EPARGNE';
+    const dateFormatted = item.dateOperation ? 
+      format(new Date(item.dateOperation), 'dd/MM/yyyy à HH:mm', { locale: fr }) : 
+      'Date inconnue';
     
     return (
-      <TouchableOpacity 
-        key={`transaction-${transaction.id}-${index}`}
+      <TouchableOpacity
         style={styles.transactionItem}
-        onPress={() => handleTransactionPress(transaction)}
+        onPress={() => handleViewTransaction(item)}
       >
-        <View style={styles.transactionHeader}>
-          <View style={[
-            styles.transactionIcon,
-            { backgroundColor: isEpargne ? `${theme.colors.success}20` : `${theme.colors.error}20` }
-          ]}>
-            <Ionicons 
-              name={isEpargne ? "arrow-down" : "arrow-up"} 
-              size={16} 
-              color={isEpargne ? theme.colors.success : theme.colors.error} 
-            />
-          </View>
-          <View style={styles.transactionInfo}>
-            <Text style={styles.transactionType}>
-              {isEpargne ? 'Épargne' : 'Retrait'}
-            </Text>
-            <Text style={styles.transactionDate}>
-              {formatDate(date)} à {formatTime(date)}
-            </Text>
-          </View>
-          <Text style={[
-            styles.transactionAmount,
-            { color: isEpargne ? theme.colors.success : theme.colors.error }
-          ]}>
-            {isEpargne ? '+' : '-'} {formatCurrency(transaction.montant)} FCFA
+        <View style={styles.transactionIcon}>
+          <Ionicons 
+            name={isEpargne ? "add-circle" : "remove-circle"} 
+            size={24} 
+            color={isEpargne ? theme.colors.success : theme.colors.error} 
+          />
+        </View>
+        
+        <View style={styles.transactionInfo}>
+          <Text style={styles.transactionType}>
+            {isEpargne ? 'Épargne' : 'Retrait'}
+          </Text>
+          <Text style={styles.transactionDate}>
+            {dateFormatted}
           </Text>
         </View>
-        {transaction.libelle && (
-          <Text style={styles.transactionDescription}>{transaction.libelle}</Text>
-        )}
+        
+        <Text style={[
+          styles.transactionAmount,
+          { color: isEpargne ? theme.colors.success : theme.colors.error }
+        ]}>
+          {isEpargne ? '+' : '-'}{formatCurrency(item.montant)}
+        </Text>
       </TouchableOpacity>
     );
   };
 
-  // ✅ ÉTATS DE CHARGEMENT ET D'ERREUR
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header
-          title="Détails du client"
-          onBackPress={handleGoBack}
+          title="Détails client"
+          onBackPress={() => navigation.goBack()}
         />
-        <View style={[styles.content, styles.centerContent]}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Chargement des détails...</Text>
+          <Text style={styles.loadingText}>Chargement...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
-  if (error && !client) {
+  if (error || !client) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <Header
-          title="Détails du client"
-          onBackPress={handleGoBack}
+          title="Détails client"
+          onBackPress={() => navigation.goBack()}
         />
-        <View style={[styles.content, styles.centerContent]}>
-          <Ionicons name="alert-circle" size={60} color={theme.colors.error} />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
           <Text style={styles.errorTitle}>Erreur</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
-            <Text style={styles.retryButtonText}>Réessayer</Text>
-          </TouchableOpacity>
+          <Text style={styles.errorMessage}>
+            {error || 'Impossible de charger les détails du client'}
+          </Text>
+          <Button
+            title="Réessayer"
+            onPress={loadClientDetails}
+            style={styles.retryButton}
+          />
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
-
-  if (!client) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <Header
-          title="Détails du client"
-          onBackPress={handleGoBack}
-        />
-        <View style={[styles.content, styles.centerContent]}>
-          <Ionicons name="person-outline" size={60} color={theme.colors.gray} />
-          <Text style={styles.errorTitle}>Client introuvable</Text>
-          <Text style={styles.errorMessage}>Les informations de ce client ne sont pas disponibles.</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ✅ CALCUL DES STATISTIQUES
-  const totalEpargne = client.totalEpargne || 
-    transactions.filter(t => t.typeMouvement === 'EPARGNE' || t.sens === 'epargne')
-                .reduce((sum, t) => sum + (t.montant || 0), 0);
-                
-  const totalRetraits = client.totalRetraits || 
-    transactions.filter(t => t.typeMouvement === 'RETRAIT' || t.sens === 'retrait')
-                .reduce((sum, t) => sum + (t.montant || 0), 0);
-                
-  const soldeActuel = client.soldeTotal || (totalEpargne - totalRetraits);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Header
-        title="Détails du client"
-        onBackPress={handleGoBack}
+        title="Détails client"
+        onBackPress={() => navigation.goBack()}
       />
       
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.scrollContent}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
+            onRefresh={onRefresh}
             colors={[theme.colors.primary]}
           />
         }
       >
-        {/* ✅ INFORMATIONS PERSONNELLES */}
-        <Card title="Informations personnelles" style={styles.infoCard}>
-          <DetailRow 
-            label="Nom complet" 
-            value={`${client.prenom} ${client.nom}`}
-            icon="person-outline"
-          />
-          <DetailRow 
-            label="N° CNI" 
-            value={client.numeroCni}
-            icon="id-card-outline"
-          />
-          <DetailRow 
-            label="N° de compte" 
-            value={client.numeroCompte || `#${client.id}`}
-            icon="card-outline"
-          />
-          {client.telephone && (
-            <DetailRow 
-              label="Téléphone" 
-              value={client.telephone}
-              icon="call-outline"
-            />
-          )}
-          {client.ville && (
-            <DetailRow 
-              label="Ville" 
-              value={client.ville}
-              icon="location-outline"
-            />
-          )}
-          {client.quartier && (
-            <DetailRow 
-              label="Quartier" 
-              value={client.quartier}
-            />
-          )}
-          <DetailRow 
-            label="Statut" 
-            value={client.valide ? 'Actif' : 'Inactif'}
-            icon={client.valide ? "checkmark-circle-outline" : "close-circle-outline"}
-          />
-        </Card>
-
-        {/* ✅ RÉSUMÉ FINANCIER */}
-        <Card title="Résumé financier" style={styles.financialCard}>
-          <View style={styles.balanceContainer}>
-            <Text style={styles.balanceLabel}>Solde actuel</Text>
-            <Text style={[
-              styles.balanceAmount,
-              { color: soldeActuel >= 0 ? theme.colors.success : theme.colors.error }
-            ]}>
-              {formatCurrency(soldeActuel)} FCFA
+        {/* Informations personnelles */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Informations personnelles</Text>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Nom complet</Text>
+            <Text style={styles.infoValue}>
+              {client.prenom} {client.nom}
             </Text>
           </View>
           
-          <View style={styles.financialStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Total épargné</Text>
-              <Text style={[styles.statValue, { color: theme.colors.success }]}>
-                +{formatCurrency(totalEpargne)} FCFA
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Total retiré</Text>
-              <Text style={[styles.statValue, { color: theme.colors.error }]}>
-                -{formatCurrency(totalRetraits)} FCFA
-              </Text>
-            </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Téléphone</Text>
+            <Text style={styles.infoValue}>{client.telephone}</Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Date d'inscription</Text>
+            <Text style={styles.infoValue}>
+              {client.dateCreation ? 
+                format(new Date(client.dateCreation), 'dd MMMM yyyy', { locale: fr }) :
+                'Non disponible'
+              }
+            </Text>
           </View>
         </Card>
 
-        {/* ✅ BOUTONS D'ACTION */}
-        <View style={styles.actionButtonsContainer}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.epargneButton]}
-            onPress={() => handleNewTransaction('epargne')}
-          >
-            <Ionicons name="add-circle" size={20} color="white" />
-            <Text style={styles.actionButtonText}>Nouvelle épargne</Text>
-          </TouchableOpacity>
+        {/* Solde et actions */}
+        <Card style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>Solde actuel</Text>
+          <Text style={styles.balanceValue}>{formatCurrency(balance)}</Text>
           
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.retraitButton]}
-            onPress={() => handleNewTransaction('retrait')}
-          >
-            <Ionicons name="remove-circle" size={20} color="white" />
-            <Text style={styles.actionButtonText}>Nouveau retrait</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.transactionButtons}>
+            <Button
+              title="Nouvelle épargne"
+              onPress={() => handleNewTransaction('epargne')}
+              style={styles.epargneButton}
+              icon="add-circle"
+            />
+            
+            <Button
+              title="Nouveau retrait"
+              onPress={() => handleNewTransaction('retrait')}
+              style={styles.retraitButton}
+              variant="secondary"
+              icon="remove-circle"
+            />
+          </View>
+        </Card>
 
-        {/* ✅ HISTORIQUE DES TRANSACTIONS */}
-        <Card title={`Historique (${transactions.length} transactions)`} style={styles.transactionsCard}>
-          {transactions.length > 0 ? (
-            <View>
-              {transactions.slice(0, 10).map(renderTransaction)}
-              {transactions.length > 10 && (
-                <TouchableOpacity style={styles.viewAllButton}>
-                  <Text style={styles.viewAllText}>Voir toutes les transactions</Text>
-                </TouchableOpacity>
-              )}
+        {/* Résumé financier */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Résumé financier</Text>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Total épargné</Text>
+            <Text style={[styles.infoValue, { color: theme.colors.success }]}>
+              {formatCurrency(calculatedTotals.totalEpargne)}
+            </Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Total retiré</Text>
+            <Text style={[styles.infoValue, { color: theme.colors.error }]}>
+              {formatCurrency(calculatedTotals.totalRetrait)}
+            </Text>
+          </View>
+        </Card>
+
+        {/* Dernières transactions */}
+        <Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Dernières transactions</Text>
+          
+          {transactions.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="receipt-outline" size={48} color={theme.colors.textLight} />
+              <Text style={styles.emptyText}>Aucune transaction enregistrée</Text>
             </View>
           ) : (
-            <View style={styles.noTransactions}>
-              <Ionicons name="document-text-outline" size={40} color={theme.colors.gray} />
-              <Text style={styles.noTransactionsText}>Aucune transaction pour ce client</Text>
-            </View>
+            <FlatList
+              data={transactions.slice(0, 10)} // Limite à 10 transactions pour éviter le surchargement
+              renderItem={renderTransactionItem}
+              keyExtractor={(item) => item?.id?.toString() || Math.random().toString()}
+              scrollEnabled={false}
+            />
           )}
         </Card>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
-// STYLES (identiques au précédent)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    minHeight: 60,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 32,
   },
   content: {
     flex: 1,
@@ -445,33 +326,59 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  centerContent: {
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.colors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: theme.colors.textLight,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.background,
     padding: 20,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.error,
+    marginTop: 16,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  retryButton: {
+    marginTop: 16,
+    width: '50%',
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
     padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
-  cardTitle: {
+  balanceCard: {
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+  },
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: theme.colors.text,
     marginBottom: 16,
   },
-  detailRow: {
+  infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -479,161 +386,84 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.lightGray,
   },
-  detailLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  detailLabel: {
+  infoLabel: {
     fontSize: 14,
     color: theme.colors.textLight,
   },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
+  infoValue: {
+    fontSize: 16,
     color: theme.colors.text,
-    maxWidth: '50%',
-    textAlign: 'right',
-  },
-  balanceContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingVertical: 16,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
+    fontWeight: '500',
   },
   balanceLabel: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    marginBottom: 4,
-  },
-  balanceAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  financialStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginBottom: 4,
-  },
-  statValue: {
     fontSize: 16,
-    fontWeight: 'bold',
+    color: theme.colors.white,
+    opacity: 0.8,
+    marginBottom: 8,
   },
-  actionButtonsContainer: {
+  balanceValue: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: theme.colors.white,
+    marginBottom: 24,
+  },
+  transactionButtons: {
     flexDirection: 'row',
-    marginBottom: 16,
     gap: 12,
   },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
   epargneButton: {
-    backgroundColor: theme.colors.success,
+    flex: 1,
+    backgroundColor: theme.colors.white,
   },
   retraitButton: {
-    backgroundColor: theme.colors.error,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 8,
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: theme.colors.white,
   },
   transactionItem: {
-    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.lightGray,
   },
-  transactionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   transactionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 12,
   },
   transactionInfo: {
     flex: 1,
   },
   transactionType: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
+    marginBottom: 2,
   },
   transactionDate: {
-    fontSize: 12,
+    fontSize: 14,
     color: theme.colors.textLight,
-    marginTop: 2,
   },
   transactionAmount: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  transactionDescription: {
-    fontSize: 12,
-    color: theme.colors.textLight,
-    marginTop: 4,
-    marginLeft: 44,
-  },
-  loadingText: {
-    marginTop: 12,
     fontSize: 16,
-    color: theme.colors.textLight,
+    fontWeight: '600',
   },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  noTransactions: {
+  emptyContainer: {
+    paddingVertical: 40,
     alignItems: 'center',
-    padding: 20,
   },
-  noTransactionsText: {
-    marginTop: 8,
+  emptyText: {
+    fontSize: 16,
     color: theme.colors.textLight,
-    textAlign: 'center',
+    marginTop: 12,
+  },
+  loadingMore: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   viewAllButton: {
     alignItems: 'center',
     padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.lightGray,
-    marginTop: 8,
   },
   viewAllText: {
     color: theme.colors.primary,

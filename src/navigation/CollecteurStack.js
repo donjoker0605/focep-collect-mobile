@@ -15,6 +15,7 @@ import ProfileScreen from '../screens/Collecteur/ProfileScreen';
 import ClientDetailScreen from '../screens/Collecteur/ClientDetailScreen';
 import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen';
 import CollecteDetailScreen from '../screens/Collecteur/CollecteDetailScreen';
+import TransactionDetailScreen from '../screens/Collecteur/TransactionDetailScreen'; 
 import NotificationsScreen from '../screens/Comon/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();

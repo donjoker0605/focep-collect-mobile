@@ -74,30 +74,43 @@ const CollecteScreen = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   
   // Charger la liste des clients
-  const loadClients = useCallback(async () => {
-    try {
-      setClientsLoading(true);
-      setError(null);
-      
-      // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
-      const clientsData = await clientService.getClientsByCollecteur(user.id);
-      const clientsList = Array.isArray(clientsData) ? clientsData : [];
-      
-      // Formater pour le SelectInput
-      const clientOptions = clientsList.map(client => ({
-        label: `${client.prenom} ${client.nom} ${client.numeroCni ? `(${client.numeroCni})` : ''}`,
-        value: client.id,
-        data: client
-      }));
-      
-      setClients(clientOptions);
-    } catch (err) {
-      console.error('Erreur chargement clients:', err);
-      setError(err.message);
-    } finally {
-      setClientsLoading(false);
-    }
-  }, [user.id]);
+	const loadClients = useCallback(async (showRefreshing = false) => {
+	  try {
+		if (showRefreshing) setRefreshing(true);
+		else setClientsLoading(true);
+		
+		const response = await clientService.getClientsByCollecteur(user.id);
+		console.log('API full response:', response);
+		
+		if (!response || !response.data) {
+		  throw new Error('Réponse API invalide');
+		}
+		
+		// Formatage des données selon la structure réçue
+		const clientsArray = Array.isArray(response.data) 
+		  ? response.data 
+		  : Object.values(response.data);
+		
+		const formattedClients = clientsArray.map(client => ({
+		  value: client.id || client._id,
+		  label: `${client.nom || ''} ${client.prenom || ''}`.trim(),
+		  data: client
+		}));
+		
+		setClients(formattedClients);
+		
+	  } catch (error) {
+		console.error('Erreur détaillée:', error.response || error);
+		Alert.alert(
+		  'Erreur',
+		  error.message || 'Impossible de charger les clients'
+		);
+		setClients([]);
+	  } finally {
+		setClientsLoading(false);
+		setRefreshing(false);
+	  }
+	}, [user.id]);
 
   // Réinitialiser le formulaire
   const resetForm = () => {
@@ -229,11 +242,15 @@ const CollecteScreen = ({ navigation, route }) => {
     }
   };
 
+	const [refreshing, setRefreshing] = useState(false);
+	
   // Charger les clients au démarrage
-  useEffect(() => {
-    loadClients();
-  }, [loadClients]);
-  
+	useEffect(() => {
+	  const fetchClients = async () => {
+		await loadClients();
+	  };
+	  fetchClients();
+	}, [loadClients]);  
   // Rendu des onglets
   const renderTabs = () => (
     <View style={styles.tabContainer}>

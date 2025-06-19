@@ -164,7 +164,7 @@ console.log('📋 EST-CE UN ARRAY?:', Array.isArray(response.data));
   const renderItem = ({ item }) => (
     <TouchableOpacity 
       style={styles.transactionItem}
-      onPress={() => navigation.navigate('CollecteDetail', { transaction: item })}
+      onPress={() => navigation.navigate('TransactionDetail', { transaction: item })}
     >
       <View style={styles.transactionLeft}>
         <Ionicons 
