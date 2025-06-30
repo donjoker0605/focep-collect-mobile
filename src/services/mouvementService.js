@@ -5,12 +5,12 @@ class MouvementService extends BaseApiService {
     super();
   }
 
-  // ✅ ÉPARGNE AVEC JOURNAL AUTOMATIQUE
+  // ÉPARGNE AVEC JOURNAL AUTOMATIQUE
   async enregistrerEpargne(data) {
     try {
       console.log('💰 Enregistrement épargne avec journal automatique:', data);
       
-      // ✅ PLUS BESOIN DE PASSER LE JOURNAL - IL EST CRÉÉ AUTOMATIQUEMENT
+      // PLUS BESOIN DE PASSER LE JOURNAL - IL EST CRÉÉ AUTOMATIQUEMENT
       const response = await this.axios.post('/mouvements/epargne', {
         clientId: data.clientId,
         collecteurId: data.collecteurId,
@@ -24,7 +24,7 @@ class MouvementService extends BaseApiService {
     }
   }
 
-  // ✅ RETRAIT AVEC JOURNAL AUTOMATIQUE
+  // RETRAIT AVEC JOURNAL AUTOMATIQUE
   async effectuerRetrait(data) {
     try {
       console.log('🏧 Effectuation retrait avec journal automatique:', data);
@@ -38,12 +38,22 @@ class MouvementService extends BaseApiService {
       
       return this.formatResponse(response, 'Retrait effectué avec succès');
     } catch (error) {
+		// Gestion spécifique des erreurs de validation solde collecteur
+		if (error.response?.data?.errorCode === 'SOLDE_COLLECTEUR_INSUFFISANT') {
+		  const message = error.response.data.message || 'Solde collecteur insuffisant';
+		  throw new Error(message);
+		}
+		
+		if (error.response?.data?.errorCode === 'AUCUNE_EPARGNE_JOURNEE') {
+		  throw new Error('Vous devez effectuer au moins une épargne avant de faire un retrait');
+		}
+		
       console.error('Erreur lors de l\'effectuation du retrait:', error);
       throw this.handleError(error, 'Erreur lors du retrait');
     }
   }
 
-  // ✅ RÉCUPÉRATION DES OPÉRATIONS DU JOUR POUR UN COLLECTEUR
+  // RÉCUPÉRATION DES OPÉRATIONS DU JOUR POUR UN COLLECTEUR
   async getOperationsDuJour(collecteurId, date = null) {
     try {
       const dateParam = date || new Date().toISOString().split('T')[0];
