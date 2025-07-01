@@ -79,15 +79,15 @@ class ClientService extends BaseApiService {
   /**
    * Récupérer les clients d'un collecteur
    */
-	 async getClientsByCollecteur(collecteurId, params = {}) {
-	  try {
-		console.log('📱 API: GET /clients/collecteur/', collecteurId);
-		const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
-		return this.formatResponse(response, 'Clients du collecteur récupérés');
-	  } catch (error) {
-		throw this.handleError(error, 'Erreur lors de la récupération des clients');
-	  }
-	}
+  async getClientsByCollecteur(collecteurId, params = {}) {
+    try {
+      console.log('📱 API: GET /clients/collecteur/', collecteurId);
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
+      return this.formatResponse(response, 'Clients du collecteur récupérés');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des clients');
+    }
+  }
 
   /**
    * Rechercher des clients
@@ -104,15 +104,15 @@ class ClientService extends BaseApiService {
     }
   }
   
-	async getClientWithTransactions(clientId) {
-		try {
-			console.log('📱 API: GET /clients/', clientId, '/with-transactions');
-			const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
-			return this.formatResponse(response, 'Détails client récupérés');
-		} catch (error) {
-			throw this.handleError(error, 'Erreur lors de la récupération des détails du client');
-		}
-	}
+  async getClientWithTransactions(clientId) {
+    try {
+      console.log('📱 API: GET /clients/', clientId, '/with-transactions');
+      const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+      return this.formatResponse(response, 'Détails client récupérés');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des détails du client');
+    }
+  }
 
   /**
    * Récupérer l'historique des transactions d'un client
@@ -251,44 +251,54 @@ class ClientService extends BaseApiService {
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la suppression');
     }
-	
-	// Nouvelle méthode pour mettre à jour la localisation
-	async updateClientLocation(clientId, locationData) {
-	  try {
-		console.log('📍 Mise à jour localisation client:', clientId);
-		
-		const response = await this.axios.put(
-		  `/clients/${clientId}/location`, 
-		  locationData
-		);
-		
-		return this.formatResponse(response, 'Localisation mise à jour');
-	  } catch (error) {
-		throw this.handleError(error, 'Erreur mise à jour localisation');
-	  }
-	}
-
-	// Nouvelle méthode pour obtenir la localisation
-	async getClientLocation(clientId) {
-	  try {
-		const response = await this.axios.get(`/clients/${clientId}/location`);
-		return this.formatResponse(response, 'Localisation récupérée');
-	  } catch (error) {
-		throw this.handleError(error, 'Erreur récupération localisation');
-	  }
-	}
-
-	// Nouvelle méthode pour obtenir les clients proches
-	async getNearbyClients(latitude, longitude, radiusKm = 5) {
-	  try {
-		const params = { latitude, longitude, radiusKm };
-		const response = await this.axios.get('/clients/location/nearby', { params });
-		return this.formatResponse(response, 'Clients proches récupérés');
-	  } catch (error) {
-		throw this.handleError(error, 'Erreur recherche clients proches');
-	  }
-	}
   }
-  
+
+  // ============================================
+  // NOUVELLES MÉTHODES GÉOLOCALISATION
+  // ============================================
+
+  /**
+   * Mettre à jour la localisation d'un client
+   */
+  async updateClientLocation(clientId, locationData) {
+    try {
+      console.log('📍 Mise à jour localisation client:', clientId);
+      
+      const response = await this.axios.put(
+        `/clients/${clientId}/location`, 
+        locationData
+      );
+      
+      return this.formatResponse(response, 'Localisation mise à jour');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur mise à jour localisation');
+    }
+  }
+
+  /**
+   * Obtenir la localisation d'un client
+   */
+  async getClientLocation(clientId) {
+    try {
+      const response = await this.axios.get(`/clients/${clientId}/location`);
+      return this.formatResponse(response, 'Localisation récupérée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur récupération localisation');
+    }
+  }
+
+  /**
+   * Obtenir les clients proches d'une position
+   */
+  async getNearbyClients(latitude, longitude, radiusKm = 5) {
+    try {
+      const params = { latitude, longitude, radiusKm };
+      const response = await this.axios.get('/clients/location/nearby', { params });
+      return this.formatResponse(response, 'Clients proches récupérés');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur recherche clients proches');
+    }
+  }
+}
 
 export default new ClientService();

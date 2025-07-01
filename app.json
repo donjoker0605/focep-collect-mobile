@@ -9,13 +9,26 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FOCEP Collecte utilise votre localisation pour enregistrer automatiquement la position géographique de vos clients lors de leur création.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FOCEP Collecte utilise votre localisation pour enregistrer automatiquement la position géographique de vos clients lors de leur création.",
+        "NSCameraUsageDescription": "FOCEP Collecte utilise l'appareil photo pour prendre des photos des documents clients.",
+        "NSPhotoLibraryUsageDescription": "FOCEP Collecte accède à votre bibliothèque photo pour sélectionner des documents clients."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -32,7 +45,25 @@
         }
       ],
       "expo-build-properties",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FOCEP Collecte utilise votre localisation pour enregistrer automatiquement la position géographique de vos clients lors de leur création.",
+          "locationAlwaysPermission": "FOCEP Collecte utilise votre localisation pour enregistrer automatiquement la position géographique de vos clients lors de leur création.",
+          "locationWhenInUsePermission": "FOCEP Collecte utilise votre localisation pour enregistrer automatiquement la position géographique de vos clients lors de leur création.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FOCEP Collecte accède à votre bibliothèque photo pour sélectionner des documents clients.",
+          "cameraPermission": "FOCEP Collecte utilise l'appareil photo pour prendre des photos des documents clients."
+        }
+      ]
     ]
   }
 }

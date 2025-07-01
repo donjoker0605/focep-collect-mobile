@@ -1,54 +1,107 @@
 // src/services/journalActiviteService.js
 import BaseApiService from './base/BaseApiService';
-import { format } from 'date-fns';
 
 class JournalActiviteService extends BaseApiService {
   constructor() {
     super();
   }
 
-  async getUserActivities(userId, date, options = {}) {
+  /**
+   * Récupérer les activités d'un utilisateur pour une date
+   */
+  async getUserActivities(userId, date, { page = 0, size = 20, sortBy = 'timestamp', sortDir = 'desc' } = {}) {
     try {
-      console.log('📋 Récupération activités utilisateur:', userId, date);
+      console.log('📋 API: GET /journal-activite/user/', userId);
       
       const params = {
-        date: format(date, 'yyyy-MM-dd'),
-        page: options.page || 0,
-        size: options.size || 20
+        date: date, // Format YYYY-MM-DD
+        page,
+        size,
+        sortBy,
+        sortDir
       };
       
-      const response = await this.axios.get(`/audit/user/${userId}`, { params });
+      const response = await this.axios.get(`/journal-activite/user/${userId}`, { params });
       return this.formatResponse(response, 'Activités récupérées');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des activités');
     }
   }
 
-  async getAdminActivities(agenceId, date, options = {}) {
+  /**
+   * Récupérer les activités d'une agence pour une date
+   */
+  async getAgenceActivities(agenceId, date, { page = 0, size = 20, sortBy = 'timestamp', sortDir = 'desc' } = {}) {
     try {
-      const params = { 
-        date: format(date, 'yyyy-MM-dd'), 
-        ...options 
+      console.log('📋 API: GET /journal-activite/agence/', agenceId);
+      
+      const params = {
+        date: date,
+        page,
+        size,
+        sortBy,
+        sortDir
       };
       
-      const response = await this.axios.get(`/audit/agence/${agenceId}`, { params });
-      return this.formatResponse(response, 'Activités admin récupérées');
+      const response = await this.axios.get(`/journal-activite/agence/${agenceId}`, { params });
+      return this.formatResponse(response, 'Activités de l\'agence récupérées');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération admin');
+      throw this.handleError(error, 'Erreur lors de la récupération des activités de l\'agence');
     }
   }
 
-  async getActivityStats(userId, startDate, endDate) {
+  /**
+   * Recherche avancée avec filtres
+   */
+  async searchActivities(filters, { page = 0, size = 20, sortBy = 'timestamp', sortDir = 'desc' } = {}) {
     try {
+      console.log('🔍 API: GET /journal-activite/search');
+      
       const params = {
-        startDate: format(startDate, 'yyyy-MM-dd'),
-        endDate: format(endDate, 'yyyy-MM-dd')
+        ...filters,
+        page,
+        size,
+        sortBy,
+        sortDir
       };
       
-      const response = await this.axios.get(`/audit/user/${userId}/stats`, { params });
+      const response = await this.axios.get('/journal-activite/search', { params });
+      return this.formatResponse(response, 'Recherche effectuée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la recherche');
+    }
+  }
+
+  /**
+   * Statistiques d'activité pour un utilisateur
+   */
+  async getUserActivityStats(userId, dateDebut, dateFin) {
+    try {
+      console.log('📊 API: GET /journal-activite/stats/user/', userId);
+      
+      const params = {
+        dateDebut,
+        dateFin
+      };
+      
+      const response = await this.axios.get(`/journal-activite/stats/user/${userId}`, { params });
       return this.formatResponse(response, 'Statistiques récupérées');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des stats');
+      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+    }
+  }
+
+  /**
+   * Récupérer les actions disponibles pour les filtres
+   */
+  async getAvailableActions() {
+    try {
+      console.log('📋 API: GET /journal-activite/actions');
+      
+      const response = await this.axios.get('/journal-activite/actions');
+      return this.formatResponse(response, 'Actions récupérées');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des actions');
     }
   }
 }

@@ -1,8 +1,11 @@
-// src/navigation/CollecteurStack.js - STACK COLLECTEUR AVEC TABS
+// src/navigation/CollecteurStack.js
+// REMPLACER tout le contenu par :
+
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import theme from '../theme';
 
 // Écrans de tabs collecteur
 import DashboardScreen from '../screens/Collecteur/DashboardScreen';
@@ -11,12 +14,15 @@ import CollecteScreen from '../screens/Collecteur/CollecteScreen';
 import JournalScreen from '../screens/Collecteur/JournalScreen';
 import ProfileScreen from '../screens/Collecteur/ProfileScreen';
 
+// ✅ NOUVEAU - Import du Journal d'Activité
+import JournalActiviteScreen from '../screens/Collecteur/JournalActiviteScreen';
+
 // Écrans modaux et détails
 import ClientDetailScreen from '../screens/Collecteur/ClientDetailScreen';
 import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen';
 import CollecteDetailScreen from '../screens/Collecteur/CollecteDetailScreen';
 import TransactionDetailScreen from '../screens/Collecteur/TransactionDetailScreen'; 
-import NotificationsScreen from '../screens/Comon/NotificationsScreen';
+import NotificationsScreen from '../screens/Common/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -50,8 +56,16 @@ function CollecteurTabs() {
           
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textLight,
+        tabBarStyle: {
+          backgroundColor: theme.colors.white,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.lightGray,
+          paddingBottom: 5,
+          paddingTop: 5,
+          height: 60,
+        },
         headerShown: false,
       })}
     >
@@ -89,7 +103,14 @@ export default function CollecteurStack() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CollecteurTabs" component={CollecteurTabs} />
       
-      {/* Écrans modaux et de détails */}
+      {/* ✅ NOUVEAU - Écran Journal d'Activité */}
+      <Stack.Screen 
+        name="JournalActivite" 
+        component={JournalActiviteScreen}
+        options={{ presentation: 'card' }}
+      />
+      
+      {/* Écrans modaux et de détails existants */}
       <Stack.Screen 
         name="ClientDetail" 
         component={ClientDetailScreen}
@@ -107,7 +128,13 @@ export default function CollecteurStack() {
         component={CollecteDetailScreen}
         options={{ presentation: 'card' }}
       />
-
+      
+      <Stack.Screen 
+        name="TransactionDetail" 
+        component={TransactionDetailScreen}
+        options={{ presentation: 'card' }}
+      />
+      
       <Stack.Screen 
         name="Notifications" 
         component={NotificationsScreen}

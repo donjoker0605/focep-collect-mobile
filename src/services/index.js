@@ -11,9 +11,10 @@ export { default as testService } from './testService';
 export { default as notificationService } from './notificationService';
 export { default as SyncService } from './SyncService';
 
+export { default as journalActiviteService } from './journalActiviteService';
+
 // Services Admin
 export { default as adminService } from './adminService';
 export { default as adminCommissionService } from './adminCommissionService';
 export { default as commissionService } from './commissionService';
-export { default as journalActiviteService } from './journalActiviteService';
 export { default as geolocationService } from './geolocationService';

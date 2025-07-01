@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { collecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
+import journalActiviteService from '../../services/journalActiviteService';
 
 // COMPOSANTS DE REMPLACEMENT TEMPORAIRES
 const Header = ({ title, showNotificationButton, onNotificationPress }) => (
@@ -72,6 +73,95 @@ const TransactionItem = ({ transaction, onPress }) => (
     </Text>
   </TouchableOpacity>
 );
+
+const RecentActivitiesPreview = ({ userId }) => {
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRecentActivities();
+  }, [userId]);
+
+  const loadRecentActivities = async () => {
+    if (!userId) return;
+    
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await journalActiviteService.getUserActivities(
+        userId, 
+        today, 
+        { page: 0, size: 3 }
+      );
+      
+      if (response.success && response.data) {
+        setActivities(response.data.content || []);
+      }
+    } catch (error) {
+      console.error('Erreur chargement activités récentes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.recentActivitiesLoading}>
+        <LoadingSpinner size="small" />
+      </View>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <View style={styles.recentActivitiesEmpty}>
+        <Text style={styles.emptyActivitiesText}>Aucune activité aujourd'hui</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.recentActivitiesList}>
+      {activities.map((activity, index) => (
+        <View key={activity.id} style={styles.activityPreviewItem}>
+          <View style={styles.activityIcon}>
+            <Ionicons 
+              name={getActivityIcon(activity.action)} 
+              size={16} 
+              color={getActivityColor(activity.action)} 
+            />
+          </View>
+          <View style={styles.activityContent}>
+            <Text style={styles.activityTitle}>{activity.actionDisplayName}</Text>
+            <Text style={styles.activityTime}>{activity.timeAgo}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+// Fonctions utilitaires pour l'aperçu (ajouter dans le même fichier)
+const getActivityIcon = (action) => {
+  const icons = {
+    'CREATE_CLIENT': 'person-add',
+    'MODIFY_CLIENT': 'create',
+    'TRANSACTION_EPARGNE': 'arrow-down-circle',
+    'TRANSACTION_RETRAIT': 'arrow-up-circle',
+    'LOGIN': 'log-in'
+  };
+  return icons[action] || 'information-circle';
+};
+
+const getActivityColor = (action) => {
+  const colors = {
+    'CREATE_CLIENT': theme.colors.success,
+    'MODIFY_CLIENT': theme.colors.warning,
+    'TRANSACTION_EPARGNE': theme.colors.success,
+    'TRANSACTION_RETRAIT': theme.colors.warning,
+    'LOGIN': theme.colors.primary
+  };
+  return colors[action] || theme.colors.textLight;
+};
 
 const DashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -267,13 +357,25 @@ const DashboardScreen = ({ navigation }) => {
             
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => navigateToScreen('Journal')}
+              onPress={() => navigateToScreen('JournalActivite')}
             >
               <Ionicons name="document-text" size={24} color={theme.colors.info} />
               <Text style={styles.quickActionText}>Journal</Text>
             </TouchableOpacity>
           </View>
         </Card>
+		
+		{/* Activités récentes */}
+		<Card style={styles.recentActivitiesCard}>
+		  <View style={styles.cardHeader}>
+			<Text style={styles.cardTitle}>Activités récentes</Text>
+			<TouchableOpacity onPress={() => navigateToScreen('JournalActivite')}>
+			  <Text style={styles.seeAllText}>Voir tout</Text>
+			</TouchableOpacity>
+		  </View>
+		  
+		  <RecentActivitiesPreview userId={user?.id} />
+		</Card>
       </ScrollView>
     </View>
   );
@@ -465,6 +567,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: theme.colors.primary,
+  },
+  recentActivitiesCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  recentActivitiesLoading: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  recentActivitiesEmpty: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyActivitiesText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
+  },
+  recentActivitiesList: {
+    paddingVertical: 4,
+  },
+  activityPreviewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  activityIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 2,
   },
 });
 
