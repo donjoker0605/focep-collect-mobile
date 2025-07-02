@@ -13,8 +13,6 @@ import ClientListScreen from '../screens/Collecteur/ClientListScreen';
 import CollecteScreen from '../screens/Collecteur/CollecteScreen';
 import JournalScreen from '../screens/Collecteur/JournalScreen';
 import ProfileScreen from '../screens/Collecteur/ProfileScreen';
-
-// ✅ NOUVEAU - Import du Journal d'Activité
 import JournalActiviteScreen from '../screens/Collecteur/JournalActiviteScreen';
 
 // Écrans modaux et détails
@@ -22,7 +20,7 @@ import ClientDetailScreen from '../screens/Collecteur/ClientDetailScreen';
 import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen';
 import CollecteDetailScreen from '../screens/Collecteur/CollecteDetailScreen';
 import TransactionDetailScreen from '../screens/Collecteur/TransactionDetailScreen'; 
-import NotificationsScreen from '../screens/Common/NotificationsScreen';
+import NotificationsScreen from '../screens/Comon/NotificationsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
