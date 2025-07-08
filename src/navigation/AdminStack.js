@@ -1,239 +1,305 @@
 // src/navigation/AdminStack.js
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
+import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// ÉCRANS ADMIN PRINCIPAUX
+// Écrans existants (à adapter selon votre structure)
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
-import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
-import ClientManagementScreen from '../screens/Admin/ClientManagementScreen';
-import ReportsScreen from '../screens/Admin/ReportsScreen';
-import ProfileScreen from '../screens/Collecteur/ProfileScreen';
+import AdminCollecteursScreen from '../screens/Admin/AdminCollecteursScreen';
+import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
+import AdminReportsScreen from '../screens/Admin/AdminReportsScreen';
 
-// ÉCRANS DE DÉTAILS ET CRÉATION
-import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
-import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
-import ClientDetailScreen from '../screens/Admin/ClientDetailScreen';
-import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
+// 🎯 Nouveaux écrans de supervision des collecteurs
+import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
+import AdminCollecteurDetailScreen from '../screens/Admin/AdminCollecteurDetailScreen';
+import AdminCollecteurCriticalScreen from '../screens/Admin/AdminCollecteurCriticalScreen';
+import AdminCollecteurActivitiesScreen from '../screens/Admin/AdminCollecteurActivitiesScreen';
 
-// ÉCRANS OUTILS ADMINISTRATIFS
-import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
-import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
-import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
-import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
+const Stack = createStackNavigator();
 
-// ÉCRANS COMMUNS
-import NotificationsScreen from '../screens/Comon/NotificationsScreen';
-
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
-
-// Navigation par onglets
-function AdminTabs() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
-          
-          switch (route.name) {
-            case 'AdminDashboard':
-              iconName = focused ? 'speedometer' : 'speedometer-outline';
-              break;
-            case 'CollecteurManagement':
-              iconName = focused ? 'people' : 'people-outline';
-              break;
-            case 'ClientManagement':
-              iconName = focused ? 'person-add' : 'person-add-outline';
-              break;
-            case 'Reports':
-              iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-              break;
-            case 'Profile':
-              iconName = focused ? 'person-circle' : 'person-circle-outline';
-              break;
-            default:
-              iconName = 'help-circle-outline';
-          }
-          
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#2E7D32',
-        tabBarInactiveTintColor: '#9E9E9E',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopWidth: 1,
-          borderTopColor: '#E0E0E0',
-          paddingBottom: 5,
-          paddingTop: 5,
-          height: 60,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen 
-        name="AdminDashboard" 
-        component={AdminDashboardScreen}
-        options={{
-          tabBarLabel: 'Tableau de bord',
-        }}
-      />
-      
-      <Tab.Screen 
-        name="CollecteurManagement" 
-        component={CollecteurManagementScreen}
-        options={{
-          tabBarLabel: 'Collecteurs',
-        }}
-      />
-      
-      <Tab.Screen 
-        name="ClientManagement" 
-        component={ClientManagementScreen}
-        options={{
-          tabBarLabel: 'Clients',
-        }}
-      />
-      
-      <Tab.Screen 
-        name="Reports" 
-        component={ReportsScreen}
-        options={{
-          tabBarLabel: 'Rapports',
-        }}
-      />
-      
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{
-          tabBarLabel: 'Profil',
-        }}
-      />
-    </Tab.Navigator>
-  );
-}
-
-// Stack principal avec tous les écrans
-export default function AdminStack() {
+/**
+ * 🎯 Stack de navigation pour les administrateurs
+ * 
+ * NOUVELLE ARCHITECTURE :
+ * - Dashboard principal inchangé
+ * - Nouvelle section "Supervision Collecteurs"
+ * - Navigation hiérarchique intuitive
+ * - Boutons d'action contextuels
+ */
+const AdminStack = () => {
   return (
     <Stack.Navigator
+      initialRouteName="AdminDashboard"
       screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        animation: 'slide_from_right',
+        headerStyle: {
+          backgroundColor: '#fff',
+          elevation: 2,
+          shadowOpacity: 0.1,
+        },
+        headerTintColor: '#212529',
+        headerTitleStyle: {
+          fontWeight: '600',
+          fontSize: 18,
+        },
+        headerBackTitleVisible: false,
+        cardStyle: {
+          backgroundColor: '#f8f9fa',
+        },
       }}
     >
-      {/* Écran principal avec onglets */}
-      <Stack.Screen 
-        name="AdminTabs" 
-        component={AdminTabs}
-        options={{ headerShown: false }}
-      />
+      {/* ============================= */}
+      {/* ÉCRANS PRINCIPAUX EXISTANTS */}
+      {/* ============================= */}
       
-      {/* TOUS LES ÉCRANS DE NAVIGATION */}
-      <Stack.Screen 
-        name="CollecteurManagementScreen" 
-        component={CollecteurManagementScreen}
+      <Stack.Screen
+        name="AdminDashboard"
+        component={AdminDashboardScreen}
+        options={({ navigation }) => ({
+          title: 'Tableau de bord',
+          headerLeft: () => null, // Pas de bouton retour sur le dashboard
+          headerRight: () => (
+            <TouchableOpacity
+              style={{ marginRight: 16, padding: 8 }}
+              onPress={() => navigation.navigate('AdminNotifications')}
+            >
+              <Ionicons name="notifications-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
+        })}
+      />
+
+      <Stack.Screen
+        name="AdminCollecteurs"
+        component={AdminCollecteursScreen}
         options={{
-          title: 'Gestion des collecteurs',
+          title: 'Gestion Collecteurs',
         }}
       />
-      
-      <Stack.Screen 
-        name="ClientManagementScreen" 
-        component={ClientManagementScreen}
+
+      <Stack.Screen
+        name="AdminNotifications"
+        component={AdminNotificationsScreen}
         options={{
-          title: 'Gestion des clients',
+          title: 'Notifications',
         }}
       />
-      
-      <Stack.Screen 
-        name="ReportsScreen" 
-        component={ReportsScreen}
+
+      <Stack.Screen
+        name="AdminReports"
+        component={AdminReportsScreen}
         options={{
           title: 'Rapports',
         }}
       />
-      
-      <Stack.Screen 
-        name="CollecteurCreationScreen" 
-        component={CollecteurCreationScreen}
+
+      {/* ============================= */}
+      {/* 🎯 NOUVEAUX ÉCRANS SUPERVISION */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="AdminCollecteurSupervision"
+        component={AdminCollecteurSupervisionScreen}
+        options={({ navigation }) => ({
+          title: 'Supervision Collecteurs',
+          headerRight: () => (
+            <TouchableOpacity
+              style={{ marginRight: 16, padding: 8 }}
+              onPress={() => {
+                // Action pour actualiser ou filtrer
+                navigation.setParams({ refresh: Date.now() });
+              }}
+            >
+              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
+        })}
+      />
+
+      <Stack.Screen
+        name="AdminCollecteurDetail"
+        component={AdminCollecteurDetailScreen}
+        options={({ route }) => ({
+          title: route.params?.collecteurNom || 'Détails Collecteur',
+          headerBackTitle: 'Supervision',
+          // Le headerRight est géré dans le composant lui-même
+        })}
+      />
+
+      <Stack.Screen
+        name="AdminCollecteurCritical"
+        component={AdminCollecteurCriticalScreen}
+        options={({ route }) => ({
+          title: 'Activités Critiques',
+          headerBackTitle: 'Détails',
+          // Le headerRight est géré dans le composant lui-même
+        })}
+      />
+
+      <Stack.Screen
+        name="AdminCollecteurActivities"
+        component={AdminCollecteurActivitiesScreen}
+        options={({ route }) => ({
+          title: 'Toutes les activités',
+          headerBackTitle: 'Détails',
+          // Le headerRight est géré dans le composant lui-même
+        })}
+      />
+
+      {/* ============================= */}
+      {/* ÉCRANS MODAUX (si nécessaire) */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="AdminCollecteurMessage"
+        component={AdminCollecteurMessageModal}
         options={{
-          title: 'Nouveau collecteur',
+          title: 'Envoyer un message',
           presentation: 'modal',
+          headerLeft: ({ onPress }) => (
+            <TouchableOpacity onPress={onPress} style={{ marginLeft: 16 }}>
+              <Ionicons name="close" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
         }}
       />
-      
-      <Stack.Screen 
-        name="CollecteurDetailScreen" 
-        component={CollecteurDetailScreen}
+
+      <Stack.Screen
+        name="AdminCollecteurStats"
+        component={AdminCollecteurStatsModal}
         options={{
-          title: 'Détails collecteur',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="ClientDetailScreen" 
-        component={ClientDetailScreen}
-        options={{
-          title: 'Détails client',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="TransactionDetailScreen" 
-        component={TransactionDetailScreen}
-        options={{
-          title: 'Détails transaction',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="CommissionParametersScreen" 
-        component={CommissionParametersScreen}
-        options={{
-          title: 'Paramètres de commissions',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="TransfertCompteScreen" 
-        component={TransfertCompteScreen}
-        options={{
-          title: 'Transfert de comptes',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="JournalClotureScreen" 
-        component={JournalClotureScreen}
-        options={{
-          title: 'Journal & Clôture',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="CommissionCalculationScreen" 
-        component={CommissionCalculationScreen}
-        options={{
-          title: 'Calcul des commissions',
-        }}
-      />
-      
-      <Stack.Screen 
-        name="NotificationsScreen" 
-        component={NotificationsScreen}
-        options={{
-          title: 'Notifications',
+          title: 'Statistiques détaillées',
           presentation: 'modal',
+          headerLeft: ({ onPress }) => (
+            <TouchableOpacity onPress={onPress} style={{ marginLeft: 16 }}>
+              <Ionicons name="close" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
         }}
       />
     </Stack.Navigator>
   );
-}
+};
+
+/**
+ * 📨 Écran modal pour envoyer un message à un collecteur
+ * (À implémenter selon vos besoins)
+ */
+const AdminCollecteurMessageModal = ({ route, navigation }) => {
+  // TODO: Implémenter l'écran de message
+  return null;
+};
+
+/**
+ * 📊 Écran modal pour les statistiques détaillées
+ * (À implémenter selon vos besoins)
+ */
+const AdminCollecteurStatsModal = ({ route, navigation }) => {
+  // TODO: Implémenter l'écran de stats
+  return null;
+};
+
+/**
+ * 🎯 Configuration des options de navigation par défaut
+ */
+export const getAdminScreenOptions = (title, options = {}) => ({
+  title,
+  headerStyle: {
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowOpacity: 0.1,
+  },
+  headerTintColor: '#212529',
+  headerTitleStyle: {
+    fontWeight: '600',
+    fontSize: 18,
+  },
+  headerBackTitleVisible: false,
+  cardStyle: {
+    backgroundColor: '#f8f9fa',
+  },
+  ...options,
+});
+
+/**
+ * 🚀 Fonction helper pour naviguer vers la supervision
+ * À utiliser depuis d'autres écrans pour naviguer vers la supervision
+ */
+export const navigateToSupervision = (navigation, collecteurId = null) => {
+  if (collecteurId) {
+    navigation.navigate('AdminCollecteurDetail', {
+      collecteurId,
+    });
+  } else {
+    navigation.navigate('AdminCollecteurSupervision');
+  }
+};
+
+/**
+ * 📱 Hook personnalisé pour les actions de supervision
+ * Utilisable dans les composants pour les actions rapides
+ */
+export const useSupervisionActions = (navigation) => {
+  const goToSupervision = () => {
+    navigation.navigate('AdminCollecteurSupervision');
+  };
+
+  const goToCollecteurDetail = (collecteurId, collecteurNom, agenceNom) => {
+    navigation.navigate('AdminCollecteurDetail', {
+      collecteurId,
+      collecteurNom,
+      agenceNom,
+    });
+  };
+
+  const goToCriticalActivities = (collecteurId, collecteurNom, critiques = []) => {
+    navigation.navigate('AdminCollecteurCritical', {
+      collecteurId,
+      collecteurNom,
+      critiques,
+    });
+  };
+
+  const goToAllActivities = (collecteurId, collecteurNom) => {
+    navigation.navigate('AdminCollecteurActivities', {
+      collecteurId,
+      collecteurNom,
+    });
+  };
+
+  return {
+    goToSupervision,
+    goToCollecteurDetail,
+    goToCriticalActivities,
+    goToAllActivities,
+  };
+};
+
+/**
+ * 🎨 Composants de boutons d'action réutilisables
+ */
+export const SupervisionHeaderButton = ({ onPress, iconName, color = '#007AFF' }) => (
+  <TouchableOpacity
+    style={{ marginRight: 16, padding: 8 }}
+    onPress={onPress}
+  >
+    <Ionicons name={iconName} size={24} color={color} />
+  </TouchableOpacity>
+);
+
+/**
+ * 🔄 Gestionnaire de mise à jour automatique pour les écrans de supervision
+ */
+export const useAutoRefresh = (refreshFunction, intervalMs = 300000) => {
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      if (refreshFunction && typeof refreshFunction === 'function') {
+        refreshFunction(true); // Refresh silencieux
+      }
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [refreshFunction, intervalMs]);
+};
+
+export default AdminStack;
