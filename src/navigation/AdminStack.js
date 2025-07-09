@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Écrans existants (à adapter selon votre structure)
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
-import AdminCollecteursScreen from '../screens/Admin/AdminCollecteursScreen';
+import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
 import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
 import AdminReportsScreen from '../screens/Admin/AdminReportsScreen';
 
@@ -18,15 +18,6 @@ import AdminCollecteurActivitiesScreen from '../screens/Admin/AdminCollecteurAct
 
 const Stack = createStackNavigator();
 
-/**
- * 🎯 Stack de navigation pour les administrateurs
- * 
- * NOUVELLE ARCHITECTURE :
- * - Dashboard principal inchangé
- * - Nouvelle section "Supervision Collecteurs"
- * - Navigation hiérarchique intuitive
- * - Boutons d'action contextuels
- */
 const AdminStack = () => {
   return (
     <Stack.Navigator
