@@ -18,3 +18,5 @@ export { default as adminService } from './adminService';
 export { default as adminCommissionService } from './adminCommissionService';
 export { default as commissionService } from './commissionService';
 export { default as geolocationService } from './geolocationService';
+export { default as adminNotificationService } from './adminNotificationService';
+export { default as adminCollecteurService } from './adminCollecteurService';

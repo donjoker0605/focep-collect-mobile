@@ -1,28 +1,26 @@
-// src/navigation/AdminStack.js - VERSION CORRIGÉE COMPLÈTE
+// src/navigation/AdminStack.js - VERSION COMPLÈTE CORRIGÉE
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // ============================= 
-// IMPORTS DES ÉCRANS EXISTANTS
+// IMPORTS DES ÉCRANS
 // ============================= 
 
 // Écrans principaux
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
 
+// ✅ NOUVEAUX ÉCRANS DE SUPERVISION
+import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
+import AdminJournalActiviteScreen from '../screens/Admin/AdminJournalActiviteScreen';
+
 // Écrans de gestion des collecteurs
 import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
 import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
 import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
 import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
-
-// Écrans de supervision des collecteurs
-import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
-import AdminCollecteurDetailScreen from '../screens/Admin/AdminCollecteurDetailScreen';
-import AdminCollecteurCriticalScreen from '../screens/Admin/AdminCollecteurCriticalScreen';
-import AdminCollecteurActivitiesScreen from '../screens/Admin/AdminCollecteurActivitiesScreen';
 
 // Écrans de gestion des clients
 import ClientManagementScreen from '../screens/Admin/ClientManagementScreen';
@@ -60,6 +58,8 @@ const AdminStack = () => {
         cardStyle: {
           backgroundColor: '#f8f9fa',
         },
+        // ✅ CORRECTION : Gestion uniforme du header
+        headerMode: 'screen',
       }}
     >
       {/* ============================= */}
@@ -88,7 +88,40 @@ const AdminStack = () => {
         component={AdminNotificationsScreen}
         options={{
           title: 'Notifications',
+          // ✅ CORRECTION : Pas de header personnalisé supplémentaire
         }}
+      />
+
+      {/* ============================= */}
+      {/* SUPERVISION DES COLLECTEURS */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="AdminCollecteurSupervision"
+        component={AdminCollecteurSupervisionScreen}
+        options={({ navigation }) => ({
+          title: 'Supervision Collecteurs',
+          headerRight: () => (
+            <TouchableOpacity
+              style={{ marginRight: 16, padding: 8 }}
+              onPress={() => {
+                // Trigger refresh par navigation params
+                navigation.setParams({ refresh: Date.now() });
+              }}
+            >
+              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
+        })}
+      />
+
+      <Stack.Screen
+        name="AdminJournalActivite"
+        component={AdminJournalActiviteScreen}
+        options={({ route }) => ({
+          title: `Journal - ${route.params?.collecteurNom || 'Collecteur'}`,
+          headerBackTitle: 'Supervision',
+        })}
       />
 
       {/* ============================= */}
@@ -115,7 +148,9 @@ const AdminStack = () => {
         name="CollecteurCreationScreen"
         component={CollecteurCreationScreen}
         options={({ route }) => ({
-          title: route.params?.mode === 'edit' ? 'Modifier Collecteur' : 'Nouveau Collecteur',
+          title: route.params?.mode === 'edit' 
+            ? 'Modifier Collecteur' 
+            : 'Nouveau Collecteur',
         })}
       />
 
@@ -124,55 +159,6 @@ const AdminStack = () => {
         component={CollecteurClientsScreen}
         options={({ route }) => ({
           title: `Clients - ${route.params?.collecteurNom || 'Collecteur'}`,
-        })}
-      />
-
-      {/* ============================= */}
-      {/* SUPERVISION DES COLLECTEURS */}
-      {/* ============================= */}
-
-      <Stack.Screen
-        name="AdminCollecteurSupervision"
-        component={AdminCollecteurSupervisionScreen}
-        options={({ navigation }) => ({
-          title: 'Supervision Collecteurs',
-          headerRight: () => (
-            <TouchableOpacity
-              style={{ marginRight: 16, padding: 8 }}
-              onPress={() => {
-                navigation.setParams({ refresh: Date.now() });
-              }}
-            >
-              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          ),
-        })}
-      />
-
-      <Stack.Screen
-        name="AdminCollecteurDetail"
-        component={AdminCollecteurDetailScreen}
-        options={({ route }) => ({
-          title: route.params?.collecteurNom || 'Détails Collecteur',
-          headerBackTitle: 'Supervision',
-        })}
-      />
-
-      <Stack.Screen
-        name="AdminCollecteurCritical"
-        component={AdminCollecteurCriticalScreen}
-        options={({ route }) => ({
-          title: 'Activités Critiques',
-          headerBackTitle: 'Détails',
-        })}
-      />
-
-      <Stack.Screen
-        name="AdminCollecteurActivities"
-        component={AdminCollecteurActivitiesScreen}
-        options={({ route }) => ({
-          title: 'Toutes les activités',
-          headerBackTitle: 'Détails',
         })}
       />
 
@@ -197,7 +183,7 @@ const AdminStack = () => {
       />
 
       {/* ============================= */}
-      {/* RAPPORTS ET ANALYSES */}
+      {/* RAPPORTS ET COMMISSIONS */}
       {/* ============================= */}
 
       <Stack.Screen
@@ -207,10 +193,6 @@ const AdminStack = () => {
           title: 'Rapports',
         }}
       />
-
-      {/* ============================= */}
-      {/* COMMISSIONS */}
-      {/* ============================= */}
 
       <Stack.Screen
         name="CommissionCalculationScreen"
@@ -224,7 +206,7 @@ const AdminStack = () => {
         name="CommissionParametersScreen"
         component={CommissionParametersScreen}
         options={{
-          title: 'Paramètres de Commission',
+          title: 'Paramètres Commissions',
         }}
       />
 
@@ -232,7 +214,7 @@ const AdminStack = () => {
         name="CommissionReportScreen"
         component={CommissionReportScreen}
         options={({ route }) => ({
-          title: `Commissions - ${route.params?.collecteurName || 'Rapport'}`,
+          title: 'Rapport Commission',
         })}
       />
 
@@ -260,61 +242,11 @@ const AdminStack = () => {
         name="JournalClotureScreen"
         component={JournalClotureScreen}
         options={{
-          title: 'Journal & Clôture',
-        }}
-      />
-
-      {/* ============================= */}
-      {/* ÉCRANS MODAUX */}
-      {/* ============================= */}
-
-      <Stack.Screen
-        name="AdminCollecteurMessage"
-        component={AdminCollecteurMessageModal}
-        options={{
-          title: 'Envoyer un message',
-          presentation: 'modal',
-          headerLeft: ({ onPress }) => (
-            <TouchableOpacity onPress={onPress} style={{ marginLeft: 16 }}>
-              <Ionicons name="close" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          ),
-        }}
-      />
-
-      <Stack.Screen
-        name="AdminCollecteurStats"
-        component={AdminCollecteurStatsModal}
-        options={{
-          title: 'Statistiques détaillées',
-          presentation: 'modal',
-          headerLeft: ({ onPress }) => (
-            <TouchableOpacity onPress={onPress} style={{ marginLeft: 16 }}>
-              <Ionicons name="close" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          ),
+          title: 'Clôture Journal',
         }}
       />
     </Stack.Navigator>
   );
-};
-
-/**
- * 📨 Écran modal pour envoyer un message à un collecteur
- * (À implémenter selon vos besoins)
- */
-const AdminCollecteurMessageModal = ({ route, navigation }) => {
-  // TODO: Implémenter l'écran de message
-  return null;
-};
-
-/**
- * 📊 Écran modal pour les statistiques détaillées
- * (À implémenter selon vos besoins)
- */
-const AdminCollecteurStatsModal = ({ route, navigation }) => {
-  // TODO: Implémenter l'écran de stats
-  return null;
 };
 
 /**
@@ -344,7 +276,7 @@ export const getAdminScreenOptions = (title, options = {}) => ({
  */
 export const navigateToSupervision = (navigation, collecteurId = null) => {
   if (collecteurId) {
-    navigation.navigate('AdminCollecteurDetail', {
+    navigation.navigate('AdminJournalActivite', {
       collecteurId,
     });
   } else {
@@ -360,62 +292,18 @@ export const useSupervisionActions = (navigation) => {
     navigation.navigate('AdminCollecteurSupervision');
   };
 
-  const goToCollecteurDetail = (collecteurId, collecteurNom, agenceNom) => {
-    navigation.navigate('AdminCollecteurDetail', {
+  const goToCollecteurJournal = (collecteurId, collecteurNom, agenceNom) => {
+    navigation.navigate('AdminJournalActivite', {
       collecteurId,
       collecteurNom,
       agenceNom,
     });
   };
 
-  const goToCriticalActivities = (collecteurId, collecteurNom, critiques = []) => {
-    navigation.navigate('AdminCollecteurCritical', {
-      collecteurId,
-      collecteurNom,
-      critiques,
-    });
-  };
-
-  const goToAllActivities = (collecteurId, collecteurNom) => {
-    navigation.navigate('AdminCollecteurActivities', {
-      collecteurId,
-      collecteurNom,
-    });
-  };
-
   return {
     goToSupervision,
-    goToCollecteurDetail,
-    goToCriticalActivities,
-    goToAllActivities,
+    goToCollecteurJournal,
   };
-};
-
-/**
- * 🎨 Composants de boutons d'action réutilisables
- */
-export const SupervisionHeaderButton = ({ onPress, iconName, color = '#007AFF' }) => (
-  <TouchableOpacity
-    style={{ marginRight: 16, padding: 8 }}
-    onPress={onPress}
-  >
-    <Ionicons name={iconName} size={24} color={color} />
-  </TouchableOpacity>
-);
-
-/**
- * 🔄 Gestionnaire de mise à jour automatique pour les écrans de supervision
- */
-export const useAutoRefresh = (refreshFunction, intervalMs = 300000) => {
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      if (refreshFunction && typeof refreshFunction === 'function') {
-        refreshFunction(true); // Refresh silencieux
-      }
-    }, intervalMs);
-
-    return () => clearInterval(interval);
-  }, [refreshFunction, intervalMs]);
 };
 
 export default AdminStack;

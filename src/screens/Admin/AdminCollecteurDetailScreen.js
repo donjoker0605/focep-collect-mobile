@@ -1,465 +1,145 @@
-// src/screens/Admin/AdminCollecteurDetailScreen.js - VERSION CORRIGÉE
+// src/screens/Admin/AdminCollecteurDetailScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Alert,
   RefreshControl,
   ActivityIndicator,
-  Dimensions,
-  Modal,
-  TextInput,
+  SafeAreaView,
+  TouchableOpacity,
+  Alert
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { format, parseISO, subDays } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+import { useFocusEffect } from '@react-navigation/native';
 
-// ✅ IMPORT CORRIGÉ - Chemin depuis src/screens/Admin vers src/services
+// Components
+import Header from '../../components/Header/Header';
+import Card from '../../components/Card/Card';
+import EmptyState from '../../components/EmptyState/EmptyState';
+
+// Services
 import adminCollecteurService from '../../services/adminCollecteurService';
+import theme from '../../theme';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
-const { width, height } = Dimensions.get('window');
-const chartWidth = width - 40;
-
-/**
- * 🔍 Écran de détail d'un collecteur spécifique
- * 
- * FONCTIONNALITÉS :
- * - Informations détaillées du collecteur
- * - Graphiques d'activité et tendances
- * - Liste des activités récentes
- * - Actions rapides (message, voir critiques)
- * - Statistiques sur plusieurs périodes
- * - Navigation vers activités critiques
- */
-const AdminCollecteurDetailScreen = ({ route, navigation }) => {
-  const { collecteurId, collecteurNom, agenceNom } = route.params;
-
-  // =====================================
-  // ÉTAT DU COMPOSANT
-  // =====================================
-
+const AdminCollecteurDetailScreen = ({ navigation, route }) => {
+  const { collecteurId, collecteurNom, agenceNom } = route.params || {};
+  
+  // États
+  const [collecteur, setCollecteur] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [journaux, setJournaux] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activites, setActivites] = useState({ content: [], totalElements: 0 });
-  const [stats, setStats] = useState({});
-  const [critiques, setCritiques] = useState([]);
-  const [selectedPeriod, setSelectedPeriod] = useState('7'); // 7, 14, 30 jours
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [messageText, setMessageText] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
+  const [error, setError] = useState(null);
 
-  // =====================================
-  // EFFETS ET CHARGEMENT DES DONNÉES
-  // =====================================
-
-  useEffect(() => {
-    navigation.setOptions({
-      title: collecteurNom,
-      headerRight: () => (
-        <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={() => setShowMessageModal(true)}
-        >
-          <Ionicons name="mail-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, collecteurNom]);
-
-  useEffect(() => {
-    chargerDonnees();
-  }, [selectedPeriod]);
-
-  const chargerDonnees = useCallback(async (silencieux = false) => {
+  // Charger les détails du collecteur
+  const loadCollecteurDetails = useCallback(async (showLoader = true) => {
     try {
-      if (!silencieux) {
+      if (showLoader) {
         setLoading(true);
+        setError(null);
       }
 
-      console.log(`📊 Chargement données collecteur ${collecteurId}, période: ${selectedPeriod} jours`);
-
-      const dateDebut = format(subDays(new Date(), parseInt(selectedPeriod)), 'yyyy-MM-dd');
-      const dateFin = format(new Date(), 'yyyy-MM-dd');
-
-      // Chargement en parallèle
-      const [activitesData, statsData, critiquesData] = await Promise.all([
-        adminCollecteurService.getCollecteurActivities(collecteurId, dateFin, 0, 20),
-        adminCollecteurService.getCollecteurDetailedStats(collecteurId, dateDebut, dateFin),
-        adminCollecteurService.getCollecteurCriticalActivities(collecteurId, parseInt(selectedPeriod), 10),
+      console.log('📊 Chargement détails collecteur:', collecteurId);
+      
+      // Charger en parallèle les données du collecteur
+      const [collecteurResult, statsResult, journauxResult] = await Promise.allSettled([
+        adminCollecteurService.getCollecteurById(collecteurId),
+        adminCollecteurService.getCollecteurStats(collecteurId),
+        adminCollecteurService.getCollecteurJournaux(collecteurId)
       ]);
 
-      setActivites(activitesData);
-      setStats(statsData);
-      setCritiques(critiquesData);
+      // Traiter les résultats
+      if (collecteurResult.status === 'fulfilled') {
+        setCollecteur(collecteurResult.value.data);
+      }
 
-      console.log(`✅ Données chargées: ${activitesData.totalElements} activités, ${critiquesData.length} critiques`);
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value.data);
+      }
+
+      if (journauxResult.status === 'fulfilled') {
+        setJournaux(journauxResult.value.data || []);
+      }
+
+      // Vérifier s'il y a eu des erreurs critiques
+      const hasErrors = [collecteurResult, statsResult, journauxResult]
+        .some(result => result.status === 'rejected');
+
+      if (hasErrors && showLoader) {
+        console.warn('⚠️ Certaines données n\'ont pas pu être chargées');
+      }
 
     } catch (error) {
-      console.error('❌ Erreur chargement données collecteur:', error);
-      Alert.alert('Erreur', 'Impossible de charger les données du collecteur.');
+      console.error('❌ Erreur chargement détails collecteur:', error);
+      setError(error.message);
+      Alert.alert('Erreur', error.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [collecteurId, selectedPeriod]);
+  }, [collecteurId]);
 
+  // Charger au focus de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      if (collecteurId) {
+        loadCollecteurDetails();
+      }
+    }, [loadCollecteurDetails, collecteurId])
+  );
+
+  // Refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    chargerDonnees();
-  }, [chargerDonnees]);
+    loadCollecteurDetails(false);
+  }, [loadCollecteurDetails]);
 
-  // =====================================
-  // HANDLERS D'ÉVÉNEMENTS
-  // =====================================
-
-  const handlePeriodChange = (period) => {
-    setSelectedPeriod(period);
-  };
-
-  const handleVoirToutesActivites = () => {
-    navigation.navigate('AdminCollecteurActivities', {
+  // Navigation vers le journal d'activité
+  const navigateToJournalActivite = () => {
+    navigation.navigate('AdminJournalActivite', {
       collecteurId,
       collecteurNom,
+      agenceNom
     });
   };
 
-  const handleVoirCritiques = () => {
-    navigation.navigate('AdminCollecteurCritical', {
-      collecteurId,
-      collecteurNom,
-      critiques,
-    });
-  };
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim()) {
-      Alert.alert('Erreur', 'Veuillez saisir un message.');
-      return;
-    }
-
-    try {
-      setSendingMessage(true);
-      
-      // TODO: Appel API pour envoyer le message
-      // await adminCollecteurService.sendMessageToCollecteur(collecteurId, messageText);
-      
-      // Simulation pour l'instant
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      Alert.alert('Succès', 'Message envoyé au collecteur.');
-      setShowMessageModal(false);
-      setMessageText('');
-
-    } catch (error) {
-      console.error('❌ Erreur envoi message:', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer le message.');
-    } finally {
-      setSendingMessage(false);
+  // Actions sur le collecteur
+  const handleCollecteurAction = (action) => {
+    switch (action) {
+      case 'message':
+        // TODO: Implémenter envoi de message
+        Alert.alert('Info', 'Fonctionnalité à implémenter');
+        break;
+      case 'suspend':
+        // TODO: Implémenter suspension
+        Alert.alert('Info', 'Fonctionnalité à implémenter');
+        break;
+      case 'edit':
+        navigation.navigate('CollecteurCreationScreen', {
+          mode: 'edit',
+          collecteur: collecteur
+        });
+        break;
+      default:
+        break;
     }
   };
 
-  // =====================================
-  // MÉTHODES DE RENDU DES COMPOSANTS
-  // =====================================
-
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View style={styles.collecteurInfo}>
-        <Text style={styles.collecteurNom}>{collecteurNom}</Text>
-        <Text style={styles.agenceNom}>📍 {agenceNom}</Text>
-      </View>
-      
-      <View style={styles.statsQuick}>
-        <View style={styles.statQuick}>
-          <Text style={styles.statQuickValue}>{stats.totalActivites || 0}</Text>
-          <Text style={styles.statQuickLabel}>Activités</Text>
-        </View>
-        <View style={styles.statQuick}>
-          <Text style={[styles.statQuickValue, { color: critiques.length > 0 ? '#F44336' : '#4CAF50' }]}>
-            {critiques.length}
-          </Text>
-          <Text style={styles.statQuickLabel}>Critiques</Text>
-        </View>
-        <View style={styles.statQuick}>
-          <Text style={styles.statQuickValue}>{stats.joursActifs || 0}</Text>
-          <Text style={styles.statQuickLabel}>Jours actifs</Text>
-        </View>
-      </View>
-    </View>
-  );
-
-  const renderPeriodSelector = () => (
-    <View style={styles.periodSelector}>
-      <Text style={styles.sectionTitle}>Période d'analyse</Text>
-      <View style={styles.periodButtons}>
-        {['7', '14', '30'].map(period => (
-          <TouchableOpacity
-            key={period}
-            style={[
-              styles.periodButton,
-              selectedPeriod === period && styles.periodButtonActive
-            ]}
-            onPress={() => handlePeriodChange(period)}
-          >
-            <Text style={[
-              styles.periodButtonText,
-              selectedPeriod === period && styles.periodButtonTextActive
-            ]}>
-              {period} jours
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
-  const renderActivityChart = () => {
-    if (!stats.activitesParJour || Object.keys(stats.activitesParJour).length === 0) {
-      return (
-        <View style={styles.chartContainer}>
-          <Text style={styles.sectionTitle}>Activité quotidienne</Text>
-          <View style={styles.noDataContainer}>
-            <Ionicons name="bar-chart-outline" size={48} color="#ccc" />
-            <Text style={styles.noDataText}>Aucune donnée disponible</Text>
-          </View>
-        </View>
-      );
-    }
-
-    // Préparation des données pour le graphique
-    const sortedDates = Object.keys(stats.activitesParJour).sort();
-    const chartData = {
-      labels: sortedDates.slice(-7).map(date => format(parseISO(date), 'dd/MM')),
-      datasets: [{
-        data: sortedDates.slice(-7).map(date => stats.activitesParJour[date] || 0),
-        color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-        strokeWidth: 2,
-      }],
-    };
-
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Activité quotidienne (7 derniers jours)</Text>
-        <LineChart
-          data={chartData}
-          width={chartWidth}
-          height={200}
-          chartConfig={chartConfig}
-          bezier
-          style={styles.chart}
-        />
-      </View>
-    );
-  };
-
-  const renderActivityBreakdown = () => {
-    if (!stats.repartitionActionsFormattee || stats.repartitionActionsFormattee.length === 0) {
-      return null;
-    }
-
-    // Prendre les 5 actions les plus fréquentes
-    const topActions = stats.repartitionActionsFormattee.slice(0, 5);
-    const total = topActions.reduce((sum, item) => sum + item.value, 0);
-
-    const chartData = {
-      labels: topActions.map(item => item.label.replace('_', ' ')),
-      datasets: [{
-        data: topActions.map(item => item.value),
-      }],
-    };
-
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.sectionTitle}>Répartition par type d'action</Text>
-        <BarChart
-          data={chartData}
-          width={chartWidth}
-          height={200}
-          chartConfig={chartConfig}
-          style={styles.chart}
-          showValuesOnTopOfBars
-        />
-        
-        {/* Légende avec pourcentages */}
-        <View style={styles.legend}>
-          {topActions.map((item, index) => (
-            <View key={index} style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: getActionColor(index) }]} />
-              <Text style={styles.legendText}>
-                {item.label}: {item.value} ({Math.round((item.value / total) * 100)}%)
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const renderRecentActivities = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Activités récentes</Text>
-        <TouchableOpacity onPress={handleVoirToutesActivites}>
-          <Text style={styles.seeAllText}>Voir tout</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {activites.content.length === 0 ? (
-        <View style={styles.noActivitiesContainer}>
-          <Ionicons name="list-outline" size={48} color="#ccc" />
-          <Text style={styles.noActivitiesText}>Aucune activité récente</Text>
-        </View>
-      ) : (
-        <View style={styles.activitiesList}>
-          {activites.content.slice(0, 5).map((activite, index) => (
-            <View key={`activite-${activite.id || index}`} style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Text style={styles.activityIconText}>{activite.iconeAction}</Text>
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityDescription} numberOfLines={1}>
-                  {activite.descriptionFormattee}
-                </Text>
-                <Text style={styles.activityTime}>{activite.timeAgo}</Text>
-              </View>
-              {activite.estCritique && (
-                <View style={styles.criticalBadge}>
-                  <Ionicons name="warning" size={16} color="#F44336" />
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-
-  const renderCriticalActivities = () => {
-    if (critiques.length === 0) {
-      return (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activités critiques</Text>
-          <View style={styles.noCriticalContainer}>
-            <Ionicons name="checkmark-circle-outline" size={48} color="#4CAF50" />
-            <Text style={styles.noCriticalText}>Aucune activité critique détectée</Text>
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: '#F44336' }]}>
-            🚨 Activités critiques ({critiques.length})
-          </Text>
-          <TouchableOpacity onPress={handleVoirCritiques}>
-            <Text style={styles.seeAllText}>Voir tout</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.criticalList}>
-          {critiques.slice(0, 3).map((critique, index) => (
-            <View key={`critique-${critique.id || index}`} style={styles.criticalItem}>
-              <View style={styles.criticalIcon}>
-                <Ionicons name="warning" size={20} color="#F44336" />
-              </View>
-              <View style={styles.criticalContent}>
-                <Text style={styles.criticalDescription} numberOfLines={2}>
-                  {critique.descriptionFormattee}
-                </Text>
-                <Text style={styles.criticalTime}>{critique.timeAgo}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  const renderActionButtons = () => (
-    <View style={styles.actionButtons}>
-      <TouchableOpacity 
-        style={styles.actionButton}
-        onPress={() => setShowMessageModal(true)}
-      >
-        <Ionicons name="mail-outline" size={20} color="#007AFF" />
-        <Text style={styles.actionButtonText}>Envoyer message</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={styles.actionButton}
-        onPress={handleVoirCritiques}
-      >
-        <Ionicons name="warning-outline" size={20} color="#FF9800" />
-        <Text style={styles.actionButtonText}>Voir critiques</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderMessageModal = () => (
-    <Modal
-      visible={showMessageModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowMessageModal(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setShowMessageModal(false)}>
-            <Text style={styles.modalCancelText}>Annuler</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Message à {collecteurNom}</Text>
-          <TouchableOpacity 
-            onPress={handleSendMessage}
-            disabled={sendingMessage || !messageText.trim()}
-          >
-            {sendingMessage ? (
-              <ActivityIndicator size="small" color="#007AFF" />
-            ) : (
-              <Text style={[
-                styles.modalSendText,
-                (!messageText.trim()) && styles.modalSendTextDisabled
-              ]}>
-                Envoyer
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.modalContent}>
-          <TextInput
-            style={styles.messageInput}
-            placeholder="Tapez votre message ici..."
-            multiline
-            numberOfLines={6}
-            value={messageText}
-            onChangeText={setMessageText}
-            textAlignVertical="top"
-            maxLength={500}
-          />
-          <Text style={styles.characterCount}>
-            {messageText.length}/500 caractères
-          </Text>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
-
-  // =====================================
-  // RENDU PRINCIPAL
-  // =====================================
-
-  if (loading) {
+  // Render loading
+  if (loading && !collecteur) {
     return (
       <SafeAreaView style={styles.container}>
+        <Header
+          title={collecteurNom || 'Détails Collecteur'}
+          showBackButton={true}
+          onBackPress={() => navigation.goBack()}
+        />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Chargement des détails...</Text>
         </View>
       </SafeAreaView>
@@ -468,376 +148,363 @@ const AdminCollecteurDetailScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Header
+        title={collecteurNom || 'Détails Collecteur'}
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+        rightComponent={() => (
+          <TouchableOpacity onPress={onRefresh}>
+            <Ionicons name="refresh" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )}
+      />
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#007AFF']}
+            colors={[theme.colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {renderHeader()}
-        {renderPeriodSelector()}
-        {renderActivityChart()}
-        {renderActivityBreakdown()}
-        {renderRecentActivities()}
-        {renderCriticalActivities()}
-        {renderActionButtons()}
+        {/* Informations du collecteur */}
+        {collecteur && (
+          <Card style={styles.collecteurCard}>
+            <View style={styles.collecteurHeader}>
+              <View style={styles.collecteurInfo}>
+                <Ionicons name="person-circle" size={48} color={theme.colors.primary} />
+                <View style={styles.collecteurDetails}>
+                  <Text style={styles.collecteurNom}>
+                    {collecteur.prenom} {collecteur.nom}
+                  </Text>
+                  <Text style={styles.collecteurEmail}>{collecteur.email}</Text>
+                  <Text style={styles.agenceInfo}>{agenceNom}</Text>
+                </View>
+              </View>
+              <View style={styles.statusBadge}>
+                <View style={[
+                  styles.statusIndicator,
+                  { backgroundColor: collecteur.actif ? theme.colors.success : theme.colors.error }
+                ]} />
+                <Text style={styles.statusText}>
+                  {collecteur.actif ? 'Actif' : 'Inactif'}
+                </Text>
+              </View>
+            </View>
+          </Card>
+        )}
+
+        {/* Statistiques */}
+        {stats && (
+          <Card style={styles.statsCard}>
+            <Text style={styles.sectionTitle}>📊 Statistiques</Text>
+            <View style={styles.statsGrid}>
+              <StatItem
+                label="Clients"
+                value={stats.nombreClients || 0}
+                icon="people"
+                color={theme.colors.primary}
+              />
+              <StatItem
+                label="Collecte du jour"
+                value={formatCurrency(stats.collecteJour || 0)}
+                icon="card"
+                color={theme.colors.success}
+              />
+              <StatItem
+                label="Transactions"
+                value={stats.transactionsDuJour || 0}
+                icon="swap-horizontal"
+                color={theme.colors.info}
+              />
+              <StatItem
+                label="Performance"
+                value={`${stats.performance || 0}%`}
+                icon="trending-up"
+                color={theme.colors.warning}
+              />
+            </View>
+          </Card>
+        )}
+
+        {/* Actions rapides */}
+        <Card style={styles.actionsCard}>
+          <Text style={styles.sectionTitle}>⚡ Actions</Text>
+          <View style={styles.actionsGrid}>
+            <ActionButton
+              title="Journal d'activité"
+              icon="document-text"
+              color={theme.colors.primary}
+              onPress={navigateToJournalActivite}
+            />
+            <ActionButton
+              title="Modifier"
+              icon="create"
+              color={theme.colors.warning}
+              onPress={() => handleCollecteurAction('edit')}
+            />
+            <ActionButton
+              title="Message"
+              icon="mail"
+              color={theme.colors.info}
+              onPress={() => handleCollecteurAction('message')}
+            />
+            <ActionButton
+              title="Suspendre"
+              icon="pause-circle"
+              color={theme.colors.error}
+              onPress={() => handleCollecteurAction('suspend')}
+            />
+          </View>
+        </Card>
+
+        {/* Journaux récents */}
+        <Card style={styles.journauxCard}>
+          <View style={styles.journauxHeader}>
+            <Text style={styles.sectionTitle}>📓 Journaux récents</Text>
+            <TouchableOpacity onPress={navigateToJournalActivite}>
+              <Text style={styles.viewAllText}>Voir tout</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {journaux.length > 0 ? (
+            journaux.slice(0, 5).map((journal, index) => (
+              <JournalItem key={journal.id || index} journal={journal} />
+            ))
+          ) : (
+            <EmptyState
+              icon="document-outline"
+              title="Aucun journal"
+              message="Aucun journal trouvé pour ce collecteur"
+              style={styles.emptyState}
+            />
+          )}
+        </Card>
+
+        <View style={styles.bottomSpacing} />
       </ScrollView>
-      
-      {renderMessageModal()}
     </SafeAreaView>
   );
 };
 
-// =====================================
-// CONFIGURATION DES GRAPHIQUES
-// =====================================
+// Composant pour une statistique
+const StatItem = ({ label, value, icon, color }) => (
+  <View style={styles.statItem}>
+    <Ionicons name={icon} size={24} color={color} />
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
 
-const chartConfig = {
-  backgroundColor: '#ffffff',
-  backgroundGradientFrom: '#ffffff',
-  backgroundGradientTo: '#ffffff',
-  decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(108, 117, 125, ${opacity})`,
-  style: {
-    borderRadius: 16,
-  },
-  propsForDots: {
-    r: '4',
-    strokeWidth: '2',
-    stroke: '#007AFF',
-  },
-  propsForLabels: {
-    fontSize: 12,
-  },
-};
+// Composant pour un bouton d'action
+const ActionButton = ({ title, icon, color, onPress }) => (
+  <TouchableOpacity style={styles.actionButton} onPress={onPress}>
+    <View style={[styles.actionIconContainer, { backgroundColor: `${color}20` }]}>
+      <Ionicons name={icon} size={24} color={color} />
+    </View>
+    <Text style={styles.actionButtonText}>{title}</Text>
+  </TouchableOpacity>
+);
 
-const getActionColor = (index) => {
-  const colors = ['#007AFF', '#4CAF50', '#FF9800', '#F44336', '#9C27B0'];
-  return colors[index % colors.length];
-};
-
-// =====================================
-// STYLES
-// =====================================
+// Composant pour un item de journal
+const JournalItem = ({ journal }) => (
+  <View style={styles.journalItem}>
+    <View style={styles.journalInfo}>
+      <Text style={styles.journalDate}>
+        {formatDate(journal.dateCreation)}
+      </Text>
+      <Text style={styles.journalStatus}>
+        {journal.clotureEffectuee ? 'Clôturé' : 'En cours'}
+      </Text>
+    </View>
+    <Text style={styles.journalMontant}>
+      {formatCurrency(journal.montantTotal || 0)}
+    </Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: theme.colors.background,
   },
   scrollView: {
     flex: 1,
   },
-  
-  // En-tête
-  headerButton: {
-    padding: 8,
-  },
-  header: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  collecteurInfo: {
-    marginBottom: 16,
-  },
-  collecteurNom: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 4,
-  },
-  agenceNom: {
-    fontSize: 16,
-    color: '#6c757d',
-  },
-  statsQuick: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statQuick: {
-    alignItems: 'center',
-  },
-  statQuickValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  statQuickLabel: {
-    fontSize: 12,
-    color: '#6c757d',
-    marginTop: 4,
-  },
-  
-  // Sélecteur de période
-  periodSelector: {
-    backgroundColor: '#fff',
-    padding: 20,
-    marginBottom: 8,
-  },
-  periodButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  periodButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    backgroundColor: '#fff',
-  },
-  periodButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  periodButtonText: {
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  periodButtonTextActive: {
-    color: '#fff',
-  },
-  
-  // Sections
-  section: {
-    backgroundColor: '#fff',
-    padding: 20,
-    marginBottom: 8,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#212529',
-  },
-  seeAllText: {
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  
-  // Graphiques
-  chartContainer: {
-    backgroundColor: '#fff',
-    padding: 20,
-    marginBottom: 8,
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  legend: {
-    marginTop: 12,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  legendText: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
-  
-  // Listes d'activités
-  activitiesList: {
-    gap: 12,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f8f9fa',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  activityIconText: {
-    fontSize: 16,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityDescription: {
-    fontSize: 14,
-    color: '#212529',
-    marginBottom: 2,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#6c757d',
-  },
-  criticalBadge: {
-    marginLeft: 8,
-  },
-  
-  // Activités critiques
-  criticalList: {
-    gap: 12,
-  },
-  criticalItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 12,
-    backgroundColor: '#fff5f5',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F44336',
-  },
-  criticalIcon: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  criticalContent: {
-    flex: 1,
-  },
-  criticalDescription: {
-    fontSize: 14,
-    color: '#212529',
-    marginBottom: 4,
-  },
-  criticalTime: {
-    fontSize: 12,
-    color: '#6c757d',
-  },
-  
-  // États vides
-  noDataContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noDataText: {
-    fontSize: 16,
-    color: '#6c757d',
-    marginTop: 8,
-  },
-  noActivitiesContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noActivitiesText: {
-    fontSize: 16,
-    color: '#6c757d',
-    marginTop: 8,
-  },
-  noCriticalContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  noCriticalText: {
-    fontSize: 16,
-    color: '#4CAF50',
-    marginTop: 8,
-  },
-  
-  // Boutons d'action
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-    gap: 8,
-  },
-  actionButtonText: {
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  
-  // Modal de message
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#212529',
-  },
-  modalCancelText: {
-    color: '#007AFF',
-    fontSize: 16,
-  },
-  modalSendText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalSendTextDisabled: {
-    color: '#ccc',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 20,
-  },
-  messageInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    marginBottom: 8,
-  },
-  characterCount: {
-    textAlign: 'right',
-    fontSize: 12,
-    color: '#6c757d',
-  },
-  
-  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: theme.spacing.md,
+    color: theme.colors.textSecondary,
     fontSize: 16,
-    color: '#6c757d',
+  },
+  collecteurCard: {
+    margin: theme.spacing.md,
+  },
+  collecteurHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collecteurInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  collecteurDetails: {
+    marginLeft: theme.spacing.md,
+    flex: 1,
+  },
+  collecteurNom: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  collecteurEmail: {
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  agenceInfo: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    marginTop: 4,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.surface,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: theme.spacing.xs,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  statsCard: {
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: theme.spacing.md,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    width: '48%',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.sm,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginTop: theme.spacing.xs,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  actionsCard: {
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    width: '48%',
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+  },
+  actionIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: theme.colors.text,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  journauxCard: {
+    marginHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  journauxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    fontWeight: '600',
+  },
+  journalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  journalInfo: {
+    flex: 1,
+  },
+  journalDate: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  journalStatus: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  journalMontant: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  emptyState: {
+    paddingVertical: theme.spacing.xl,
+  },
+  bottomSpacing: {
+    height: theme.spacing.xl,
   },
 });
 

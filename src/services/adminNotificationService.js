@@ -475,6 +475,11 @@ class AdminNotificationService extends BaseApiService {
   isPollingActive() {
     return !!this.pollingTimeout;
   }
+
+  // ✅ ALIAS POUR COMPATIBILITÉ AVEC L'ANCIEN CODE
+  stopPolling() {
+    return this.stopIntelligentPolling();
+  }
 }
 
 export default new AdminNotificationService();

@@ -565,28 +565,23 @@ const AdminCollecteurCriticalScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {renderHeader()}
-      
-      {critiquesFiltrees.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <FlatList
-          data={critiquesFiltrees}
-          renderItem={renderActivityItem}
-          keyExtractor={(item) => `critique-${item.id || item.timestamp}`}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#007AFF']}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      {renderDetailModal()}
+      <Header
+        title="Activités Critiques"
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+      />
+      <View style={styles.content}>
+        <Text style={styles.title}>Activités Critiques</Text>
+        <Text style={styles.subtitle}>
+          {collecteurNom ? `Collecteur: ${collecteurNom}` : 'Collecteur non spécifié'}
+        </Text>
+        <Text style={styles.message}>
+          Cet écran affichera les activités critiques du collecteur.
+        </Text>
+        <Text style={styles.note}>
+          📝 Note: Cet écran sera implémenté dans une version future.
+        </Text>
+      </View>
     </SafeAreaView>
   );
 };

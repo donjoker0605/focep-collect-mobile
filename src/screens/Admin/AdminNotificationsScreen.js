@@ -81,7 +81,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
         adminNotificationService.getCriticalNotifications()
       ]);
       
-      // Adapter les données du backend à la structure attendue par le frontend
+      // ✅ CORRECTION : Adapter les données du backend à la structure attendue par le frontend
       const dashboardData = dashboardResult.data || {};
       const criticalData = criticalResult.data || [];
       
@@ -114,7 +114,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
       setCriticalNotifications(criticalData);
       setLastUpdate(new Date());
       
-      // LOG CORRIGÉ avec les bonnes propriétés
+      // ✅ LOG CORRIGÉ avec les bonnes propriétés
       console.log('✅ Données admin chargées depuis votre backend:', {
         activités: mappedDashboard.activitiesCount,
         urgentes: mappedDashboard.urgentNotifications,
@@ -129,8 +129,9 @@ const AdminNotificationsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
   /**
-   * 🔄 Callback polling intelligent - gère les changements significatifs
+   * 🔄 Callback polling intelligent - CORRIGÉ pour la structure backend
    */
   const handlePollingUpdate = (dashboardResult) => {
     if (dashboardResult && dashboardResult.data) {
@@ -170,22 +171,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   };
 
   /**
-   * 🚨 Alerte pour notifications urgentes
-   */
-  const showUrgentNotificationAlert = (urgentCount) => {
-    Alert.alert(
-      '🚨 Notification Urgente',
-      `Vous avez ${urgentCount} notification${urgentCount > 1 ? 's' : ''} urgente${urgentCount > 1 ? 's' : ''}`,
-      [
-        { text: 'Plus tard', style: 'cancel' },
-        { text: 'Voir', onPress: () => loadCriticalNotifications() }
-      ],
-      { cancelable: true }
-    );
-  };
-
-  /**
-   * 🔔 Charger notifications critiques depuis votre backend
+   * 🔔 Charger notifications critiques depuis votre backend - CORRIGÉ
    */
   const loadCriticalNotifications = async () => {
     try {
@@ -198,7 +184,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   };
 
   /**
-   * Marquer notification comme lue via votre backend
+   * Marquer notification comme lue via votre backend - CORRIGÉ
    */
   const handleMarkAsRead = async (notificationId) => {
     try {

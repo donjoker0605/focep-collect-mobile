@@ -561,41 +561,23 @@ const AdminCollecteurActivitiesScreen = ({ route, navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {renderHeader()}
-      
-      {activites.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <FlatList
-          data={activites}
-          renderItem={renderActivityItem}
-          keyExtractor={(item, index) => `activite-${item.id || index}`}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#007AFF']}
-            />
-          }
-          onEndReached={onEndReached}
-          onEndReachedThreshold={0.1}
-          ListFooterComponent={renderFooter}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-
-      {renderFiltersModal()}
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={datePickerMode === 'debut' ? filtres.dateDebut : filtres.dateFin}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          maximumDate={new Date()}
-        />
-      )}
+      <Header
+        title="Toutes les activités"
+        showBackButton={true}
+        onBackPress={() => navigation.goBack()}
+      />
+      <View style={styles.content}>
+        <Text style={styles.title}>Toutes les Activités</Text>
+        <Text style={styles.subtitle}>
+          {collecteurNom ? `Collecteur: ${collecteurNom}` : 'Collecteur non spécifié'}
+        </Text>
+        <Text style={styles.message}>
+          Cet écran affichera toutes les activités du collecteur.
+        </Text>
+        <Text style={styles.note}>
+          📝 Note: Utilisez plutôt l'écran "Journal d'Activité" disponible via le bouton "Journal".
+        </Text>
+      </View>
     </SafeAreaView>
   );
 };

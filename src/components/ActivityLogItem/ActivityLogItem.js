@@ -1,193 +1,253 @@
 // src/components/ActivityLogItem/ActivityLogItem.js
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import theme from '../../theme';
+import { formatTimeAgo } from '../../utils/formatters';
 
-const ActivityLogItem = ({ activity, onPress }) => {
-  const getActionIcon = (actionIcon) => {
-    const iconMap = {
-      'person-add': 'person-add',
-      'create': 'create',
-      'trash': 'trash',
-      'log-in': 'log-in',
-      'log-out': 'log-out',
-      'arrow-down-circle': 'arrow-down-circle',
-      'arrow-up-circle': 'arrow-up-circle',
-      'information-circle': 'information-circle'
+const ActivityLogItem = ({ activity, isAdmin = false, onPress }) => {
+  // Déterminer l'icône selon le type d'action
+  const getActionIcon = (action) => {
+    const icons = {
+      'CREATE_CLIENT': 'person-add',
+      'MODIFY_CLIENT': 'create',
+      'DELETE_CLIENT': 'person-remove',
+      'TRANSACTION_EPARGNE': 'arrow-up-circle',
+      'TRANSACTION_RETRAIT': 'arrow-down-circle',
+      'LOGIN': 'log-in',
+      'LOGOUT': 'log-out',
+      'JOURNAL_CREATE': 'document-text',
+      'JOURNAL_CLOSE': 'checkmark-circle',
+      'COMMISSION_CALCULATE': 'calculator',
+      'SYNC': 'sync',
+      'SYSTEM': 'settings',
+      'ERROR': 'alert-circle',
+      'WARNING': 'warning',
+      'INFO': 'information-circle'
     };
-    return iconMap[actionIcon] || 'information-circle';
+    return icons[action] || 'document';
   };
 
-  const getActionColor = (actionColor) => {
-    const colorMap = {
-      'success': theme.colors.success,
-      'warning': theme.colors.warning,
-      'danger': theme.colors.error,
-      'primary': theme.colors.primary,
-      'medium': theme.colors.textLight
+  // Déterminer la couleur selon le type d'action
+  const getActionColor = (action) => {
+    const colors = {
+      'CREATE_CLIENT': theme.colors.success,
+      'MODIFY_CLIENT': theme.colors.warning,
+      'DELETE_CLIENT': theme.colors.error,
+      'TRANSACTION_EPARGNE': theme.colors.success,
+      'TRANSACTION_RETRAIT': theme.colors.warning,
+      'LOGIN': theme.colors.primary,
+      'LOGOUT': theme.colors.textSecondary,
+      'JOURNAL_CREATE': theme.colors.info,
+      'JOURNAL_CLOSE': theme.colors.success,
+      'COMMISSION_CALCULATE': theme.colors.secondary,
+      'SYNC': theme.colors.info,
+      'SYSTEM': theme.colors.textSecondary,
+      'ERROR': theme.colors.error,
+      'WARNING': theme.colors.warning,
+      'INFO': theme.colors.info
     };
-    return colorMap[actionColor] || theme.colors.textLight;
+    return colors[action] || theme.colors.textSecondary;
   };
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    return format(date, 'HH:mm:ss', { locale: fr });
+  // Obtenir le libellé de l'action
+  const getActionDisplayName = (action) => {
+    const names = {
+      'CREATE_CLIENT': 'Client créé',
+      'MODIFY_CLIENT': 'Client modifié',
+      'DELETE_CLIENT': 'Client supprimé',
+      'TRANSACTION_EPARGNE': 'Épargne',
+      'TRANSACTION_RETRAIT': 'Retrait',
+      'LOGIN': 'Connexion',
+      'LOGOUT': 'Déconnexion',
+      'JOURNAL_CREATE': 'Journal créé',
+      'JOURNAL_CLOSE': 'Journal clôturé',
+      'COMMISSION_CALCULATE': 'Commission calculée',
+      'SYNC': 'Synchronisation',
+      'SYSTEM': 'Système',
+      'ERROR': 'Erreur',
+      'WARNING': 'Avertissement',
+      'INFO': 'Information'
+    };
+    return names[action] || action;
   };
 
-  const getStatusIndicator = () => {
-    if (activity.success === false) {
-      return (
-        <View style={[styles.statusIndicator, styles.statusError]}>
-          <Ionicons name="close-circle" size={12} color={theme.colors.white} />
-        </View>
-      );
+  // Parser les détails JSON si disponibles
+  const parseDetails = (details) => {
+    if (!details) return null;
+    
+    try {
+      return typeof details === 'string' ? JSON.parse(details) : details;
+    } catch (error) {
+      return details;
     }
-    return (
-      <View style={[styles.statusIndicator, styles.statusSuccess]}>
-        <Ionicons name="checkmark-circle" size={12} color={theme.colors.white} />
-      </View>
-    );
   };
 
-  return (
-    <TouchableOpacity 
-      style={styles.container} 
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.iconContainer}>
-        <Ionicons 
-          name={getActionIcon(activity.actionIcon)} 
-          size={24} 
-          color={getActionColor(activity.actionColor)} 
-        />
-        {getStatusIndicator()}
-      </View>
+  const actionIcon = getActionIcon(activity.action);
+  const actionColor = getActionColor(activity.action);
+  const actionName = getActionDisplayName(activity.action);
+  const parsedDetails = parseDetails(activity.details);
+  const timestamp = new Date(activity.timestamp);
 
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.actionName} numberOfLines={1}>
-            {activity.actionDisplayName}
-          </Text>
-          <Text style={styles.timestamp}>
-            {formatTimestamp(activity.timestamp)}
-          </Text>
+  const component = (
+    <View style={styles.container}>
+      {/* Header de l'activité */}
+      <View style={styles.header}>
+        <View style={styles.iconContainer}>
+          <View style={[styles.iconBackground, { backgroundColor: `${actionColor}20` }]}>
+            <Ionicons name={actionIcon} size={20} color={actionColor} />
+          </View>
         </View>
-
-        <View style={styles.details}>
-          {activity.entityDisplayName && (
-            <Text style={styles.entityName} numberOfLines={1}>
-              {activity.entityDisplayName}
+        
+        <View style={styles.content}>
+          <View style={styles.titleRow}>
+            <Text style={styles.actionTitle}>{actionName}</Text>
+            <Text style={styles.timestamp}>
+              {formatTimeAgo(timestamp)}
+            </Text>
+          </View>
+          
+          {/* Message ou description */}
+          {activity.message && (
+            <Text style={styles.message}>{activity.message}</Text>
+          )}
+          
+          {/* Détails de l'entité concernée */}
+          {activity.entityType && activity.entityId && (
+            <Text style={styles.entityInfo}>
+              {activity.entityType} #{activity.entityId}
             </Text>
           )}
           
-          {activity.durationMs && (
-            <Text style={styles.duration}>
-              {activity.durationMs}ms
-            </Text>
+          {/* Détails JSON parsés */}
+          {parsedDetails && (
+            <View style={styles.detailsContainer}>
+              {typeof parsedDetails === 'object' ? (
+                Object.entries(parsedDetails).map(([key, value]) => (
+                  <Text key={key} style={styles.detailItem}>
+                    {key}: {String(value)}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.detailItem}>{String(parsedDetails)}</Text>
+              )}
+            </View>
+          )}
+          
+          {/* Informations admin (visible seulement en mode admin) */}
+          {isAdmin && (
+            <View style={styles.adminInfo}>
+              {activity.ipAddress && (
+                <Text style={styles.adminDetail}>IP: {activity.ipAddress}</Text>
+              )}
+              {activity.userAgent && (
+                <Text style={styles.adminDetail} numberOfLines={1}>
+                  UA: {activity.userAgent}
+                </Text>
+              )}
+              <Text style={styles.adminDetail}>
+                {format(timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: fr })}
+              </Text>
+            </View>
           )}
         </View>
-
-        {activity.success === false && activity.errorMessage && (
-          <Text style={styles.errorMessage} numberOfLines={2}>
-            Erreur: {activity.errorMessage}
-          </Text>
-        )}
       </View>
-
-      <Ionicons 
-        name="chevron-forward" 
-        size={16} 
-        color={theme.colors.textLight} 
-      />
-    </TouchableOpacity>
+    </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={() => onPress(activity)} activeOpacity={0.7}>
+        {component}
+      </TouchableOpacity>
+    );
+  }
+
+  return component;
 };
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: theme.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
-  },
-  iconContainer: {
-    position: 'relative',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  statusIndicator: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusSuccess: {
-    backgroundColor: theme.colors.success,
-  },
-  statusError: {
-    backgroundColor: theme.colors.error,
-  },
-  content: {
-    flex: 1,
-    marginRight: 8,
+    backgroundColor: theme.colors.surface,
+    marginHorizontal: theme.spacing.md,
+    marginVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconContainer: {
+    marginRight: theme.spacing.md,
+  },
+  iconBackground: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
   },
-  actionName: {
+  actionTitle: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: theme.colors.text,
     flex: 1,
   },
   timestamp: {
     fontSize: 12,
-    color: theme.colors.textLight,
+    color: theme.colors.textSecondary,
+    marginLeft: theme.spacing.sm,
   },
-  details: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  entityName: {
+  message: {
     fontSize: 14,
-    color: theme.colors.textLight,
-    flex: 1,
+    color: theme.colors.text,
+    marginBottom: theme.spacing.xs,
+    lineHeight: 20,
   },
-  duration: {
+  entityInfo: {
     fontSize: 12,
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  errorMessage: {
-    fontSize: 12,
-    color: theme.colors.error,
-    marginTop: 4,
+    color: theme.colors.textSecondary,
     fontStyle: 'italic',
+    marginBottom: theme.spacing.xs,
+  },
+  detailsContainer: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.borderRadius.sm,
+    padding: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  detailItem: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    marginBottom: 2,
+  },
+  adminInfo: {
+    marginTop: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  adminDetail: {
+    fontSize: 10,
+    color: theme.colors.textSecondary,
+    marginBottom: 2,
   },
 });
 
