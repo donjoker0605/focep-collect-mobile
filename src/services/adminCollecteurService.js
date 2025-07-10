@@ -1,163 +1,22 @@
+// src/services/adminCollecteurService.js - VERSION CORRIGÉE AVEC AUTHENTIFICATION
+import BaseApiService from './base/BaseApiService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { format } from 'date-fns';
+import { STORAGE_KEYS } from '../config/apiConfig';
 
 /**
  * 🎯 Service pour la gestion des activités des collecteurs par les admins
  * 
- * FONCTIONNALITÉS :
- * - Appels API vers AdminCollecteurActivityController
- * - Cache local intelligent (5 minutes)
- * - Gestion des erreurs réseau
- * - Transformation et formatage des données
- * - Retry automatique avec backoff exponentiel
+ * CORRECTION MAJEURE : Hérite de BaseApiService pour l'authentification
  */
-class AdminCollecteurService {
+class AdminCollecteurService extends BaseApiService {
   constructor() {
-    this.baseURL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
-    this.apiPath = '/api/admin/collecteurs';
+    super();
     this.cache = new Map();
     this.CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-    this.MAX_RETRIES = 3;
   }
 
   // =====================================
-  // MÉTHODES UTILITAIRES
-  // =====================================
-
-  /**
-   * 🔑 Récupère le token d'authentification depuis le stockage
-   */
-  async getAuthToken() {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('Token d\'authentification manquant');
-      }
-      return token;
-    } catch (error) {
-      console.error('❌ Erreur récupération token:', error);
-      throw new Error('Authentification requise');
-    }
-  }
-
-  /**
-   * 🌐 Effectue une requête HTTP avec retry et gestion d'erreurs
-   */
-  async makeRequest(endpoint, options = {}, retryCount = 0) {
-    try {
-      const token = await this.getAuthToken();
-      const url = `${this.baseURL}${this.apiPath}${endpoint}`;
-      
-      console.log(`🌐 Requête API: ${options.method || 'GET'} ${url}`);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...options.headers,
-        },
-        ...options,
-      });
-
-      // Gestion des erreurs HTTP
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage;
-
-        switch (response.status) {
-          case 401:
-            errorMessage = 'Session expirée. Veuillez vous reconnecter.';
-            // TODO: Déclencher la déconnexion
-            break;
-          case 403:
-            errorMessage = 'Accès non autorisé à cette ressource.';
-            break;
-          case 404:
-            errorMessage = 'Ressource non trouvée.';
-            break;
-          case 500:
-            errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
-            break;
-          default:
-            errorMessage = `Erreur HTTP ${response.status}: ${errorText}`;
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      console.log(`✅ Réponse API reçue: ${data.data ? 'avec données' : 'vide'}`);
-      
-      return data;
-
-    } catch (error) {
-      console.error(`❌ Erreur requête API (tentative ${retryCount + 1}):`, error);
-
-      // Retry automatique avec backoff exponentiel
-      if (retryCount < this.MAX_RETRIES && this.shouldRetry(error)) {
-        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-        console.log(`🔄 Retry dans ${delay}ms...`);
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.makeRequest(endpoint, options, retryCount + 1);
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * 🔍 Détermine si une erreur justifie un retry
-   */
-  shouldRetry(error) {
-    // Retry sur les erreurs réseau, pas sur les erreurs d'authentification
-    return !error.message.includes('401') && 
-           !error.message.includes('403') &&
-           (error.message.includes('Network') || 
-            error.message.includes('timeout') ||
-            error.message.includes('500'));
-  }
-
-  /**
-   * 💾 Gestion du cache local
-   */
-  getCacheKey(endpoint, params = {}) {
-    const paramString = Object.keys(params)
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('&');
-    return `${endpoint}?${paramString}`;
-  }
-
-  setCache(key, data) {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-    });
-  }
-
-  getCache(key) {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-
-    const isExpired = Date.now() - cached.timestamp > this.CACHE_DURATION;
-    if (isExpired) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    console.log(`💾 Cache hit pour: ${key}`);
-    return cached.data;
-  }
-
-  clearCache() {
-    this.cache.clear();
-    console.log('🧹 Cache vidé');
-  }
-
-  // =====================================
-  // API ENDPOINTS
+  // MÉTHODES PRINCIPALES
   // =====================================
 
   /**
@@ -165,55 +24,83 @@ class AdminCollecteurService {
    */
   async getCollecteursActivitySummary(dateDebut = null, dateFin = null) {
     try {
+      console.log('📊 Chargement résumé activités collecteurs...');
+      
+      // Construire les paramètres de la requête
       const params = {};
       if (dateDebut) params.dateDebut = dateDebut;
       if (dateFin) params.dateFin = dateFin;
 
-      const cacheKey = this.getCacheKey('/activites/resume', params);
+      // Vérifier le cache
+      const cacheKey = this.getCacheKey('/admin/collecteurs/activites/summary', params);
       const cached = this.getCache(cacheKey);
-      if (cached) return cached;
+      if (cached) {
+        console.log('📊 Résumé depuis cache');
+        return cached;
+      }
 
+      // Construire l'URL avec les paramètres
       const queryParams = new URLSearchParams(params).toString();
-      const endpoint = `/activites/resume${queryParams ? `?${queryParams}` : ''}`;
+      const url = `/admin/collecteurs/activites/summary${queryParams ? `?${queryParams}` : ''}`;
       
-      const response = await this.makeRequest(endpoint);
-      const collecteurs = response.data || [];
-
-      // Transformation et enrichissement des données
+      console.log('🌐 API: GET', url);
+      
+      // ✅ UTILISATION DE L'AXIOS CONFIGURÉ DE BaseApiService
+      const response = await this.axios.get(url);
+      
+      // Utiliser le formatage standard de BaseApiService
+      const result = this.formatResponse(response, 'Résumé activités récupéré');
+      
+      // Enrichir les données pour l'affichage
+      const collecteurs = result.data || [];
       const collecteursEnrichis = collecteurs.map(this.enrichirCollecteurSummary);
 
+      // Mettre en cache
       this.setCache(cacheKey, collecteursEnrichis);
+      
+      console.log(`✅ ${collecteursEnrichis.length} collecteurs récupérés`);
       return collecteursEnrichis;
 
     } catch (error) {
       console.error('❌ Erreur getCollecteursActivitySummary:', error);
-      throw new Error(`Impossible de récupérer le résumé des activités: ${error.message}`);
+      throw this.handleError(error, 'Impossible de récupérer le résumé des activités');
     }
   }
 
   /**
    * 📋 Récupère les activités d'un collecteur spécifique
    */
-  async getCollecteurActivities(collecteurId, date = null, page = 0, size = 20, sortBy = 'timestamp', sortDir = 'desc') {
+  async getCollecteurActivities(collecteurId, options = {}) {
     try {
       if (!collecteurId) {
         throw new Error('ID du collecteur requis');
       }
 
+      const {
+        date = null,
+        page = 0,
+        size = 20,
+        sortBy = 'timestamp',
+        sortDir = 'desc'
+      } = options;
+
       const params = { page, size, sortBy, sortDir };
       if (date) params.date = date;
 
-      const cacheKey = this.getCacheKey(`/${collecteurId}/activites`, params);
+      const cacheKey = this.getCacheKey(`/admin/collecteurs/${collecteurId}/activites`, params);
       const cached = this.getCache(cacheKey);
       if (cached) return cached;
 
       const queryParams = new URLSearchParams(params).toString();
-      const endpoint = `/${collecteurId}/activites?${queryParams}`;
+      const url = `/admin/collecteurs/${collecteurId}/activites?${queryParams}`;
       
-      const response = await this.makeRequest(endpoint);
-      const activites = response.data || { content: [], totalElements: 0 };
-
-      // Enrichissement des activités
+      console.log('🌐 API: GET', url);
+      
+      const response = await this.axios.get(url);
+      const result = this.formatResponse(response, 'Activités récupérées');
+      
+      // Enrichir les activités
+      const activites = result.data || { content: [], totalElements: 0 };
       if (activites.content) {
         activites.content = activites.content.map(this.enrichirActivite);
       }
@@ -223,7 +110,7 @@ class AdminCollecteurService {
 
     } catch (error) {
       console.error('❌ Erreur getCollecteurActivities:', error);
-      throw new Error(`Impossible de récupérer les activités: ${error.message}`);
+      throw this.handleError(error, 'Impossible de récupérer les activités');
     }
   }
 
@@ -240,17 +127,20 @@ class AdminCollecteurService {
       if (dateDebut) params.dateDebut = dateDebut;
       if (dateFin) params.dateFin = dateFin;
 
-      const cacheKey = this.getCacheKey(`/${collecteurId}/activites/stats`, params);
+      const cacheKey = this.getCacheKey(`/admin/collecteurs/${collecteurId}/activites/stats`, params);
       const cached = this.getCache(cacheKey);
       if (cached) return cached;
 
       const queryParams = new URLSearchParams(params).toString();
-      const endpoint = `/${collecteurId}/activites/stats${queryParams ? `?${queryParams}` : ''}`;
+      const url = `/admin/collecteurs/${collecteurId}/activites/stats${queryParams ? `?${queryParams}` : ''}`;
       
-      const response = await this.makeRequest(endpoint);
-      const stats = response.data || {};
-
-      // Transformation des stats pour l'affichage
+      console.log('🌐 API: GET', url);
+      
+      const response = await this.axios.get(url);
+      const result = this.formatResponse(response, 'Statistiques récupérées');
+      
+      // Enrichir les statistiques
+      const stats = result.data || {};
       const statsEnrichies = this.enrichirStatistiques(stats);
 
       this.setCache(cacheKey, statsEnrichies);
@@ -258,7 +148,7 @@ class AdminCollecteurService {
 
     } catch (error) {
       console.error('❌ Erreur getCollecteurDetailedStats:', error);
-      throw new Error(`Impossible de récupérer les statistiques: ${error.message}`);
+      throw this.handleError(error, 'Impossible de récupérer les statistiques');
     }
   }
 
@@ -272,17 +162,20 @@ class AdminCollecteurService {
       }
 
       const params = { dernierJours, limit };
-      const cacheKey = this.getCacheKey(`/${collecteurId}/activites/critiques`, params);
+      const cacheKey = this.getCacheKey(`/admin/collecteurs/${collecteurId}/activites/critiques`, params);
       const cached = this.getCache(cacheKey);
       if (cached) return cached;
 
       const queryParams = new URLSearchParams(params).toString();
-      const endpoint = `/${collecteurId}/activites/critiques?${queryParams}`;
+      const url = `/admin/collecteurs/${collecteurId}/activites/critiques?${queryParams}`;
       
-      const response = await this.makeRequest(endpoint);
-      const activitesCritiques = response.data || [];
-
-      // Enrichissement des activités critiques
+      console.log('🌐 API: GET', url);
+      
+      const response = await this.axios.get(url);
+      const result = this.formatResponse(response, 'Activités critiques récupérées');
+      
+      // Enrichir les activités critiques
+      const activitesCritiques = result.data || [];
       const activitesEnrichies = activitesCritiques.map(this.enrichirActivite);
 
       this.setCache(cacheKey, activitesEnrichies);
@@ -290,353 +183,283 @@ class AdminCollecteurService {
 
     } catch (error) {
       console.error('❌ Erreur getCollecteurCriticalActivities:', error);
-      throw new Error(`Impossible de récupérer les activités critiques: ${error.message}`);
-    }
-  }
-
-  /**
-   * 🔍 Recherche d'activités avec filtres
-   */
-  async searchCollecteurActivities(collecteurId, filters = {}) {
-    try {
-      if (!collecteurId) {
-        throw new Error('ID du collecteur requis');
-      }
-
-      const params = {
-        page: 0,
-        size: 50,
-        ...filters,
-      };
-
-      // Pas de cache pour les recherches
-      const queryParams = new URLSearchParams(params).toString();
-      const endpoint = `/${collecteurId}/activites/search?${queryParams}`;
-      
-      const response = await this.makeRequest(endpoint);
-      const activites = response.data || { content: [], totalElements: 0 };
-
-      // Enrichissement des résultats
-      if (activites.content) {
-        activites.content = activites.content.map(this.enrichirActivite);
-      }
-
-      return activites;
-
-    } catch (error) {
-      console.error('❌ Erreur searchCollecteurActivities:', error);
-      throw new Error(`Impossible d'effectuer la recherche: ${error.message}`);
+      throw this.handleError(error, 'Impossible de récupérer les activités critiques');
     }
   }
 
   // =====================================
-  // MÉTHODES D'ENRICHISSEMENT DES DONNÉES
+  // MÉTHODES D'ENRICHISSEMENT
   // =====================================
 
   /**
-   * ✨ Enrichit un résumé de collecteur pour l'affichage
+   * 📊 Enrichit un résumé de collecteur avec des données calculées
    */
   enrichirCollecteurSummary = (collecteur) => {
+    if (!collecteur) return collecteur;
+
     return {
       ...collecteur,
-      
-      // Calculs dérivés
-      activitesParJour: collecteur.joursActifs > 0 
-        ? Math.round((collecteur.totalActivites / collecteur.joursActifs) * 10) / 10 
+      // Calculs d'affichage
+      activitesMoyennesParJour: collecteur.joursActifs > 0 
+        ? Math.round(collecteur.totalActivites / collecteur.joursActifs) 
         : 0,
       
-      pourcentageCritiques: collecteur.totalActivites > 0 
-        ? Math.round((collecteur.activitesCritiques / collecteur.totalActivites) * 100 * 10) / 10 
-        : 0,
-
-      // Niveau de priorité pour le tri
-      niveauPriorite: this.getNiveauPriorite(collecteur.statut),
-
-      // Indicateur d'attention
-      necessiteAttention: collecteur.statut === 'ATTENTION' || 
-                         collecteur.statut === 'INACTIF' || 
-                         (collecteur.activitesCritiques || 0) > 0,
-
+      // Statuts visuels
+      statusText: this.getStatusText(collecteur),
+      statusColor: this.getStatusColor(collecteur),
+      
       // Formatage des dates
       derniereActiviteFormatee: collecteur.derniereActivite 
-        ? this.formaterDate(collecteur.derniereActivite)
+        ? this.formatDate(collecteur.derniereActivite)
         : 'Aucune activité',
-
-      // Performance visuelle
-      etoilesPerformance: this.calculerEtoiles(collecteur.scoreActivite),
-      emojiPerformance: this.getEmojiPerformance(collecteur.scoreActivite),
+      
+      // Indicateurs de performance
+      performanceScore: this.calculatePerformanceScore(collecteur),
+      
+      // Alertes
+      hasAlerts: collecteur.activitesCritiques > 0 || collecteur.inactifDepuis > 24,
+      alertLevel: this.getAlertLevel(collecteur)
     };
   };
 
   /**
-   * ✨ Enrichit une activité pour l'affichage
+   * 📋 Enrichit une activité avec des données d'affichage
    */
   enrichirActivite = (activite) => {
+    if (!activite) return activite;
+
     return {
       ...activite,
-      
       // Formatage des dates
-      timestampFormate: this.formaterDateHeure(activite.timestamp),
-      timeAgo: this.calculerTempsEcoule(activite.timestamp),
+      timestampFormate: this.formatDate(activite.timestamp),
+      heureFormatee: this.formatTime(activite.timestamp),
       
-      // Catégorisation
-      estCritique: this.estActiviteCritique(activite),
-      categorieAction: this.categoriserAction(activite.action),
+      // Données d'affichage
+      actionFormatee: this.formatActionName(activite.action),
+      statusColor: this.getActionColor(activite.action),
       
-      // Affichage
-      iconeAction: this.getIconeAction(activite.action),
-      couleurAction: this.getCouleurAction(activite.action, activite.success),
-      descriptionFormattee: this.formaterDescription(activite),
+      // Indicateurs
+      isCritical: this.isActivityCritical(activite),
+      riskLevel: this.evaluateRiskLevel(activite),
+      
+      // Métadonnées
+      detailsFormates: this.formatActivityDetails(activite.details)
     };
   };
 
   /**
-   * ✨ Enrichit les statistiques pour l'affichage
+   * 📊 Enrichit les statistiques avec des calculs d'affichage
    */
   enrichirStatistiques = (stats) => {
+    if (!stats) return stats;
+
     return {
       ...stats,
+      // Calculs supplémentaires
+      efficiency: this.calculateEfficiency(stats),
+      trends: this.calculateTrends(stats),
       
-      // Métriques calculées
-      tauxActiviteJournaliere: stats.joursActifs && stats.totalActivites 
-        ? Math.round((stats.totalActivites / stats.joursActifs) * 10) / 10 
-        : 0,
+      // Formatage pour l'affichage
+      formattedPeriod: this.formatPeriod(stats.dateDebut, stats.dateFin),
       
-      tauxCritiques: stats.totalActivites > 0 && stats.activitesSuspectes 
-        ? Math.round((stats.activitesSuspectes.length / stats.totalActivites) * 100 * 10) / 10 
-        : 0,
-
-      // Formatage pour graphiques
-      repartitionActionsFormattee: this.formaterRepartition(stats.repartitionActions),
-      repartitionEntitesFormattee: this.formaterRepartition(stats.repartitionEntites),
-      heuresActivitesFormattees: this.formaterHeuresActivites(stats.heuresActivites),
+      // Comparaisons
+      comparisonWithPrevious: this.compareWithPrevious(stats),
       
-      // Tendances
-      indicateurTendance: this.getIndicateurTendance(stats.tendanceActivite),
+      // Recommandations
+      recommendations: this.generateRecommendations(stats)
     };
   };
 
   // =====================================
-  // MÉTHODES UTILITAIRES DE FORMATAGE
+  // MÉTHODES UTILITAIRES
   // =====================================
 
-  getNiveauPriorite(statut) {
-    switch (statut) {
-      case 'INACTIF': return 1;
-      case 'ATTENTION': return 2;
-      case 'ACTIF': return 3;
-      default: return 4;
-    }
-  }
-
-  calculerEtoiles(score) {
-    if (!score) return 1;
-    if (score >= 90) return 5;
-    if (score >= 75) return 4;
-    if (score >= 60) return 3;
-    if (score >= 40) return 2;
-    return 1;
-  }
-
-  getEmojiPerformance(score) {
-    const etoiles = this.calculerEtoiles(score);
-    switch (etoiles) {
-      case 5: return '🌟';
-      case 4: return '⭐';
-      case 3: return '✨';
-      case 2: return '🔸';
-      default: return '🔹';
-    }
-  }
-
-  formaterDate(dateString) {
-    try {
-      const date = new Date(dateString);
-      const maintenant = new Date();
-      const diffMs = maintenant - date;
-      const diffMinutes = Math.floor(diffMs / 60000);
-      const diffHeures = Math.floor(diffMs / 3600000);
-      const diffJours = Math.floor(diffMs / 86400000);
-
-      if (diffMinutes < 1) return "À l'instant";
-      if (diffMinutes < 60) return `${diffMinutes} min`;
-      if (diffHeures < 24) return `${diffHeures}h`;
-      if (diffJours < 7) return `${diffJours}j`;
-      
-      return format(date, 'dd/MM');
-    } catch (error) {
-      return 'Date invalide';
-    }
-  }
-
-  formaterDateHeure(dateString) {
-    try {
-      const date = new Date(dateString);
-      return format(date, 'dd/MM/yyyy à HH:mm');
-    } catch (error) {
-      return 'Date invalide';
-    }
-  }
-
-  calculerTempsEcoule(dateString) {
-    try {
-      const date = new Date(dateString);
-      const maintenant = new Date();
-      const diffMs = maintenant - date;
-      const diffMinutes = Math.floor(diffMs / 60000);
-      const diffHeures = Math.floor(diffMs / 3600000);
-      const diffJours = Math.floor(diffMs / 86400000);
-
-      if (diffMinutes < 1) return "à l'instant";
-      if (diffMinutes < 60) return `il y a ${diffMinutes} min`;
-      if (diffHeures < 24) return `il y a ${diffHeures}h`;
-      return `il y a ${diffJours} jour${diffJours > 1 ? 's' : ''}`;
-    } catch (error) {
-      return '';
-    }
-  }
-
-  estActiviteCritique(activite) {
-    const actionsCritiques = ['DELETE_CLIENT', 'MODIFY_SOLDE', 'LOGIN_FAILED'];
-    return actionsCritiques.includes(activite.action) || 
-           (activite.success === false) ||
-           (activite.durationMs && activite.durationMs > 10000);
-  }
-
-  categoriserAction(action) {
-    const categories = {
-      'CREATE_CLIENT': 'creation',
-      'MODIFY_CLIENT': 'modification',
-      'DELETE_CLIENT': 'suppression',
-      'CREATE_MOUVEMENT': 'transaction',
-      'LOGIN': 'connexion',
-      'LOGOUT': 'deconnexion',
-    };
-    return categories[action] || 'autre';
-  }
-
-  getIconeAction(action) {
-    const icones = {
-      'CREATE_CLIENT': '👤➕',
-      'MODIFY_CLIENT': '👤✏️',
-      'DELETE_CLIENT': '👤❌',
-      'CREATE_MOUVEMENT': '💰',
-      'LOGIN': '🔑',
-      'LOGOUT': '🚪',
-      'CREATE_JOURNAL': '📋',
-    };
-    return icones[action] || '📋';
-  }
-
-  getCouleurAction(action, success) {
-    if (success === false) return '#F44336';
+  /**
+   * 🎯 Calcule le score de performance d'un collecteur
+   */
+  calculatePerformanceScore(collecteur) {
+    if (!collecteur) return 0;
     
-    const couleurs = {
-      'CREATE_CLIENT': '#4CAF50',
-      'MODIFY_CLIENT': '#FF9800',
-      'DELETE_CLIENT': '#F44336',
-      'CREATE_MOUVEMENT': '#2196F3',
-      'LOGIN': '#4CAF50',
-      'LOGOUT': '#9E9E9E',
-    };
-    return couleurs[action] || '#6c757d';
+    let score = 100;
+    
+    // Pénalités
+    if (collecteur.activitesCritiques > 0) score -= 20;
+    if (collecteur.inactifDepuis > 24) score -= 30;
+    if (collecteur.totalActivites < 10) score -= 10;
+    
+    // Bonus
+    if (collecteur.joursActifs > 20) score += 10;
+    if (collecteur.activitesCritiques === 0) score += 5;
+    
+    return Math.max(0, Math.min(100, score));
   }
 
-  formaterDescription(activite) {
-    const { action, entityType, entityId } = activite;
+  /**
+   * 🚨 Détermine le niveau d'alerte d'un collecteur
+   */
+  getAlertLevel(collecteur) {
+    if (!collecteur) return 'none';
     
-    const actions = {
+    if (collecteur.activitesCritiques > 5) return 'critical';
+    if (collecteur.inactifDepuis > 48) return 'critical';
+    if (collecteur.activitesCritiques > 0) return 'warning';
+    if (collecteur.inactifDepuis > 24) return 'warning';
+    
+    return 'normal';
+  }
+
+  /**
+   * 🎨 Retourne la couleur selon le statut
+   */
+  getStatusColor(collecteur) {
+    const level = this.getAlertLevel(collecteur);
+    
+    switch (level) {
+      case 'critical': return '#dc3545';
+      case 'warning': return '#ffc107';
+      case 'normal': return '#28a745';
+      default: return '#6c757d';
+    }
+  }
+
+  /**
+   * 📝 Retourne le texte de statut
+   */
+  getStatusText(collecteur) {
+    const level = this.getAlertLevel(collecteur);
+    
+    switch (level) {
+      case 'critical': return 'Attention requise';
+      case 'warning': return 'Surveillance';
+      case 'normal': return 'Normal';
+      default: return 'Inconnu';
+    }
+  }
+
+  /**
+   * 🎨 Retourne la couleur selon l'action
+   */
+  getActionColor(action) {
+    const criticalActions = ['DELETE_CLIENT', 'MODIFY_SOLDE', 'LOGIN_FAILED'];
+    const warningActions = ['MODIFY_CLIENT', 'LARGE_TRANSACTION'];
+    
+    if (criticalActions.includes(action)) return '#dc3545';
+    if (warningActions.includes(action)) return '#ffc107';
+    return '#28a745';
+  }
+
+  /**
+   * 📝 Formate le nom d'une action
+   */
+  formatActionName(action) {
+    const actionNames = {
+      'LOGIN': 'Connexion',
+      'LOGOUT': 'Déconnexion',
       'CREATE_CLIENT': 'Création client',
       'MODIFY_CLIENT': 'Modification client',
       'DELETE_CLIENT': 'Suppression client',
-      'CREATE_MOUVEMENT': 'Nouvelle transaction',
-      'LOGIN': 'Connexion',
-      'LOGOUT': 'Déconnexion',
+      'TRANSACTION_EPARGNE': 'Épargne',
+      'TRANSACTION_RETRAIT': 'Retrait',
+      'CLOTURE_JOURNAL': 'Clôture journal',
+      'MODIFY_SOLDE': 'Modification solde',
+      'LOGIN_FAILED': 'Échec connexion'
     };
-
-    let description = actions[action] || action;
     
-    if (entityType && entityId) {
-      description += ` (${entityType} #${entityId})`;
+    return actionNames[action] || action;
+  }
+
+  /**
+   * 🚨 Détermine si une activité est critique
+   */
+  isActivityCritical(activite) {
+    const criticalActions = ['DELETE_CLIENT', 'MODIFY_SOLDE', 'LOGIN_FAILED'];
+    return criticalActions.includes(activite.action);
+  }
+
+  /**
+   * 📅 Formate une date
+   */
+  formatDate(date) {
+    try {
+      return new Date(date).toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return 'Date invalide';
     }
-    
-    return description;
   }
 
-  formaterRepartition(repartition) {
-    if (!repartition || typeof repartition !== 'object') return [];
-    
-    return Object.entries(repartition)
-      .map(([key, value]) => ({
-        label: key,
-        value: value,
-        percentage: 0, // Sera calculé côté UI
-      }))
-      .sort((a, b) => b.value - a.value);
-  }
-
-  formaterHeuresActivites(heuresActivites) {
-    if (!heuresActivites || typeof heuresActivites !== 'object') return [];
-    
-    return Object.entries(heuresActivites)
-      .map(([heure, count]) => ({
-        heure: parseInt(heure),
-        activites: count,
-        label: `${heure}h`,
-      }))
-      .sort((a, b) => a.heure - b.heure);
-  }
-
-  getIndicateurTendance(tendance) {
-    switch (tendance) {
-      case 'CROISSANTE': return { icone: '📈', couleur: '#4CAF50', texte: 'En hausse' };
-      case 'DÉCROISSANTE': return { icone: '📉', couleur: '#F44336', texte: 'En baisse' };
-      default: return { icone: '➡️', couleur: '#6c757d', texte: 'Stable' };
+  /**
+   * ⏰ Formate une heure
+   */
+  formatTime(date) {
+    try {
+      return new Date(date).toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Heure invalide';
     }
   }
 
   // =====================================
-  // MÉTHODES DE GESTION DU CACHE
+  // GESTION DU CACHE
   // =====================================
 
   /**
-   * 🔄 Force le rechargement des données (invalide le cache)
+   * 🔑 Génère une clé de cache
    */
-  async refreshData(collecteurId = null) {
-    if (collecteurId) {
-      // Supprimer le cache pour un collecteur spécifique
-      const keysToDelete = [];
-      for (const key of this.cache.keys()) {
-        if (key.includes(`/${collecteurId}/`)) {
-          keysToDelete.push(key);
-        }
-      }
-      keysToDelete.forEach(key => this.cache.delete(key));
-    } else {
-      // Vider tout le cache
-      this.clearCache();
-    }
-    
-    console.log(`🔄 Cache invalidé ${collecteurId ? `pour collecteur ${collecteurId}` : 'globalement'}`);
+  getCacheKey(endpoint, params = {}) {
+    const paramString = Object.keys(params).length > 0 
+      ? JSON.stringify(params) 
+      : '';
+    return `${endpoint}${paramString}`;
   }
 
   /**
-   * 📊 Informations sur le cache (pour le débogage)
+   * 💾 Met en cache
    */
-  getCacheInfo() {
-    const entries = Array.from(this.cache.entries());
-    return {
-      size: entries.length,
-      entries: entries.map(([key, value]) => ({
-        key,
-        timestamp: value.timestamp,
-        age: Date.now() - value.timestamp,
-      })),
-    };
+  setCache(key, data) {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
   }
+
+  /**
+   * 📖 Récupère du cache
+   */
+  getCache(key) {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    const isExpired = (Date.now() - cached.timestamp) > this.CACHE_DURATION;
+    if (isExpired) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  }
+
+  /**
+   * 🧹 Nettoie le cache
+   */
+  clearCache() {
+    this.cache.clear();
+  }
+
+  // Méthodes d'assistance (à implémenter selon vos besoins)
+  calculateEfficiency(stats) { return 85; }
+  calculateTrends(stats) { return { up: true, percentage: 12 }; }
+  formatPeriod(debut, fin) { return `${debut} - ${fin}`; }
+  compareWithPrevious(stats) { return { change: '+5%', direction: 'up' }; }
+  generateRecommendations(stats) { return ['Maintenir le rythme', 'Surveiller les activités critiques']; }
+  evaluateRiskLevel(activite) { return this.isActivityCritical(activite) ? 'high' : 'low'; }
+  formatActivityDetails(details) { return details || 'Aucun détail'; }
 }
 
-// Export de l'instance singleton
-const adminCollecteurService = new AdminCollecteurService();
-
-export default adminCollecteurService;
+export default new AdminCollecteurService();

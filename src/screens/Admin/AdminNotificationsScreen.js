@@ -76,19 +76,50 @@ const AdminNotificationsScreen = ({ navigation }) => {
       setLoading(true);
       
       // Utiliser vos endpoints
-      const [dashboardData, criticalData] = await Promise.all([
-        adminNotificationService.getDashboard(60),
+      const [dashboardResult, criticalResult] = await Promise.all([
+        adminNotificationService.getDashboard(),
         adminNotificationService.getCriticalNotifications()
       ]);
       
-      setDashboard(dashboardData);
+      // Adapter les données du backend à la structure attendue par le frontend
+      const dashboardData = dashboardResult.data || {};
+      const criticalData = criticalResult.data || [];
+      
+      // Mapper les données backend vers la structure frontend
+      const mappedDashboard = {
+        // Utiliser les stats du backend
+        urgentNotifications: dashboardData.stats?.critiquesNonLues || 0,
+        unreadNotifications: dashboardData.stats?.nonLues || 0,
+        activitiesCount: dashboardData.stats?.total || 0,
+        
+        // Données additionnelles du backend
+        criticalNotifications: dashboardData.criticalNotifications || [],
+        recentNotifications: dashboardData.recentNotifications || [],
+        lastUpdate: dashboardData.lastUpdate || new Date().toISOString(),
+        
+        // Stats détaillées si disponibles
+        stats: {
+          total: dashboardData.stats?.total || 0,
+          critiques: dashboardData.stats?.critiques || 0,
+          critiquesNonLues: dashboardData.stats?.critiquesNonLues || 0,
+          nonLues: dashboardData.stats?.nonLues || 0,
+          // Ajouter d'autres stats si nécessaire
+          transactions: 0, // TODO: à implémenter côté backend si nécessaire
+          nouveauxClients: 0, // TODO: à implémenter côté backend si nécessaire
+          collecteursActifs: 0 // TODO: à implémenter côté backend si nécessaire
+        }
+      };
+      
+      setDashboard(mappedDashboard);
       setCriticalNotifications(criticalData);
       setLastUpdate(new Date());
       
+      // LOG CORRIGÉ avec les bonnes propriétés
       console.log('✅ Données admin chargées depuis votre backend:', {
-        activités: dashboardData.activitiesCount,
-        urgentes: dashboardData.urgentNotifications,
-        notifications: criticalData.length
+        activités: mappedDashboard.activitiesCount,
+        urgentes: mappedDashboard.urgentNotifications,
+        notifications: criticalData.length,
+        stats: mappedDashboard.stats
       });
       
     } catch (error) {
@@ -98,13 +129,31 @@ const AdminNotificationsScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
-
   /**
    * 🔄 Callback polling intelligent - gère les changements significatifs
    */
-  const handlePollingUpdate = (newDashboard, hasSignificantChanges) => {
-    if (newDashboard) {
-      setDashboard(newDashboard);
+  const handlePollingUpdate = (dashboardResult) => {
+    if (dashboardResult && dashboardResult.data) {
+      const dashboardData = dashboardResult.data;
+      
+      // Mapper les nouvelles données
+      const mappedDashboard = {
+        urgentNotifications: dashboardData.stats?.critiquesNonLues || 0,
+        unreadNotifications: dashboardData.stats?.nonLues || 0,
+        activitiesCount: dashboardData.stats?.total || 0,
+        criticalNotifications: dashboardData.criticalNotifications || [],
+        recentNotifications: dashboardData.recentNotifications || [],
+        lastUpdate: dashboardData.lastUpdate || new Date().toISOString(),
+        stats: dashboardData.stats || {}
+      };
+      
+      // Détecter changements significatifs
+      const hasSignificantChanges = dashboard && (
+        mappedDashboard.urgentNotifications !== dashboard.urgentNotifications ||
+        mappedDashboard.unreadNotifications !== dashboard.unreadNotifications
+      );
+      
+      setDashboard(mappedDashboard);
       setLastUpdate(new Date());
       
       // Si changements significatifs, recharger notifications critiques
@@ -113,8 +162,8 @@ const AdminNotificationsScreen = ({ navigation }) => {
         loadCriticalNotifications();
         
         // Vibration pour nouvelles urgentes si app active
-        if (appState === 'active' && newDashboard.urgentNotifications > 0) {
-          showUrgentNotificationAlert(newDashboard.urgentNotifications);
+        if (appState === 'active' && mappedDashboard.urgentNotifications > 0) {
+          showUrgentNotificationAlert(mappedDashboard.urgentNotifications);
         }
       }
     }
@@ -140,7 +189,8 @@ const AdminNotificationsScreen = ({ navigation }) => {
    */
   const loadCriticalNotifications = async () => {
     try {
-      const notifications = await adminNotificationService.getCriticalNotifications();
+      const result = await adminNotificationService.getCriticalNotifications();
+      const notifications = result.data || [];
       setCriticalNotifications(notifications);
     } catch (error) {
       console.error('❌ Erreur chargement notifications:', error);

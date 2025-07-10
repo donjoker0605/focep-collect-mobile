@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from '../../components/DatePicker/DatePicker';
 import { format, parseISO, isToday, isYesterday, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
