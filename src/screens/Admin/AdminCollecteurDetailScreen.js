@@ -1,3 +1,4 @@
+// src/screens/Admin/AdminCollecteurDetailScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -18,7 +19,8 @@ import { format, parseISO, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 
-import adminCollecteurService from '../services/adminCollecteurService';
+// ✅ IMPORT CORRIGÉ - Chemin depuis src/screens/Admin vers src/services
+import adminCollecteurService from '../../services/adminCollecteurService';
 
 const { width, height } = Dimensions.get('window');
 const chartWidth = width - 40;

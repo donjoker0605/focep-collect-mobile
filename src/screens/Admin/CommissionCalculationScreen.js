@@ -1,4 +1,4 @@
-// src/screens/Admin/CommissionCalculationScreen.js
+// src/screens/Admin/CommissionCalculationScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,7 +18,7 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
 import SelectInput from '../../components/SelectInput/SelectInput';
-import DatePickerInput from '../../components/DatePicker/DatePicker';
+import DatePicker from '../../components/DatePicker/DatePicker';
 import theme from '../../theme';
 import { commissionService, collecteurService } from '../../services';
 
@@ -35,6 +35,10 @@ const CommissionCalculationScreen = ({ navigation }) => {
   const [dateFin, setDateFin] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [commissionResults, setCommissionResults] = useState(null);
   const [error, setError] = useState(null);
+
+  // ✅ NOUVEAUX ÉTATS pour les DatePickers
+  const [showDateDebutPicker, setShowDateDebutPicker] = useState(false);
+  const [showDateFinPicker, setShowDateFinPicker] = useState(false);
 
   // Options de période
   const periodOptions = [
@@ -164,6 +168,79 @@ const CommissionCalculationScreen = ({ navigation }) => {
     }
   };
 
+  // ✅ FONCTION HELPER pour formater les dates d'affichage
+  const formatDateForDisplay = (dateString) => {
+    try {
+      return format(new Date(dateString), 'dd/MM/yyyy', { locale: fr });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // ✅ COMPOSANT pour les sélecteurs de date personnalisés
+  const renderCustomDateInputs = () => {
+    if (selectedPeriod !== 'custom') return null;
+
+    return (
+      <View style={styles.customDateContainer}>
+        {/* Date de début */}
+        <View style={styles.dateInputGroup}>
+          <Text style={styles.dateLabel}>Date de début</Text>
+          <TouchableOpacity 
+            style={styles.dateButton}
+            onPress={() => setShowDateDebutPicker(true)}
+          >
+            <Text style={styles.dateText}>
+              {formatDateForDisplay(dateDebut)}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Date de fin */}
+        <View style={styles.dateInputGroup}>
+          <Text style={styles.dateLabel}>Date de fin</Text>
+          <TouchableOpacity 
+            style={styles.dateButton}
+            onPress={() => setShowDateFinPicker(true)}
+          >
+            <Text style={styles.dateText}>
+              {formatDateForDisplay(dateFin)}
+            </Text>
+            <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* DatePicker pour date de début */}
+        {showDateDebutPicker && (
+          <DatePicker
+            date={new Date(dateDebut)}
+            onDateChange={(date) => {
+              setDateDebut(format(date, 'yyyy-MM-dd'));
+              setShowDateDebutPicker(false);
+            }}
+            onClose={() => setShowDateDebutPicker(false)}
+            maximumDate={new Date(dateFin)}
+          />
+        )}
+
+        {/* DatePicker pour date de fin */}
+        {showDateFinPicker && (
+          <DatePicker
+            date={new Date(dateFin)}
+            onDateChange={(date) => {
+              setDateFin(format(date, 'yyyy-MM-dd'));
+              setShowDateFinPicker(false);
+            }}
+            onClose={() => setShowDateFinPicker(false)}
+            minimumDate={new Date(dateDebut)}
+            maximumDate={new Date()}
+          />
+        )}
+      </View>
+    );
+  };
+
   const renderCommissionItem = ({ item }) => {
     if (!item) return null;
 
@@ -258,25 +335,8 @@ const CommissionCalculationScreen = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Dates personnalisées */}
-          {selectedPeriod === 'custom' && (
-            <>
-              <DatePickerInput
-                label="Date de début"
-                value={dateDebut}
-                onChange={setDateDebut}
-                maximumDate={new Date()}
-              />
-              
-              <DatePickerInput
-                label="Date de fin"
-                value={dateFin}
-                onChange={setDateFin}
-                minimumDate={dateDebut ? new Date(dateDebut) : undefined}
-                maximumDate={new Date()}
-              />
-            </>
-          )}
+          {/* ✅ DATES PERSONNALISÉES CORRIGÉES */}
+          {renderCustomDateInputs()}
 
           {/* Affichage de la période sélectionnée */}
           <View style={styles.periodSummary}>
@@ -470,6 +530,36 @@ const styles = StyleSheet.create({
   activePeriodButtonText: {
     color: theme.colors.white,
   },
+  
+  // ✅ NOUVEAUX STYLES pour les dates personnalisées
+  customDateContainer: {
+    marginTop: 16,
+  },
+  dateInputGroup: {
+    marginBottom: 12,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 8,
+    backgroundColor: theme.colors.white,
+  },
+  dateText: {
+    fontSize: 16,
+    color: theme.colors.text,
+  },
+  
   periodSummary: {
     backgroundColor: theme.colors.lightGray,
     padding: 16,

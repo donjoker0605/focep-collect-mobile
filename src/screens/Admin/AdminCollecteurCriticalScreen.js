@@ -1,3 +1,4 @@
+// src/screens/Admin/AdminCollecteurCriticalScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -16,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-import adminCollecteurService from '../services/adminCollecteurService';
+// ✅ IMPORT CORRIGÉ - Chemin depuis src/screens/Admin vers src/services
+import adminCollecteurService from '../../services/adminCollecteurService';
 
 /**
  * 🚨 Écran des activités critiques d'un collecteur

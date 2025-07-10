@@ -1,20 +1,43 @@
-// src/navigation/AdminStack.js
+// src/navigation/AdminStack.js - VERSION CORRIGÉE COMPLÈTE
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Écrans existants (à adapter selon votre structure)
-import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
-import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
-import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
-import AdminReportsScreen from '../screens/Admin/AdminReportsScreen';
+// ============================= 
+// IMPORTS DES ÉCRANS EXISTANTS
+// ============================= 
 
-// 🎯 Nouveaux écrans de supervision des collecteurs
+// Écrans principaux
+import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
+import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
+
+// Écrans de gestion des collecteurs
+import CollecteurManagementScreen from '../screens/Admin/CollecteurManagementScreen';
+import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
+import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
+import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
+
+// Écrans de supervision des collecteurs
 import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
 import AdminCollecteurDetailScreen from '../screens/Admin/AdminCollecteurDetailScreen';
 import AdminCollecteurCriticalScreen from '../screens/Admin/AdminCollecteurCriticalScreen';
 import AdminCollecteurActivitiesScreen from '../screens/Admin/AdminCollecteurActivitiesScreen';
+
+// Écrans de gestion des clients
+import ClientManagementScreen from '../screens/Admin/ClientManagementScreen';
+import ClientDetailScreen from '../screens/Admin/ClientDetailScreen';
+
+// Écrans de rapports et commissions
+import ReportsScreen from '../screens/Admin/ReportsScreen';
+import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
+import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
+import CommissionReportScreen from '../screens/Admin/CommissionReportScreen';
+
+// Écrans de transactions et transferts
+import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
+import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
+import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 
 const Stack = createStackNavigator();
 
@@ -40,7 +63,7 @@ const AdminStack = () => {
       }}
     >
       {/* ============================= */}
-      {/* ÉCRANS PRINCIPAUX EXISTANTS */}
+      {/* ÉCRANS PRINCIPAUX */}
       {/* ============================= */}
       
       <Stack.Screen
@@ -61,14 +84,6 @@ const AdminStack = () => {
       />
 
       <Stack.Screen
-        name="AdminCollecteurs"
-        component={AdminCollecteursScreen}
-        options={{
-          title: 'Gestion Collecteurs',
-        }}
-      />
-
-      <Stack.Screen
         name="AdminNotifications"
         component={AdminNotificationsScreen}
         options={{
@@ -76,16 +91,44 @@ const AdminStack = () => {
         }}
       />
 
+      {/* ============================= */}
+      {/* GESTION DES COLLECTEURS */}
+      {/* ============================= */}
+
       <Stack.Screen
-        name="AdminReports"
-        component={AdminReportsScreen}
+        name="CollecteurManagementScreen"
+        component={CollecteurManagementScreen}
         options={{
-          title: 'Rapports',
+          title: 'Gestion Collecteurs',
         }}
       />
 
+      <Stack.Screen
+        name="CollecteurDetailScreen"
+        component={CollecteurDetailScreen}
+        options={({ route }) => ({
+          title: route.params?.collecteur?.nom || 'Détails Collecteur',
+        })}
+      />
+
+      <Stack.Screen
+        name="CollecteurCreationScreen"
+        component={CollecteurCreationScreen}
+        options={({ route }) => ({
+          title: route.params?.mode === 'edit' ? 'Modifier Collecteur' : 'Nouveau Collecteur',
+        })}
+      />
+
+      <Stack.Screen
+        name="CollecteurClientsScreen"
+        component={CollecteurClientsScreen}
+        options={({ route }) => ({
+          title: `Clients - ${route.params?.collecteurNom || 'Collecteur'}`,
+        })}
+      />
+
       {/* ============================= */}
-      {/* 🎯 NOUVEAUX ÉCRANS SUPERVISION */}
+      {/* SUPERVISION DES COLLECTEURS */}
       {/* ============================= */}
 
       <Stack.Screen
@@ -97,7 +140,6 @@ const AdminStack = () => {
             <TouchableOpacity
               style={{ marginRight: 16, padding: 8 }}
               onPress={() => {
-                // Action pour actualiser ou filtrer
                 navigation.setParams({ refresh: Date.now() });
               }}
             >
@@ -113,7 +155,6 @@ const AdminStack = () => {
         options={({ route }) => ({
           title: route.params?.collecteurNom || 'Détails Collecteur',
           headerBackTitle: 'Supervision',
-          // Le headerRight est géré dans le composant lui-même
         })}
       />
 
@@ -123,7 +164,6 @@ const AdminStack = () => {
         options={({ route }) => ({
           title: 'Activités Critiques',
           headerBackTitle: 'Détails',
-          // Le headerRight est géré dans le composant lui-même
         })}
       />
 
@@ -133,12 +173,99 @@ const AdminStack = () => {
         options={({ route }) => ({
           title: 'Toutes les activités',
           headerBackTitle: 'Détails',
-          // Le headerRight est géré dans le composant lui-même
         })}
       />
 
       {/* ============================= */}
-      {/* ÉCRANS MODAUX (si nécessaire) */}
+      {/* GESTION DES CLIENTS */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="ClientManagementScreen"
+        component={ClientManagementScreen}
+        options={{
+          title: 'Gestion Clients',
+        }}
+      />
+
+      <Stack.Screen
+        name="ClientDetailScreen"
+        component={ClientDetailScreen}
+        options={({ route }) => ({
+          title: route.params?.client?.nom || 'Détails Client',
+        })}
+      />
+
+      {/* ============================= */}
+      {/* RAPPORTS ET ANALYSES */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="ReportsScreen"
+        component={ReportsScreen}
+        options={{
+          title: 'Rapports',
+        }}
+      />
+
+      {/* ============================= */}
+      {/* COMMISSIONS */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="CommissionCalculationScreen"
+        component={CommissionCalculationScreen}
+        options={{
+          title: 'Calcul des Commissions',
+        }}
+      />
+
+      <Stack.Screen
+        name="CommissionParametersScreen"
+        component={CommissionParametersScreen}
+        options={{
+          title: 'Paramètres de Commission',
+        }}
+      />
+
+      <Stack.Screen
+        name="CommissionReportScreen"
+        component={CommissionReportScreen}
+        options={({ route }) => ({
+          title: `Commissions - ${route.params?.collecteurName || 'Rapport'}`,
+        })}
+      />
+
+      {/* ============================= */}
+      {/* TRANSACTIONS ET TRANSFERTS */}
+      {/* ============================= */}
+
+      <Stack.Screen
+        name="TransactionDetailScreen"
+        component={TransactionDetailScreen}
+        options={({ route }) => ({
+          title: 'Détails Transaction',
+        })}
+      />
+
+      <Stack.Screen
+        name="TransfertCompteScreen"
+        component={TransfertCompteScreen}
+        options={{
+          title: 'Transfert de Comptes',
+        }}
+      />
+
+      <Stack.Screen
+        name="JournalClotureScreen"
+        component={JournalClotureScreen}
+        options={{
+          title: 'Journal & Clôture',
+        }}
+      />
+
+      {/* ============================= */}
+      {/* ÉCRANS MODAUX */}
       {/* ============================= */}
 
       <Stack.Screen
@@ -214,7 +341,6 @@ export const getAdminScreenOptions = (title, options = {}) => ({
 
 /**
  * 🚀 Fonction helper pour naviguer vers la supervision
- * À utiliser depuis d'autres écrans pour naviguer vers la supervision
  */
 export const navigateToSupervision = (navigation, collecteurId = null) => {
   if (collecteurId) {
@@ -228,7 +354,6 @@ export const navigateToSupervision = (navigation, collecteurId = null) => {
 
 /**
  * 📱 Hook personnalisé pour les actions de supervision
- * Utilisable dans les composants pour les actions rapides
  */
 export const useSupervisionActions = (navigation) => {
   const goToSupervision = () => {

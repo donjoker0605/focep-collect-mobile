@@ -1,3 +1,4 @@
+// src/screens/Admin/AdminCollecteurSupervisionScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,7 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-import adminCollecteurService from '../services/adminCollecteurService';
+// ✅ IMPORT CORRIGÉ - Chemin depuis src/screens/Admin vers src/services
+import adminCollecteurService from '../../services/adminCollecteurService';
 
 const { width } = Dimensions.get('window');
 

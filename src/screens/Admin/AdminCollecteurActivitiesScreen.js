@@ -18,7 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { format, parseISO, isToday, isYesterday, subDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-import adminCollecteurService from '../services/adminCollecteurService';
+import adminCollecteurService from '../../services/adminCollecteurService';
 
 /**
  * 📋 Écran de toutes les activités d'un collecteur avec filtres avancés

@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminNotificationsScreen.js
+// src/screens/Admin/AdminNotificationsScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -12,11 +12,22 @@ import {
   AppState,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Ionicons } from '@expo/vector-icons'; // ✅ Changé de MaterialIcons à Ionicons pour cohérence
 
+// ✅ IMPORT CORRIGÉ - Utiliser votre structure de thème existante
+import theme from '../../theme';
 import adminNotificationService from '../../services/adminNotificationService';
 import { formatTimeAgo, formatMontant } from '../../utils/formatters';
-import { COLORS, SIZES } from '../../constants/theme';
+
+// ✅ Extraction des constantes depuis votre thème
+const { colors, spacing } = theme;
+
+// ✅ Création d'un objet SIZES pour compatibilité avec le code existant
+const SIZES = {
+  base: spacing.sm,
+  padding: spacing.md,
+  radius: theme.borderRadius.md,
+};
 
 const AdminNotificationsScreen = ({ navigation }) => {
   // États principaux
@@ -36,7 +47,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
       // Charger données initiales
       loadInitialData();
       
-      // Démarrer polling intelligent avec ton backend
+      // Démarrer polling intelligent avec votre backend
       adminNotificationService.startIntelligentPolling(handlePollingUpdate);
       
       return () => {
@@ -58,13 +69,13 @@ const AdminNotificationsScreen = ({ navigation }) => {
   }, [appState]);
 
   /**
-   * 📊 Chargement données initiales depuis ton backend
+   * 📊 Chargement données initiales depuis votre backend
    */
   const loadInitialData = async () => {
     try {
       setLoading(true);
       
-      // Utiliser tes endpoints
+      // Utiliser vos endpoints
       const [dashboardData, criticalData] = await Promise.all([
         adminNotificationService.getDashboard(60),
         adminNotificationService.getCriticalNotifications()
@@ -74,7 +85,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
       setCriticalNotifications(criticalData);
       setLastUpdate(new Date());
       
-      console.log('✅ Données admin chargées depuis ton backend:', {
+      console.log('✅ Données admin chargées depuis votre backend:', {
         activités: dashboardData.activitiesCount,
         urgentes: dashboardData.urgentNotifications,
         notifications: criticalData.length
@@ -125,7 +136,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   };
 
   /**
-   * 🔔 Charger notifications critiques depuis ton backend
+   * 🔔 Charger notifications critiques depuis votre backend
    */
   const loadCriticalNotifications = async () => {
     try {
@@ -137,7 +148,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   };
 
   /**
-   * Marquer notification comme lue via ton backend
+   * Marquer notification comme lue via votre backend
    */
   const handleMarkAsRead = async (notificationId) => {
     try {
@@ -170,7 +181,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   // ===== COMPOSANTS DE RENDU =====
 
   /**
-   * 📊 Dashboard adapté à ton backend
+   * 📊 Dashboard adapté à votre backend
    */
   const renderDashboard = () => {
     if (!dashboard) return null;
@@ -182,7 +193,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
           <View style={styles.connectionStatus}>
             <View style={[
               styles.statusIndicator,
-              { backgroundColor: appState === 'active' ? COLORS.success : COLORS.warning }
+              { backgroundColor: appState === 'active' ? colors.success : colors.warning }
             ]} />
             <Text style={styles.lastUpdateText}>
               {formatTimeAgo(lastUpdate)}
@@ -192,29 +203,29 @@ const AdminNotificationsScreen = ({ navigation }) => {
         
         <View style={styles.statsRow}>
           <DashboardStat
-            icon="error"
+            icon="warning"
             label="Urgentes"
             value={dashboard.urgentNotifications}
-            color={COLORS.error}
+            color={colors.error}
             onPress={() => filterNotifications('CRITIQUE')}
           />
           <DashboardStat
             icon="notifications"
             label="Non lues"
             value={dashboard.unreadNotifications}
-            color={COLORS.warning}
+            color={colors.warning}
             onPress={() => loadCriticalNotifications()}
           />
           <DashboardStat
             icon="trending-up"
             label="Activités"
             value={dashboard.activitiesCount}
-            color={COLORS.primary}
-            onPress={() => navigation.navigate('AdminActivitiesDetail')}
+            color={colors.primary}
+            onPress={() => navigation.navigate('AdminCollecteurSupervision')}
           />
         </View>
         
-        {/* Statistiques détaillées de ton backend */}
+        {/* Statistiques détaillées de votre backend */}
         {dashboard.stats && (
           <View style={styles.detailedStats}>
             <Text style={styles.statsTitle}>Statistiques détaillées</Text>
@@ -234,7 +245,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
    */
   const DashboardStat = ({ icon, label, value, color, onPress }) => (
     <TouchableOpacity style={styles.statCard} onPress={onPress}>
-      <Icon name={icon} size={24} color={color} />
+      <Ionicons name={icon} size={24} color={color} />
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </TouchableOpacity>
@@ -248,7 +259,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
   );
 
   /**
-   * 🚨 Notification critique adaptée à ton backend
+   * 🚨 Notification critique adaptée à votre backend
    */
   const renderCriticalNotification = ({ item }) => {
     const isUnread = !item.lu;
@@ -266,7 +277,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
       >
         <View style={styles.notificationHeader}>
           <View style={styles.notificationTitleRow}>
-            <Icon
+            <Ionicons
               name={getPriorityIcon(item.priority)}
               size={22}
               color={getPriorityColor(item.priority)}
@@ -292,7 +303,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
           {item.message}
         </Text>
         
-        {/* Données contextuelles de ton backend */}
+        {/* Données contextuelles de votre backend */}
         {item.data && (
           <View style={styles.contextData}>
             <Text style={styles.contextText}>
@@ -324,17 +335,17 @@ const AdminNotificationsScreen = ({ navigation }) => {
 
   const getPriorityIcon = (priority) => {
     switch (priority) {
-      case 'CRITIQUE': return 'error';
+      case 'CRITIQUE': return 'alert-circle';
       case 'HAUTE': return 'warning';
-      default: return 'info';
+      default: return 'information-circle';
     }
   };
 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case 'CRITIQUE': return COLORS.error;
-      case 'HAUTE': return COLORS.warning;
-      default: return COLORS.info;
+      case 'CRITIQUE': return colors.error;
+      case 'HAUTE': return colors.warning;
+      default: return colors.primary;
     }
   };
 
@@ -353,17 +364,17 @@ const AdminNotificationsScreen = ({ navigation }) => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Dashboard intégré à ton backend */}
+        {/* Dashboard intégré à votre backend */}
         {renderDashboard()}
 
-        {/* Notifications Critiques de ton backend */}
+        {/* Notifications Critiques de votre backend */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
               Notifications Critiques ({criticalNotifications.length})
             </Text>
             <TouchableOpacity onPress={loadCriticalNotifications}>
-              <Icon name="refresh" size={24} color={COLORS.primary} />
+              <Ionicons name="refresh" size={24} color={colors.primary} />
             </TouchableOpacity>
           </View>
           
@@ -376,7 +387,7 @@ const AdminNotificationsScreen = ({ navigation }) => {
             />
           ) : (
             <View style={styles.emptyState}>
-              <Icon name="check-circle" size={48} color={COLORS.success} />
+              <Ionicons name="checkmark-circle" size={48} color={colors.success} />
               <Text style={styles.emptyText}>Aucune notification critique</Text>
               <Text style={styles.emptySubtext}>
                 Système de polling en cours (intervalle adaptatif)
@@ -389,24 +400,21 @@ const AdminNotificationsScreen = ({ navigation }) => {
   );
 };
 
-// ===== STYLES =====
+// ===== STYLES CORRIGÉS =====
 
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   
   // Dashboard
   dashboardContainer: {
-    backgroundColor: COLORS.white,
+    backgroundColor: colors.white,
     margin: SIZES.padding,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
-    elevation: 3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...theme.shadows.medium,
   },
   dashboardHeader: {
     flexDirection: 'row',
@@ -415,9 +423,8 @@ const styles = {
     marginBottom: SIZES.padding,
   },
   dashboardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.black,
+    ...theme.fonts.style.h3,
+    color: colors.text,
   },
   connectionStatus: {
     flexDirection: 'row',
@@ -430,8 +437,8 @@ const styles = {
     marginRight: 6,
   },
   lastUpdateText: {
-    fontSize: 12,
-    color: COLORS.gray,
+    ...theme.fonts.style.caption,
+    color: colors.textLight,
   },
   statsRow: {
     flexDirection: 'row',
@@ -442,31 +449,30 @@ const styles = {
     flex: 1,
     alignItems: 'center',
     padding: SIZES.base,
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: colors.lightGray,
     borderRadius: SIZES.radius,
     marginHorizontal: 4,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    ...theme.fonts.style.h4,
     marginTop: 4,
   },
   statLabel: {
-    fontSize: 12,
-    color: COLORS.gray,
+    ...theme.fonts.style.caption,
+    color: colors.textLight,
     textAlign: 'center',
   },
   
   // Statistiques détaillées
   detailedStats: {
     borderTopWidth: 1,
-    borderTopColor: COLORS.lightGray,
+    borderTopColor: colors.lightGray,
     paddingTop: SIZES.padding,
   },
   statsTitle: {
-    fontSize: 14,
+    ...theme.fonts.style.bodySmall,
     fontWeight: '600',
-    color: COLORS.black,
+    color: colors.text,
     marginBottom: SIZES.base,
   },
   statsGrid: {
@@ -477,26 +483,23 @@ const styles = {
     alignItems: 'center',
   },
   statItemValue: {
-    fontSize: 16,
+    ...theme.fonts.style.body,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: colors.primary,
   },
   statItemLabel: {
     fontSize: 11,
-    color: COLORS.gray,
+    color: colors.textLight,
   },
   
   // Sections
   section: {
-    backgroundColor: COLORS.white,
+    backgroundColor: colors.white,
     margin: SIZES.padding,
     marginTop: 0,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
-    elevation: 3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    ...theme.shadows.medium,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -505,28 +508,28 @@ const styles = {
     marginBottom: SIZES.padding,
   },
   sectionTitle: {
-    fontSize: 16,
+    ...theme.fonts.style.body,
     fontWeight: 'bold',
-    color: COLORS.black,
+    color: colors.text,
   },
   
   // Notifications
   notificationCard: {
-    backgroundColor: COLORS.lightGray,
+    backgroundColor: colors.lightGray,
     borderRadius: SIZES.radius,
     padding: SIZES.padding,
     marginBottom: SIZES.base,
     position: 'relative',
     borderLeftWidth: 4,
-    borderLeftColor: COLORS.gray,
+    borderLeftColor: colors.gray,
   },
   notificationUnread: {
     backgroundColor: '#FFF3CD',
-    borderLeftColor: COLORS.warning,
+    borderLeftColor: colors.warning,
   },
   notificationUrgent: {
     backgroundColor: '#F8D7DA',
-    borderLeftColor: COLORS.error,
+    borderLeftColor: colors.error,
   },
   notificationHeader: {
     marginBottom: SIZES.base,
@@ -537,9 +540,9 @@ const styles = {
     marginBottom: 4,
   },
   notificationTitle: {
-    fontSize: 14,
+    ...theme.fonts.style.bodySmall,
     fontWeight: '500',
-    color: COLORS.black,
+    color: colors.text,
     marginLeft: 8,
     flex: 1,
   },
@@ -547,51 +550,51 @@ const styles = {
     fontWeight: 'bold',
   },
   groupedBadge: {
-    backgroundColor: COLORS.info,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   groupedText: {
-    color: COLORS.white,
+    color: colors.white,
     fontSize: 10,
     fontWeight: 'bold',
   },
   notificationTime: {
-    fontSize: 12,
-    color: COLORS.gray,
+    ...theme.fonts.style.caption,
+    color: colors.textLight,
   },
   notificationMessage: {
     fontSize: 13,
-    color: COLORS.darkGray,
+    color: colors.darkGray,
     lineHeight: 18,
     marginBottom: SIZES.base,
   },
   contextData: {
-    backgroundColor: COLORS.lightBlue,
+    backgroundColor: colors.lightGray,
     padding: 8,
     borderRadius: 4,
     marginBottom: SIZES.base,
   },
   contextText: {
     fontSize: 11,
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '500',
   },
   unreadIndicator: {
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: COLORS.warning,
+    backgroundColor: colors.warning,
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   urgentIndicator: {
-    backgroundColor: COLORS.error,
+    backgroundColor: colors.error,
   },
   unreadText: {
-    color: COLORS.white,
+    color: colors.white,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -602,18 +605,17 @@ const styles = {
     paddingVertical: SIZES.padding * 2,
   },
   emptyText: {
-    fontSize: 16,
-    color: COLORS.black,
+    ...theme.fonts.style.body,
+    color: colors.text,
     fontWeight: '500',
     marginTop: 8,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: COLORS.gray,
+    ...theme.fonts.style.bodySmall,
+    color: colors.textLight,
     marginTop: 4,
     textAlign: 'center',
   },
 };
 
 export default AdminNotificationsScreen;
-    
