@@ -14,8 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-// Components
-import Header from '../../components/Header/Header';
+// Component
 import Card from '../../components/Card/Card';
 import EmptyState from '../../components/EmptyState/EmptyState';
 

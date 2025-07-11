@@ -12,17 +12,14 @@ import {
   AppState,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons'; // ✅ Changé de MaterialIcons à Ionicons pour cohérence
+import { Ionicons } from '@expo/vector-icons'; 
 
-// ✅ IMPORT CORRIGÉ - Utiliser votre structure de thème existante
 import theme from '../../theme';
 import adminNotificationService from '../../services/adminNotificationService';
 import { formatTimeAgo, formatMontant } from '../../utils/formatters';
 
-// ✅ Extraction des constantes depuis votre thème
 const { colors, spacing } = theme;
 
-// ✅ Création d'un objet SIZES pour compatibilité avec le code existant
 const SIZES = {
   base: spacing.sm,
   padding: spacing.md,

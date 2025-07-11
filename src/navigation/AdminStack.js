@@ -1,7 +1,7 @@
-// src/navigation/AdminStack.js - VERSION COMPLÈTE CORRIGÉE
+// src/navigation/AdminStack.js - VERSION CORRIGÉE
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // ============================= 
@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
 
-// ✅ NOUVEAUX ÉCRANS DE SUPERVISION
+// ✅ ÉCRANS DE SUPERVISION
 import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
 import AdminJournalActiviteScreen from '../screens/Admin/AdminJournalActiviteScreen';
 
@@ -37,9 +37,40 @@ import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
 import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
 import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 
+// 🔥 AJOUT : Hook pour la déconnexion
+import { useAuth } from '../hooks/useAuth';
+
 const Stack = createStackNavigator();
 
 const AdminStack = () => {
+  
+  // 🔥 FONCTION DE DÉCONNEXION
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Êtes-vous sûr de vouloir vous déconnecter ?',
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Déconnecter',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Utiliser authService pour déconnexion propre
+              const { authService } = require('../services');
+              await authService.logout();
+            } catch (error) {
+              console.error('Erreur lors de la déconnexion:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <Stack.Navigator
       initialRouteName="AdminDashboard"
@@ -58,8 +89,6 @@ const AdminStack = () => {
         cardStyle: {
           backgroundColor: '#f8f9fa',
         },
-        // ✅ CORRECTION : Gestion uniforme du header
-        headerMode: 'screen',
       }}
     >
       {/* ============================= */}
@@ -74,10 +103,16 @@ const AdminStack = () => {
           headerLeft: () => null, // Pas de bouton retour sur le dashboard
           headerRight: () => (
             <TouchableOpacity
-              style={{ marginRight: 16, padding: 8 }}
+              style={{ marginRight: 16, padding: 8, flexDirection: 'row', alignItems: 'center' }}
               onPress={() => navigation.navigate('AdminNotifications')}
             >
-              <Ionicons name="notifications-outline" size={24} color="#007AFF" />
+              <Ionicons name="notifications-outline" size={24} color="#007AFF" style={{ marginRight: 12 }} />
+              <TouchableOpacity
+                onPress={handleLogout}
+                style={{ padding: 4 }}
+              >
+                <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+              </TouchableOpacity>
             </TouchableOpacity>
           ),
         })}
@@ -88,7 +123,6 @@ const AdminStack = () => {
         component={AdminNotificationsScreen}
         options={{
           title: 'Notifications',
-          // ✅ CORRECTION : Pas de header personnalisé supplémentaire
         }}
       />
 

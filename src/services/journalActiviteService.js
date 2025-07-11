@@ -1,8 +1,12 @@
-// src/services/journalActiviteService.js
+// src/services/journalActiviteService.js - VERSION CORRIGÉE
 import BaseApiService from './base/BaseApiService';
 import { format } from 'date-fns';
 
-class JournalActiviteService {
+class JournalActiviteService extends BaseApiService {
+  constructor() {
+    super();
+  }
+
   /**
    * Récupérer le journal d'activité d'un utilisateur
    * @param {number} userId - ID de l'utilisateur
@@ -23,14 +27,15 @@ class JournalActiviteService {
         ...options
       });
 
-      const response = await api.get(
+      // 🔥 CORRECTION CRITIQUE : utiliser this.axios au lieu de api
+      const response = await this.axios.get(
         `/journal-activite/user/${userId}?${params.toString()}`
       );
       
-      return response.data;
+      return this.formatResponse(response, 'Activités récupérées');
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des activités', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la récupération des activités');
     }
   }
 
@@ -54,100 +59,63 @@ class JournalActiviteService {
         ...filters
       });
 
-      const response = await api.get(
+      // 🔥 CORRECTION : utiliser this.axios
+      const response = await this.axios.get(
         `/journal-activite/agence/${agenceId}?${params.toString()}`
       );
       
-      return response.data;
+      return this.formatResponse(response, 'Activités agence récupérées');
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des activités agence', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de la récupération des activités agence');
     }
   }
 
   /**
-   * Créer une nouvelle entrée dans le journal
+   * Récupérer les statistiques du journal d'activité
+   * @param {number} userId - ID de l'utilisateur
+   * @param {string|Date} dateDebut - Date de début
+   * @param {string|Date} dateFin - Date de fin
+   */
+  async getActivityStats(userId, dateDebut, dateFin) {
+    try {
+      console.log(`📊 API: GET /journal-activite/stats/${userId}`);
+      
+      const params = new URLSearchParams();
+      if (dateDebut) {
+        params.append('dateDebut', dateDebut instanceof Date ? format(dateDebut, 'yyyy-MM-dd') : dateDebut);
+      }
+      if (dateFin) {
+        params.append('dateFin', dateFin instanceof Date ? format(dateFin, 'yyyy-MM-dd') : dateFin);
+      }
+
+      // 🔥 CORRECTION : utiliser this.axios
+      const response = await this.axios.get(
+        `/journal-activite/stats/${userId}?${params.toString()}`
+      );
+      
+      return this.formatResponse(response, 'Statistiques activité récupérées');
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des statistiques', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+    }
+  }
+
+  /**
+   * Ajouter une entrée au journal d'activité
    * @param {Object} activityData - Données de l'activité
    */
   async logActivity(activityData) {
     try {
       console.log('📝 API: POST /journal-activite');
       
-      const response = await api.post('/journal-activite', {
-        ...activityData,
-        timestamp: new Date().toISOString()
-      });
+      // 🔥 CORRECTION : utiliser this.axios
+      const response = await this.axios.post('/journal-activite', activityData);
       
-      return response.data;
+      return this.formatResponse(response, 'Activité enregistrée');
     } catch (error) {
       console.error('❌ Erreur lors de l\'enregistrement de l\'activité', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Récupérer les statistiques d'activité
-   * @param {number} userId - ID de l'utilisateur
-   * @param {string} startDate - Date de début
-   * @param {string} endDate - Date de fin
-   */
-  async getActivityStats(userId, startDate, endDate) {
-    try {
-      console.log(`📊 API: GET /journal-activite/stats/${userId}`);
-      
-      const params = new URLSearchParams({
-        startDate: format(new Date(startDate), 'yyyy-MM-dd'),
-        endDate: format(new Date(endDate), 'yyyy-MM-dd')
-      });
-
-      const response = await api.get(
-        `/journal-activite/stats/${userId}?${params.toString()}`
-      );
-      
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des statistiques', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Récupérer les types d'activités disponibles
-   */
-  async getActivityTypes() {
-    try {
-      const response = await api.get('/journal-activite/types');
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur lors de la récupération des types d\'activité', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Exporter le journal d'activité
-   * @param {number} userId - ID de l'utilisateur
-   * @param {Object} options - Options d'export (format, période, etc.)
-   */
-  async exportActivities(userId, options = {}) {
-    try {
-      console.log(`📤 API: GET /journal-activite/export/${userId}`);
-      
-      const params = new URLSearchParams({
-        format: options.format || 'excel',
-        startDate: options.startDate ? format(new Date(options.startDate), 'yyyy-MM-dd') : '',
-        endDate: options.endDate ? format(new Date(options.endDate), 'yyyy-MM-dd') : ''
-      });
-
-      const response = await api.get(
-        `/journal-activite/export/${userId}?${params.toString()}`,
-        { responseType: 'blob' }
-      );
-      
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'export des activités', error);
-      throw error;
+      throw this.handleError(error, 'Erreur lors de l\'enregistrement de l\'activité');
     }
   }
 }

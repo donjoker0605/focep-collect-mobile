@@ -16,8 +16,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import collecteurService from '../../services/collecteurService';
-// ✅ CORRECTION : Import supprimé car le fichier n'existe pas
-// import { globalStyles } from '../../styles/globalStyles';
 
 const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   const [collecteurs, setCollecteurs] = useState([]);
@@ -219,7 +217,6 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
       <SafeAreaView style={styles.container}>
         <Header 
           title="Supervision Collecteurs" 
-          onBack={() => navigation.goBack()}
           rightComponent={() => (
             <TouchableOpacity
               style={styles.headerButton}
@@ -240,7 +237,6 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <Header 
         title="Supervision Collecteurs" 
-        onBack={() => navigation.goBack()}
         rightComponent={() => (
           <TouchableOpacity
             style={styles.headerButton}
