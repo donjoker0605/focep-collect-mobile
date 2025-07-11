@@ -4,248 +4,316 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  RefreshControl,
-  ActivityIndicator,
   SafeAreaView,
+  FlatList,
   TouchableOpacity,
-  Alert
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
-// Components
 import Header from '../../components/Header/Header';
-import Card from '../../components/Card/Card';
-import ActivityLogItem from '../../components/ActivityLogItem/ActivityLogItem';
-import EmptyState from '../../components/EmptyState/EmptyState';
-import DatePicker from '../../components/DatePicker/DatePicker';
-
-// Services et hooks
 import journalActiviteService from '../../services/journalActiviteService';
-import { useAuth } from '../../hooks/useAuth';
-import theme from '../../theme';
+import collecteurService from '../../services/collecteurService';
 
 const AdminJournalActiviteScreen = ({ navigation, route }) => {
-  const { user } = useAuth();
-  
-  // ✅ Récupérer les paramètres passés par la navigation
   const { collecteurId, collecteurNom, agenceNom } = route.params || {};
   
-  // États
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [currentPage, setCurrentPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [stats, setStats] = useState(null);
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const [error, setError] = useState(null);
+  const [collecteurInfo, setCollecteurInfo] = useState(null);
+  const [stats, setStats] = useState({
+    totalActivities: 0,
+    clientsCreated: 0,
+    transactions: 0,
+    modifications: 0
+  });
 
-  // Charger les activités du collecteur
-  const loadActivities = useCallback(async (date = selectedDate, page = 0, reset = true) => {
+  // Récupérer les informations du collecteur
+  const loadCollecteurInfo = useCallback(async () => {
+    if (!collecteurId) return;
+    
     try {
-      if (reset) {
-        setLoading(true);
-        setError(null);
-      } else {
-        setLoadingMore(true);
+      const response = await collecteurService.getCollecteurById(collecteurId);
+      if (response && response.data) {
+        setCollecteurInfo(response.data);
       }
+    } catch (error) {
+      console.error('❌ Erreur chargement info collecteur:', error);
+    }
+  }, [collecteurId]);
 
-      // ✅ MODIFICATION : Utiliser l'ID du collecteur spécifique au lieu de l'utilisateur connecté
-      const targetUserId = collecteurId || user.id;
+  // Charger les activités
+  const loadActivities = useCallback(async (showLoader = true) => {
+    if (!collecteurId) {
+      Alert.alert('Erreur', 'ID du collecteur manquant');
+      navigation.goBack();
+      return;
+    }
+
+    if (showLoader) setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`📅 Chargement activités pour collecteur: ${collecteurId} date: ${format(selectedDate, 'yyyy-MM-dd')}`);
       
-      console.log('📅 Chargement activités pour collecteur:', targetUserId, 'date:', format(date, 'yyyy-MM-dd'));
-
       const response = await journalActiviteService.getUserActivities(
-        targetUserId,
-        format(startOfDay(date), 'yyyy-MM-dd\'T\'HH:mm:ss'),
-        format(endOfDay(date), 'yyyy-MM-dd\'T\'HH:mm:ss'),
-        {
-          page,
-          size: 20,
-          filter: selectedFilter !== 'all' ? selectedFilter : undefined
-        }
+        collecteurId,
+        selectedDate
       );
 
-      if (response.success) {
-        const newActivities = response.data || [];
+      if (response && response.data) {
+        const activitiesData = Array.isArray(response.data) 
+          ? response.data 
+          : Object.values(response.data).filter(item => item && item.id);
+
+        // Enrichir les données
+        const enrichedActivities = activitiesData.map(activity => ({
+          ...activity,
+          formattedTime: formatActivityTime(activity.timestamp || activity.dateCreation),
+          icon: getActivityIcon(activity.action || activity.type),
+          color: getActivityColor(activity.action || activity.type),
+          displayTitle: getActivityTitle(activity.action || activity.type),
+        }));
+
+        setActivities(enrichedActivities);
+        calculateStats(enrichedActivities);
         
-        if (reset) {
-          setActivities(newActivities);
-          setCurrentPage(0);
-        } else {
-          setActivities(prev => [...prev, ...newActivities]);
-        }
-        
-        setCurrentPage(page);
-        setHasMore(newActivities.length === 20);
-        
-        // Charger les stats si c'est la première page
-        if (reset) {
-          await loadStats(date, targetUserId);
-        }
+        console.log(`✅ ${enrichedActivities.length} activités chargées`);
       } else {
-        throw new Error(response.error || 'Erreur lors du chargement');
+        setActivities([]);
+        calculateStats([]);
       }
     } catch (error) {
       console.error('❌ Erreur chargement activités:', error);
       setError(error.message);
-      Alert.alert('Erreur', error.message);
+      
+      // Si l'erreur est liée au format de date, essayer un format alternatif
+      if (error.response?.status === 400 && error.response?.data?.detail?.includes('date')) {
+        console.log('🔄 Tentative avec format de date alternatif...');
+        try {
+          const alternativeResponse = await journalActiviteService.getUserActivities(
+            collecteurId,
+            format(selectedDate, 'yyyy-MM-dd')
+          );
+          if (alternativeResponse && alternativeResponse.data) {
+            setActivities(alternativeResponse.data);
+          }
+        } catch (retryError) {
+          Alert.alert('Erreur', 'Impossible de charger le journal d\'activité');
+        }
+      }
     } finally {
       setLoading(false);
-      setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [selectedDate, selectedFilter, collecteurId, user.id]);
+  }, [collecteurId, selectedDate, navigation]);
 
-  // Charger les statistiques
-  const loadStats = useCallback(async (date, targetUserId) => {
+  // Calculer les statistiques
+  const calculateStats = (activitiesList) => {
+    const stats = {
+      totalActivities: activitiesList.length,
+      clientsCreated: activitiesList.filter(a => 
+        a.action === 'CREATE_CLIENT' || a.type === 'CLIENT_CREATION'
+      ).length,
+      transactions: activitiesList.filter(a => 
+        a.action === 'CREATE_TRANSACTION' || a.type === 'TRANSACTION'
+      ).length,
+      modifications: activitiesList.filter(a => 
+        a.action === 'MODIFY_CLIENT' || a.type === 'MODIFICATION'
+      ).length,
+    };
+    setStats(stats);
+  };
+
+  // Formatter le temps de l'activité
+  const formatActivityTime = (timestamp) => {
+    if (!timestamp) return '';
+    
     try {
-      const response = await journalActiviteService.getUserActivityStats(
-        targetUserId,
-        format(startOfDay(date), 'yyyy-MM-dd'),
-        format(endOfDay(date), 'yyyy-MM-dd')
-      );
-      
-      if (response.success) {
-        setStats(response.data);
+      const date = parseISO(timestamp);
+      if (isToday(date)) {
+        return `Aujourd'hui à ${format(date, 'HH:mm')}`;
+      } else if (isYesterday(date)) {
+        return `Hier à ${format(date, 'HH:mm')}`;
+      } else {
+        return format(date, 'dd MMM à HH:mm', { locale: fr });
       }
     } catch (error) {
-      console.error('❌ Erreur stats:', error);
+      return format(new Date(timestamp), 'HH:mm');
     }
-  }, []);
+  };
 
-  // Charger au montage
-  useEffect(() => {
-    loadActivities();
-  }, [loadActivities]);
+  // Obtenir l'icône selon le type d'activité
+  const getActivityIcon = (action) => {
+    const iconMap = {
+      'CREATE_CLIENT': 'person-add',
+      'MODIFY_CLIENT': 'person',
+      'CREATE_TRANSACTION': 'cash',
+      'DELETE_CLIENT': 'person-remove',
+      'LOGIN': 'log-in',
+      'LOGOUT': 'log-out',
+      'VIEW_CLIENT': 'eye',
+      'EXPORT_DATA': 'download',
+    };
+    return iconMap[action] || 'document-text';
+  };
+
+  // Obtenir la couleur selon le type d'activité
+  const getActivityColor = (action) => {
+    const colorMap = {
+      'CREATE_CLIENT': '#10B981',
+      'MODIFY_CLIENT': '#F59E0B',
+      'CREATE_TRANSACTION': '#3B82F6',
+      'DELETE_CLIENT': '#EF4444',
+      'LOGIN': '#6B7280',
+      'LOGOUT': '#6B7280',
+    };
+    return colorMap[action] || '#6B7280';
+  };
+
+  // Obtenir le titre de l'activité
+  const getActivityTitle = (action) => {
+    const titleMap = {
+      'CREATE_CLIENT': 'Nouveau client créé',
+      'MODIFY_CLIENT': 'Client modifié',
+      'CREATE_TRANSACTION': 'Transaction effectuée',
+      'DELETE_CLIENT': 'Client supprimé',
+      'LOGIN': 'Connexion',
+      'LOGOUT': 'Déconnexion',
+      'VIEW_CLIENT': 'Consultation client',
+      'EXPORT_DATA': 'Export de données',
+    };
+    return titleMap[action] || action;
+  };
+
+  // Charger les données au focus
+  useFocusEffect(
+    useCallback(() => {
+      loadCollecteurInfo();
+      loadActivities();
+    }, [loadCollecteurInfo, loadActivities])
+  );
+
+  // Gérer le changement de date
+  const handleDateChange = (days) => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + days);
+    setSelectedDate(newDate);
+  };
 
   // Refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadActivities(selectedDate, 0, true);
-  }, [loadActivities, selectedDate]);
+    loadActivities(false);
+  }, [loadActivities]);
 
-  // Load more
-  const loadMore = useCallback(() => {
-    if (!loadingMore && hasMore) {
-      loadActivities(selectedDate, currentPage + 1, false);
-    }
-  }, [loadActivities, selectedDate, currentPage, loadingMore, hasMore]);
-
-  // Changer de date
-  const handleDateChange = (date) => {
-    setSelectedDate(date);
-    setShowDatePicker(false);
-    setActivities([]);
-    loadActivities(date, 0, true);
-  };
-
-  // Changer de filtre
-  const handleFilterChange = (filter) => {
-    setSelectedFilter(filter);
-    setActivities([]);
-    loadActivities(selectedDate, 0, true);
-  };
-
-  // Render activité
-  const renderActivity = ({ item }) => (
-    <ActivityLogItem
-      activity={item}
-      isAdmin={true} // ✅ Mode admin pour affichage enrichi
-      onPress={() => handleActivityPress(item)}
-    />
+  // Render activity item
+  const renderActivityItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.activityCard}
+      onPress={() => {
+        if (item.entityId && item.entityType === 'CLIENT') {
+          // Navigation vers le détail du client si applicable
+          navigation.navigate('ClientDetailScreen', { clientId: item.entityId });
+        }
+      }}
+      activeOpacity={0.7}
+    >
+      <View style={styles.activityHeader}>
+        <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
+          <Ionicons name={item.icon} size={24} color={item.color} />
+        </View>
+        <View style={styles.activityContent}>
+          <Text style={styles.activityTitle}>{item.displayTitle}</Text>
+          {item.details && (
+            <Text style={styles.activityDetails} numberOfLines={2}>
+              {item.details}
+            </Text>
+          )}
+          <Text style={styles.activityTime}>{item.formattedTime}</Text>
+        </View>
+        {item.entityId && (
+          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+        )}
+      </View>
+    </TouchableOpacity>
   );
 
-  // Gérer le clic sur une activité
-  const handleActivityPress = (activity) => {
-    // TODO: Naviguer vers les détails si nécessaire
-    console.log('Activité sélectionnée:', activity);
-  };
+  // Render empty
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <MaterialIcons name="history" size={64} color="#9CA3AF" />
+      <Text style={styles.emptyText}>
+        Aucune activité pour cette date
+      </Text>
+      <Text style={styles.emptySubtext}>
+        Les activités du collecteur apparaîtront ici
+      </Text>
+    </View>
+  );
 
-  // Render header avec stats
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      {/* Info collecteur */}
-      <Card style={styles.collecteurCard}>
-        <View style={styles.collecteurInfo}>
-          <Ionicons name="person-circle" size={40} color={theme.colors.primary} />
-          <View style={styles.collecteurDetails}>
-            <Text style={styles.collecteurNom}>{collecteurNom || 'Collecteur'}</Text>
-            {agenceNom && <Text style={styles.agenceNom}>{agenceNom}</Text>}
-          </View>
-        </View>
-      </Card>
+  // Render header with date navigation
+  const renderDateNavigation = () => (
+    <View style={styles.dateNavContainer}>
+      <TouchableOpacity
+        style={styles.dateNavButton}
+        onPress={() => handleDateChange(-1)}
+      >
+        <Ionicons name="chevron-back" size={24} color="#007AFF" />
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.dateDisplay}
+        onPress={() => {
+          // TODO: Implémenter un date picker
+          Alert.alert('Info', 'Sélecteur de date à implémenter');
+        }}
+      >
+        <Text style={styles.dateText}>
+          {format(selectedDate, 'EEEE dd MMMM yyyy', { locale: fr })}
+        </Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.dateNavButton}
+        onPress={() => handleDateChange(1)}
+        disabled={isToday(selectedDate)}
+      >
+        <Ionicons 
+          name="chevron-forward" 
+          size={24} 
+          color={isToday(selectedDate) ? '#D1D5DB' : '#007AFF'} 
+        />
+      </TouchableOpacity>
+    </View>
+  );
 
-      {/* Sélecteur de date */}
-      <Card style={styles.dateCard}>
-        <TouchableOpacity
-          style={styles.dateSelector}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <Ionicons name="calendar" size={20} color={theme.colors.primary} />
-          <Text style={styles.dateText}>
-            {format(selectedDate, 'dd MMMM yyyy', { locale: fr })}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
-        </TouchableOpacity>
-      </Card>
-
-      {/* Stats du jour */}
-      {stats && (
-        <Card style={styles.statsCard}>
-          <Text style={styles.statsTitle}>Statistiques du jour</Text>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.totalActions || 0}</Text>
-              <Text style={styles.statLabel}>Actions</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.clients || 0}</Text>
-              <Text style={styles.statLabel}>Clients</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{stats.transactions || 0}</Text>
-              <Text style={styles.statLabel}>Transactions</Text>
-            </View>
-          </View>
-        </Card>
-      )}
-
-      {/* Filtres */}
-      <Card style={styles.filtersCard}>
-        <View style={styles.filtersContainer}>
-          {[
-            { key: 'all', label: 'Tout' },
-            { key: 'CLIENT', label: 'Clients' },
-            { key: 'TRANSACTION', label: 'Transactions' },
-            { key: 'SYSTEM', label: 'Système' }
-          ].map(filter => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                selectedFilter === filter.key && styles.filterButtonActive
-              ]}
-              onPress={() => handleFilterChange(filter.key)}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  selectedFilter === filter.key && styles.filterTextActive
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Card>
+  // Render stats
+  const renderStats = () => (
+    <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats.totalActivities}</Text>
+        <Text style={styles.statLabel}>Activités</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats.clientsCreated}</Text>
+        <Text style={styles.statLabel}>Clients créés</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats.transactions}</Text>
+        <Text style={styles.statLabel}>Transactions</Text>
+      </View>
+      <View style={styles.statCard}>
+        <Text style={styles.statValue}>{stats.modifications}</Text>
+        <Text style={styles.statLabel}>Modifications</Text>
+      </View>
     </View>
   );
 
@@ -253,14 +321,12 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
   if (loading && activities.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header
-          title="Journal d'Activité"
-          showBackButton={true}
-          onBackPress={() => navigation.goBack()}
+        <Header 
+          title={`Journal - ${collecteurNom || 'Collecteur'}`}
+          onBack={() => navigation.goBack()}
         />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Chargement des activités...</Text>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
         </View>
       </SafeAreaView>
     );
@@ -268,59 +334,40 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header
-        title="Journal d'Activité"
-        showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+      <Header 
+        title={`Journal - ${collecteurNom || 'Collecteur'}`}
+        subtitle={agenceNom}
+        onBack={() => navigation.goBack()}
         rightComponent={() => (
-          <TouchableOpacity onPress={onRefresh}>
-            <Ionicons name="refresh" size={24} color={theme.colors.primary} />
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => {
+              // TODO: Implémenter export
+              Alert.alert('Info', 'Export à implémenter');
+            }}
+          >
+            <Ionicons name="download-outline" size={24} color="#007AFF" />
           </TouchableOpacity>
         )}
       />
 
+      {renderDateNavigation()}
+      {renderStats()}
+
       <FlatList
         data={activities}
-        renderItem={renderActivity}
-        keyExtractor={(item) => `${item.id}-${item.timestamp}`}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={() => (
-          <EmptyState
-            icon="document-text-outline"
-            title="Aucune activité"
-            message="Aucune activité trouvée pour cette date"
-            actionLabel="Actualiser"
-            onAction={onRefresh}
-          />
-        )}
+        renderItem={renderActivityItem}
+        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+        contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
+            colors={['#007AFF']}
           />
         }
-        onEndReached={loadMore}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={() => (
-          loadingMore ? (
-            <View style={styles.loadingMore}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            </View>
-          ) : null
-        )}
-        contentContainerStyle={activities.length === 0 ? styles.emptyContainer : null}
+        ListEmptyComponent={renderEmpty}
       />
-
-      {/* Date Picker Modal */}
-      {showDatePicker && (
-        <DatePicker
-          date={selectedDate}
-          onDateChange={handleDateChange}
-          onCancel={() => setShowDatePicker(false)}
-          visible={showDatePicker}
-        />
-      )}
     </SafeAreaView>
   );
 };
@@ -328,117 +375,123 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F5F5F5',
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: theme.spacing.md,
-    color: theme.colors.textSecondary,
-    fontSize: 16,
+  headerButton: {
+    padding: 8,
   },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  headerContainer: {
-    padding: theme.spacing.md,
-  },
-  collecteurCard: {
-    marginBottom: theme.spacing.md,
-  },
-  collecteurInfo: {
+  dateNavContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  collecteurDetails: {
-    marginLeft: theme.spacing.md,
+  dateNavButton: {
+    padding: 8,
+  },
+  dateDisplay: {
     flex: 1,
-  },
-  collecteurNom: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  agenceNom: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  dateCard: {
-    marginBottom: theme.spacing.md,
-  },
-  dateSelector: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: theme.spacing.sm,
+    paddingVertical: 8,
   },
   dateText: {
-    flex: 1,
-    marginLeft: theme.spacing.sm,
     fontSize: 16,
-    color: theme.colors.text,
+    fontWeight: '500',
+    color: '#1F2937',
     textTransform: 'capitalize',
   },
-  statsCard: {
-    marginBottom: theme.spacing.md,
-  },
-  statsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
-  },
-  statsRow: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFF',
+    marginBottom: 8,
   },
-  statItem: {
+  statCard: {
+    flex: 1,
     alignItems: 'center',
+    paddingVertical: 8,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: theme.colors.primary,
+    color: '#1F2937',
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
+    color: '#6B7280',
   },
-  filtersCard: {
-    marginBottom: theme.spacing.md,
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  filtersContainer: {
+  activityCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activityHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-  },
-  filterButton: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  filterButtonActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  filterTextActive: {
-    color: theme.colors.white,
-    fontWeight: '600',
-  },
-  loadingMore: {
-    padding: theme.spacing.md,
     alignItems: 'center',
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  activityDetails: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
   },
 });
 

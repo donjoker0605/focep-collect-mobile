@@ -5,54 +5,62 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  RefreshControl,
-  ActivityIndicator,
   SafeAreaView,
   TouchableOpacity,
+  TextInput,
+  RefreshControl,
+  ActivityIndicator,
   Alert,
-  TextInput
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-
-// Components
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
-import Card from '../../components/Card/Card';
-import EmptyState from '../../components/EmptyState/EmptyState';
-
-// Services
-import adminCollecteurService from '../../services/adminCollecteurService';
-import { useAuth } from '../../hooks/useAuth';
-import theme from '../../theme';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import collecteurService from '../../services/collecteurService';
+// ✅ CORRECTION : Import supprimé car le fichier n'existe pas
+// import { globalStyles } from '../../styles/globalStyles';
 
 const AdminCollecteurSupervisionScreen = ({ navigation }) => {
-  const { user } = useAuth();
-  
-  // États
   const [collecteurs, setCollecteurs] = useState([]);
+  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
   const [searchText, setSearchText] = useState('');
-  const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('all'); // all, active, inactive
 
   // Charger les collecteurs
   const loadCollecteurs = useCallback(async (showLoader = true) => {
-    try {
-      if (showLoader) {
-        setLoading(true);
-        setError(null);
-      }
+    if (showLoader) setLoading(true);
+    setError(null);
 
+    try {
       console.log('📊 Chargement collecteurs pour supervision...');
+      const response = await collecteurService.getCollecteurs();
       
-      // ✅ UTILISER LE NOUVEAU SERVICE ADMIN
-      const result = await adminCollecteurService.getCollecteursActivitySummary();
-      
-      if (Array.isArray(result)) {
-        setCollecteurs(result);
-        setFilteredCollecteurs(result);
+      if (response && response.data) {
+        const result = Array.isArray(response.data) 
+          ? response.data 
+          : Object.values(response.data).filter(item => 
+              item && typeof item === 'object' && item.id
+            );
+
+        // Enrichir les données avec des infos calculées
+        const enrichedData = result.map(collecteur => ({
+          ...collecteur,
+          id: collecteur.id || collecteur.collecteurId,
+          displayName: `${collecteur.prenom || ''} ${collecteur.nom || ''}`.trim(),
+          email: collecteur.adresseMail || collecteur.email,
+          isActive: collecteur.active !== false,
+          agenceNom: collecteur.agenceNom || 'N/A',
+          stats: {
+            clients: 0,
+            collecte: 0,
+            performance: '0%'
+          }
+        }));
+
+        setCollecteurs(enrichedData);
+        setFilteredCollecteurs(enrichedData);
         console.log(`✅ ${result.length} collecteurs chargés`);
       } else {
         throw new Error('Format de données invalide');
@@ -62,7 +70,6 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
       console.error('❌ Erreur chargement collecteurs:', error);
       setError(error.message);
       
-      // Fallback avec données vides plutôt que crash
       if (error.message.includes('Authentification')) {
         Alert.alert(
           'Erreur d\'authentification',
@@ -85,19 +92,27 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
     }, [loadCollecteurs])
   );
 
-  // Filtrer les collecteurs selon la recherche
+  // Filtrer les collecteurs
   useEffect(() => {
-    if (searchText.trim() === '') {
-      setFilteredCollecteurs(collecteurs);
-    } else {
-      const filtered = collecteurs.filter(collecteur =>
+    let filtered = collecteurs;
+
+    // Filtre par statut
+    if (activeTab === 'active') {
+      filtered = filtered.filter(c => c.isActive);
+    } else if (activeTab === 'inactive') {
+      filtered = filtered.filter(c => !c.isActive);
+    }
+
+    // Filtre par recherche
+    if (searchText.trim()) {
+      filtered = filtered.filter(collecteur =>
         collecteur.displayName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        collecteur.agenceNom?.toLowerCase().includes(searchText.toLowerCase()) ||
         collecteur.email?.toLowerCase().includes(searchText.toLowerCase())
       );
-      setFilteredCollecteurs(filtered);
     }
-  }, [searchText, collecteurs]);
+
+    setFilteredCollecteurs(filtered);
+  }, [searchText, collecteurs, activeTab]);
 
   // Refresh
   const onRefresh = useCallback(() => {
@@ -105,7 +120,7 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
     loadCollecteurs(false);
   }, [loadCollecteurs]);
 
-  // Naviguer vers le journal d'activité d'un collecteur
+  // Navigation vers le journal d'activité d'un collecteur
   const navigateToJournalActivite = (collecteur) => {
     navigation.navigate('AdminJournalActivite', {
       collecteurId: collecteur.id,
@@ -114,66 +129,87 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
     });
   };
 
-  // Naviguer vers les détails d'un collecteur
-  const navigateToCollecteurDetail = (collecteur) => {
-    navigation.navigate('AdminCollecteurDetail', {
+  // Navigation vers les détails d'un collecteur
+  const navigateToDetails = (collecteur) => {
+    navigation.navigate('CollecteurDetailScreen', {
       collecteurId: collecteur.id,
-      collecteurNom: collecteur.displayName,
-      agenceNom: collecteur.agenceNom
+      collecteur: collecteur
     });
   };
 
-  // Render item collecteur
-  const renderCollecteur = ({ item }) => (
-    <CollecteurCard
-      collecteur={item}
-      onPressDetail={() => navigateToCollecteurDetail(item)}
-      onPressJournal={() => navigateToJournalActivite(item)}
-    />
-  );
-
-  // Render header avec recherche
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      {/* Barre de recherche */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher un collecteur..."
-          value={searchText}
-          onChangeText={setSearchText}
-          placeholderTextColor={theme.colors.textSecondary}
-        />
-        {searchText.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchText('')}>
-            <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Statistiques globales */}
-      <Card style={styles.statsCard}>
-        <Text style={styles.statsTitle}>Vue d'ensemble</Text>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{collecteurs.length}</Text>
-            <Text style={styles.statLabel}>Collecteurs</Text>
+  // Render collecteur item
+  const renderCollecteurItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.collecteurCard}
+      onPress={() => navigateToDetails(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardHeader}>
+        <View style={styles.collecteurInfo}>
+          <View style={styles.statusIndicator}>
+            <Ionicons
+              name={item.isActive ? "checkmark-circle" : "close-circle"}
+              size={20}
+              color={item.isActive ? "#10B981" : "#EF4444"}
+            />
           </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {collecteurs.filter(c => c.statut === 'ACTIF').length}
-            </Text>
-            <Text style={styles.statLabel}>Actifs</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {collecteurs.filter(c => c.statut === 'ATTENTION').length}
-            </Text>
-            <Text style={styles.statLabel}>Attention</Text>
+          <View>
+            <Text style={styles.collecteurName}>{item.displayName}</Text>
+            <Text style={styles.agenceText}>{item.agenceNom}</Text>
           </View>
         </View>
-      </Card>
+        <View style={styles.statusBadge}>
+          <Text style={[
+            styles.statusText,
+            { color: item.isActive ? '#10B981' : '#EF4444' }
+          ]}>
+            {item.isActive ? 'ACTIF' : 'INACTIF'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{item.stats.clients}</Text>
+          <Text style={styles.statLabel}>Clients</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{item.stats.collecte}</Text>
+          <Text style={styles.statLabel}>Collecté</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{item.stats.performance}</Text>
+          <Text style={styles.statLabel}>Performance</Text>
+        </View>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.primaryAction]}
+          onPress={() => navigateToJournalActivite(item)}
+        >
+          <Ionicons name="document-text-outline" size={18} color="#FFF" />
+          <Text style={styles.actionButtonText}>Journal</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryAction]}
+          onPress={() => navigateToDetails(item)}
+        >
+          <MaterialIcons name="info-outline" size={18} color="#007AFF" />
+          <Text style={[styles.actionButtonText, { color: '#007AFF' }]}>Détails</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+
+  // Render empty
+  const renderEmpty = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="people-outline" size={64} color="#9CA3AF" />
+      <Text style={styles.emptyText}>
+        {searchText ? 'Aucun collecteur trouvé' : 'Aucun collecteur pour le moment'}
+      </Text>
     </View>
   );
 
@@ -181,14 +217,20 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   if (loading && collecteurs.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header
-          title="Supervision Collecteurs"
-          showBackButton={true}
-          onBackPress={() => navigation.goBack()}
+        <Header 
+          title="Supervision Collecteurs" 
+          onBack={() => navigation.goBack()}
+          rightComponent={() => (
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => loadCollecteurs()}
+            >
+              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
         />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Chargement des collecteurs...</Text>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
         </View>
       </SafeAreaView>
     );
@@ -196,285 +238,291 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header
-        title="Supervision Collecteurs"
-        showBackButton={true}
-        onBackPress={() => navigation.goBack()}
+      <Header 
+        title="Supervision Collecteurs" 
+        onBack={() => navigation.goBack()}
         rightComponent={() => (
-          <TouchableOpacity onPress={onRefresh}>
-            <Ionicons name="refresh" size={24} color={theme.colors.primary} />
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => loadCollecteurs()}
+          >
+            <Ionicons name="refresh-outline" size={24} color="#007AFF" />
           </TouchableOpacity>
         )}
       />
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#6B7280" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Rechercher un collecteur..."
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholderTextColor="#9CA3AF"
+        />
+        {searchText.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchText('')}>
+            <Ionicons name="close-circle" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+            Tous ({collecteurs.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'active' && styles.activeTab]}
+          onPress={() => setActiveTab('active')}
+        >
+          <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
+            Actifs ({collecteurs.filter(c => c.isActive).length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'inactive' && styles.activeTab]}
+          onPress={() => setActiveTab('inactive')}
+        >
+          <Text style={[styles.tabText, activeTab === 'inactive' && styles.activeTabText]}>
+            Inactifs ({collecteurs.filter(c => !c.isActive).length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Summary */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{collecteurs.length}</Text>
+          <Text style={styles.summaryLabel}>Collecteurs</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>{collecteurs.filter(c => c.isActive).length}</Text>
+          <Text style={styles.summaryLabel}>Actifs</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryValue}>0</Text>
+          <Text style={styles.summaryLabel}>Attention</Text>
+        </View>
+      </View>
+
+      {/* List */}
       <FlatList
         data={filteredCollecteurs}
-        renderItem={renderCollecteur}
-        keyExtractor={(item) => item.id.toString()}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={() => (
-          <EmptyState
-            icon="people-outline"
-            title="Aucun collecteur"
-            message={searchText ? "Aucun collecteur trouvé pour cette recherche" : "Aucun collecteur disponible"}
-            actionLabel="Actualiser"
-            onAction={onRefresh}
-          />
-        )}
+        renderItem={renderCollecteurItem}
+        keyExtractor={(item) => item.id?.toString()}
+        contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
+            colors={['#007AFF']}
           />
         }
-        contentContainerStyle={filteredCollecteurs.length === 0 ? styles.emptyContainer : null}
-        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={renderEmpty}
       />
     </SafeAreaView>
-  );
-};
-
-// Composant Card pour un collecteur
-const CollecteurCard = ({ collecteur, onPressDetail, onPressJournal }) => {
-  return (
-    <Card style={styles.collecteurCard}>
-      {/* Header avec nom et statut */}
-      <View style={styles.collecteurHeader}>
-        <View style={styles.collecteurInfo}>
-          <View style={[styles.statusIndicator, { backgroundColor: collecteur.statusColor }]} />
-          <View style={styles.collecteurDetails}>
-            <Text style={styles.collecteurNom}>{collecteur.displayName}</Text>
-            <Text style={styles.agenceNom}>{collecteur.agenceNom}</Text>
-          </View>
-        </View>
-        <View style={styles.statusBadge}>
-          <Ionicons 
-            name={collecteur.statusIcon} 
-            size={16} 
-            color={collecteur.statusColor} 
-          />
-          <Text style={[styles.statusText, { color: collecteur.statusColor }]}>
-            {collecteur.statut}
-          </Text>
-        </View>
-      </View>
-
-      {/* Métriques */}
-      <View style={styles.metricsRow}>
-        <View style={styles.metric}>
-          <Text style={styles.metricValue}>{collecteur.nombreClients}</Text>
-          <Text style={styles.metricLabel}>Clients</Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricValue}>
-            {formatCurrency(collecteur.collecteJour)}
-          </Text>
-          <Text style={styles.metricLabel}>Collecte</Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricValue}>{collecteur.performance}%</Text>
-          <Text style={styles.metricLabel}>Performance</Text>
-        </View>
-      </View>
-
-      {/* Dernière connexion */}
-      {collecteur.dernierConnexion && (
-        <Text style={styles.lastConnection}>
-          Dernière connexion: {formatDate(collecteur.dernierConnexion)}
-        </Text>
-      )}
-
-      {/* Actions */}
-      <View style={styles.actionsRow}>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.primaryButton]} 
-          onPress={onPressJournal}
-        >
-          <Ionicons name="document-text" size={16} color={theme.colors.white} />
-          <Text style={styles.primaryButtonText}>Journal</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.secondaryButton]} 
-          onPress={onPressDetail}
-        >
-          <Ionicons name="analytics" size={16} color={theme.colors.primary} />
-          <Text style={styles.secondaryButtonText}>Détails</Text>
-        </TouchableOpacity>
-      </View>
-    </Card>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#F5F5F5',
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: theme.spacing.md,
-    color: theme.colors.textSecondary,
-    fontSize: 16,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  headerContainer: {
-    padding: theme.spacing.md,
+  headerButton: {
+    padding: 8,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: '#FFF',
+    margin: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchIcon: {
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    marginLeft: theme.spacing.sm,
     fontSize: 16,
-    color: theme.colors.text,
+    color: '#1F2937',
   },
-  statsCard: {
-    marginBottom: theme.spacing.md,
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  statsTitle: {
+  tab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#E5E7EB',
+  },
+  activeTab: {
+    backgroundColor: '#007AFF',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#FFF',
+  },
+  summaryContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    padding: 16,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  summaryValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  collecteurCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  collecteurInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIndicator: {
+    marginRight: 12,
+  },
+  collecteurName: {
     fontSize: 16,
     fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: theme.spacing.sm,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  agenceText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
   },
   statItem: {
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: theme.colors.primary,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  collecteurCard: {
-    marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  collecteurHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: theme.spacing.md,
-  },
-  collecteurInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  statusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: theme.spacing.sm,
-  },
-  collecteurDetails: {
-    flex: 1,
-  },
-  collecteurNom: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  agenceNom: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.surface,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.sm,
-  },
-  metric: {
-    alignItems: 'center',
-  },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: theme.colors.text,
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  lastConnection: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: theme.spacing.md,
+    color: '#6B7280',
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    justifyContent: 'space-between',
+    gap: 8,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.borderRadius.md,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
   },
-  primaryButton: {
-    backgroundColor: theme.colors.primary,
+  primaryAction: {
+    backgroundColor: '#007AFF',
   },
-  secondaryButton: {
-    backgroundColor: theme.colors.surface,
+  secondaryAction: {
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: theme.colors.primary,
+    borderColor: '#E5E7EB',
   },
-  primaryButtonText: {
-    color: theme.colors.white,
-    fontWeight: '600',
-    marginLeft: theme.spacing.xs,
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#FFF',
   },
-  secondaryButtonText: {
-    color: theme.colors.primary,
-    fontWeight: '600',
-    marginLeft: theme.spacing.xs,
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginTop: 16,
   },
 });
 

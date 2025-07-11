@@ -1,134 +1,160 @@
+// src/services/journalActiviteService.js
 import BaseApiService from './base/BaseApiService';
+import { format } from 'date-fns';
 
-class JournalService extends BaseApiService {
+class JournalActiviteService extends BaseApiService {
   constructor() {
     super();
   }
 
-  // ✅ NOUVELLE MÉTHODE PRINCIPALE: Récupération automatique du journal du jour
-  async getJournalDuJour(collecteurId, date = null) {
+  /**
+   * Récupérer le journal d'activité d'un utilisateur
+   * @param {number} userId - ID de l'utilisateur
+   * @param {string|Date} date - Date au format string ou Date object
+   * @param {Object} options - Options supplémentaires
+   */
+  async getUserActivities(userId, date, options = {}) {
     try {
-      const dateParam = date || new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
-      console.log('📅 Récupération journal du jour:', collecteurId, dateParam);
+      console.log(`📋 API: GET /journal-activite/user/${userId}`);
       
-      const response = await this.axios.get(`/journaux/collecteur/${collecteurId}/jour`, {
-        params: { date: dateParam }
-      });
+      // Formater la date correctement - CORRECTION CRITIQUE
+      const formattedDate = date instanceof Date 
+        ? format(date, 'yyyy-MM-dd')  // Format simple sans heure
+        : date.split('T')[0];  // Si c'est déjà une string, prendre juste la date
       
-      return this.formatResponse(response, 'Journal du jour récupéré');
-    } catch (error) {
-      console.error('Erreur récupération journal du jour:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération du journal du jour');
-    }
-  }
-
-  // ✅ RÉCUPÉRATION DU JOURNAL ACTIF (AUJOURD'HUI)
-  async getJournalActif(collecteurId) {
-    try {
-      console.log('📅 Récupération journal actif pour collecteur:', collecteurId);
-      
-      const response = await this.axios.get(`/journaux/collecteur/${collecteurId}/actif`);
-      return this.formatResponse(response, 'Journal actif récupéré');
-    } catch (error) {
-      console.error('Error fetching journal actif:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération du journal actif');
-    }
-  }
-
-  // ✅ CLÔTURE AUTOMATIQUE DU JOURNAL DU JOUR
-  async cloturerJournalAujourdhui(collecteurId) {
-    try {
-      const dateAujourdhui = new Date().toISOString().split('T')[0];
-      console.log('🔒 Clôture journal du jour:', collecteurId, dateAujourdhui);
-      
-      const response = await this.axios.post(`/journaux/collecteur/${collecteurId}/cloture-jour`, {
-        date: dateAujourdhui
-      });
-      
-      return this.formatResponse(response, 'Journal du jour clôturé avec succès');
-    } catch (error) {
-      console.error('Erreur clôture journal du jour:', error);
-      throw this.handleError(error, 'Erreur lors de la clôture du journal du jour');
-    }
-  }
-
-  // ✅ RÉCUPÉRATION DES MOUVEMENTS DU JOURNAL DU JOUR
-  async getMouvementsJournalDuJour(collecteurId, date = null) {
-    try {
-      // 1. Récupérer le journal du jour
-      const journalResponse = await this.getJournalDuJour(collecteurId, date);
-      const journal = journalResponse.data;
-
-      // 2. Récupérer les mouvements de ce journal
-      const mouvementsResponse = await this.axios.get(`/mouvements/journal/${journal.id}`, {}, {
-        useCache: true,
-        maxAge: 5 * 60 * 1000 // 5 minutes de cache
+      const params = new URLSearchParams({
+        date: formattedDate,
+        ...options
       });
 
-      return this.formatResponse(mouvementsResponse, 'Mouvements du jour récupérés');
-    } catch (error) {
-      console.error('Erreur récupération mouvements du jour:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération des mouvements du jour');
-    }
-  }
-
-  // MÉTHODES EXISTANTES CONSERVÉES
-  async createJournal(data) {
-    try {
-      const response = await this.axios.post('/journaux', {
-        dateDebut: data.dateDebut,
-        dateFin: data.dateFin,
-        collecteurId: data.collecteurId,
-      });
-      return this.formatResponse(response, 'Journal créé avec succès');
-    } catch (error) {
-      console.error('Error creating journal:', error);
-      throw this.handleError(error, 'Erreur lors de la création du journal');
-    }
-  }
-
-  async getJournauxByCollecteur(collecteurId, dateDebut, dateFin) {
-    try {
-      const params = {};
-      if (dateDebut) params.dateDebut = dateDebut;
-      if (dateFin) params.dateFin = dateFin;
+      const response = await this.axios.get(
+        `/journal-activite/user/${userId}?${params.toString()}`
+      );
       
-      const response = await this.axios.get(`/journaux/collecteur/${collecteurId}`, { params });
-      return this.formatResponse(response, 'Journaux récupérés');
+      return this.formatResponse(response, 'Activités récupérées');
     } catch (error) {
-      console.error('Error fetching journaux:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération des journaux');
+      console.error('❌ Erreur lors de la récupération des activités', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des activités');
     }
   }
 
-  async getJournalById(journalId) {
+  /**
+   * Récupérer le journal d'activité par agence (admin)
+   * @param {number} agenceId - ID de l'agence
+   * @param {string|Date} date - Date au format string ou Date object
+   * @param {Object} filters - Filtres supplémentaires
+   */
+  async getAgenceActivities(agenceId, date, filters = {}) {
     try {
-      const response = await this.axios.get(`/journaux/${journalId}`);
-      return this.formatResponse(response, 'Journal récupéré');
+      console.log(`📋 API: GET /journal-activite/agence/${agenceId}`);
+      
+      // Formater la date correctement
+      const formattedDate = date instanceof Date 
+        ? format(date, 'yyyy-MM-dd')
+        : date.split('T')[0];
+      
+      const params = new URLSearchParams({
+        date: formattedDate,
+        ...filters
+      });
+
+      const response = await this.axios.get(
+        `/journal-activite/agence/${agenceId}?${params.toString()}`
+      );
+      
+      return this.formatResponse(response, 'Activités agence récupérées');
     } catch (error) {
-      console.error('Error fetching journal details:', error);
-      throw this.handleError(error, 'Erreur lors de la récupération du journal');
+      console.error('❌ Erreur lors de la récupération des activités agence', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des activités agence');
     }
   }
 
-  async cloturerJournal(journalId) {
+  /**
+   * Créer une nouvelle entrée dans le journal
+   * @param {Object} activityData - Données de l'activité
+   */
+  async logActivity(activityData) {
     try {
-      const response = await this.axios.post(`/journaux/cloture?journalId=${journalId}`);
-      return this.formatResponse(response, 'Journal clôturé avec succès');
+      console.log('📝 API: POST /journal-activite');
+      
+      const response = await this.axios.post('/journal-activite', {
+        ...activityData,
+        timestamp: new Date().toISOString()
+      });
+      
+      return this.formatResponse(response, 'Activité enregistrée');
     } catch (error) {
-      console.error('Error closing journal:', error);
-      throw this.handleError(error, 'Erreur lors de la clôture du journal');
+      console.error('❌ Erreur lors de l\'enregistrement de l\'activité', error);
+      throw this.handleError(error, 'Erreur lors de l\'enregistrement de l\'activité');
     }
   }
-  
-	 async getOrCreateJournalDuJour(collecteurId) {
-	  try {
-		const response = await this.axios.get(`/journals/collecteur/${collecteurId}/today`);
-		return this.formatResponse(response, 'Journal du jour récupéré');
-	  } catch (error) {
-		throw this.handleError(error, 'Erreur lors de la récupération du journal');
-	  }
-	}
+
+  /**
+   * Récupérer les statistiques d'activité
+   * @param {number} userId - ID de l'utilisateur
+   * @param {string} startDate - Date de début
+   * @param {string} endDate - Date de fin
+   */
+  async getActivityStats(userId, startDate, endDate) {
+    try {
+      console.log(`📊 API: GET /journal-activite/stats/${userId}`);
+      
+      const params = new URLSearchParams({
+        startDate: format(new Date(startDate), 'yyyy-MM-dd'),
+        endDate: format(new Date(endDate), 'yyyy-MM-dd')
+      });
+
+      const response = await this.axios.get(
+        `/journal-activite/stats/${userId}?${params.toString()}`
+      );
+      
+      return this.formatResponse(response, 'Statistiques récupérées');
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des statistiques', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+    }
+  }
+
+  /**
+   * Récupérer les types d'activités disponibles
+   */
+  async getActivityTypes() {
+    try {
+      console.log('📋 API: GET /journal-activite/types');
+      const response = await this.axios.get('/journal-activite/types');
+      return this.formatResponse(response, 'Types d\'activité récupérés');
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des types d\'activité', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des types d\'activité');
+    }
+  }
+
+  /**
+   * Exporter le journal d'activité
+   * @param {number} userId - ID de l'utilisateur
+   * @param {Object} options - Options d'export (format, période, etc.)
+   */
+  async exportActivities(userId, options = {}) {
+    try {
+      console.log(`📤 API: GET /journal-activite/export/${userId}`);
+      
+      const params = new URLSearchParams({
+        format: options.format || 'excel',
+        startDate: options.startDate ? format(new Date(options.startDate), 'yyyy-MM-dd') : '',
+        endDate: options.endDate ? format(new Date(options.endDate), 'yyyy-MM-dd') : ''
+      });
+
+      const response = await this.axios.get(
+        `/journal-activite/export/${userId}?${params.toString()}`,
+        { responseType: 'blob' }
+      );
+      
+      return this.formatResponse(response, 'Export réalisé');
+    } catch (error) {
+      console.error('❌ Erreur lors de l\'export des activités', error);
+      throw this.handleError(error, 'Erreur lors de l\'export des activités');
+    }
+  }
 }
 
-export default new JournalService();
+export default new JournalActiviteService();
