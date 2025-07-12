@@ -1,4 +1,4 @@
-// src/services/clientService.js
+// src/services/clientService.js - CORRIGÉ
 import BaseApiService from './base/BaseApiService';
 
 class ClientService extends BaseApiService {
@@ -104,6 +104,10 @@ class ClientService extends BaseApiService {
     }
   }
   
+  /**
+   * 🔥 MÉTHODE PRINCIPALE - Récupérer client avec toutes ses données
+   * Utilise l'endpoint unifié /with-transactions qui existe déjà
+   */
   async getClientWithTransactions(clientId) {
     try {
       console.log('📱 API: GET /clients/', clientId, '/with-transactions');
@@ -115,28 +119,131 @@ class ClientService extends BaseApiService {
   }
 
   /**
+   * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
    * Récupérer l'historique des transactions d'un client
    */
   async getClientTransactions(clientId, params = {}) {
     try {
-      console.log('📱 API: GET /clients/transactions/', clientId);
-      const response = await this.axios.get(`/clients/${clientId}/transactions`, { params });
-      return this.formatResponse(response, 'Transactions récupérées');
+      console.log('📱 API: Récupération transactions via /with-transactions pour client:', clientId);
+      
+      // Utilise l'endpoint unifié au lieu de l'endpoint séparé inexistant
+      const response = await this.getClientWithTransactions(clientId);
+      
+      if (response && response.data && response.data.transactions) {
+        let transactions = response.data.transactions;
+        
+        // Appliquer les filtres côté client si nécessaire
+        if (params.type) {
+          transactions = transactions.filter(t => 
+            t.sens?.toLowerCase() === params.type.toLowerCase() ||
+            t.typeMouvement?.toLowerCase() === params.type.toLowerCase()
+          );
+        }
+        
+        // Pagination côté client
+        const page = params.page || 0;
+        const size = params.size || 20;
+        const start = page * size;
+        const end = start + size;
+        
+        const paginatedTransactions = transactions.slice(start, end);
+        
+        const result = {
+          content: paginatedTransactions,
+          totalElements: transactions.length,
+          totalPages: Math.ceil(transactions.length / size),
+          size: size,
+          number: page,
+          numberOfElements: paginatedTransactions.length,
+          first: page === 0,
+          last: page >= Math.ceil(transactions.length / size) - 1
+        };
+        
+        return this.formatResponse({ data: result }, 'Transactions récupérées');
+      }
+      
+      // Si pas de transactions, retourner structure vide
+      return this.formatResponse({ 
+        data: { 
+          content: [], 
+          totalElements: 0, 
+          totalPages: 0, 
+          size: params.size || 20, 
+          number: params.page || 0 
+        } 
+      }, 'Aucune transaction');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des transactions');
     }
   }
 
   /**
+   * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
    * Récupérer les statistiques d'un client
    */
   async getClientStatistics(clientId) {
     try {
-      console.log('📱 API: GET /clients/statistics/', clientId);
-      const response = await this.axios.get(`/clients/${clientId}/statistics`);
-      return this.formatResponse(response, 'Statistiques récupérées');
+      console.log('📱 API: Calcul statistiques via /with-transactions pour client:', clientId);
+      
+      // Utilise l'endpoint unifié
+      const response = await this.getClientWithTransactions(clientId);
+      
+      if (response && response.data) {
+        const data = response.data;
+        
+        // Extraire ou calculer les statistiques depuis les données unifiées
+        const stats = {
+          totalEpargne: data.totalEpargne || 0,
+          totalRetraits: data.totalRetraits || 0,
+          soldeTotal: data.soldeTotal || 0,
+          nombreTransactions: data.transactions?.length || 0,
+          derniereTransaction: data.transactions?.[0] ? {
+            date: data.transactions[0].dateOperation,
+            montant: data.transactions[0].montant,
+            type: data.transactions[0].sens
+          } : null,
+          moyenneEpargneParTransaction: data.transactions?.length > 0 ? 
+            (data.totalEpargne || 0) / data.transactions.length : 0,
+          commission: data.commissionParam || null
+        };
+        
+        return this.formatResponse({ data: stats }, 'Statistiques calculées');
+      }
+      
+      throw new Error('Données insuffisantes pour calculer les statistiques');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
+    }
+  }
+
+  /**
+   * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
+   * Récupérer le solde d'un client
+   */
+  async getClientBalance(clientId) {
+    try {
+      console.log('📱 API: Calcul solde via /with-transactions pour client:', clientId);
+      
+      // Utilise l'endpoint unifié
+      const response = await this.getClientWithTransactions(clientId);
+      
+      if (response && response.data) {
+        const data = response.data;
+        
+        const balance = {
+          soldeTotal: data.soldeTotal || 0,
+          totalEpargne: data.totalEpargne || 0,
+          totalRetraits: data.totalRetraits || 0,
+          lastUpdated: new Date().toISOString(),
+          clientNom: `${data.prenom || ''} ${data.nom || ''}`.trim()
+        };
+        
+        return this.formatResponse({ data: balance }, 'Solde récupéré');
+      }
+      
+      throw new Error('Impossible de récupérer le solde');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération du solde');
     }
   }
 
@@ -165,19 +272,6 @@ class ClientService extends BaseApiService {
       return this.formatResponse(response, 'Client transféré');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors du transfert');
-    }
-  }
-
-  /**
-   * Récupérer le solde d'un client
-   */
-  async getClientBalance(clientId) {
-    try {
-      console.log('📱 API: GET /clients/balance/', clientId);
-      const response = await this.axios.get(`/clients/${clientId}/balance`);
-      return this.formatResponse(response, 'Solde récupéré');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération du solde');
     }
   }
 
@@ -298,6 +392,49 @@ class ClientService extends BaseApiService {
     } catch (error) {
       throw this.handleError(error, 'Erreur recherche clients proches');
     }
+  }
+
+  // ============================================
+  // 🔥 MÉTHODES UTILITAIRES
+  // ============================================
+
+  /**
+   * Vérifier si un endpoint existe (pour debug)
+   */
+  async testEndpoint(endpoint) {
+    try {
+      console.log(`🧪 Test endpoint: ${endpoint}`);
+      const response = await this.axios.get(endpoint);
+      console.log(`✅ Endpoint ${endpoint} disponible`);
+      return true;
+    } catch (error) {
+      console.log(`❌ Endpoint ${endpoint} non disponible:`, error.response?.status);
+      return false;
+    }
+  }
+
+  /**
+   * Diagnostiquer les endpoints client disponibles
+   */
+  async diagnoseClientEndpoints(clientId = 1) {
+    console.log('🔍 Diagnostic des endpoints client...');
+    
+    const endpoints = [
+      `/clients/${clientId}`,
+      `/clients/${clientId}/with-transactions`,
+      `/clients/${clientId}/statistics`,
+      `/clients/${clientId}/balance`,
+      `/clients/${clientId}/transactions`
+    ];
+    
+    const results = {};
+    
+    for (const endpoint of endpoints) {
+      results[endpoint] = await this.testEndpoint(endpoint);
+    }
+    
+    console.log('📊 Résultats diagnostic:', results);
+    return results;
   }
 }
 

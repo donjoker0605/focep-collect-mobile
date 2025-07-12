@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminCollecteurSupervisionScreen.js
+// src/screens/Admin/AdminCollecteurSupervisionScreen.js - CORRIGÉ
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import Header from '../../components/Header/Header';
+// ❌ RETIRÉ : import Header from '../../components/Header/Header';
 import collecteurService from '../../services/collecteurService';
 
 const AdminCollecteurSupervisionScreen = ({ navigation }) => {
@@ -24,7 +24,7 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('all'); // all, active, inactive
+  const [activeTab, setActiveTab] = useState('all');
 
   // Charger les collecteurs
   const loadCollecteurs = useCallback(async (showLoader = true) => {
@@ -42,7 +42,6 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
               item && typeof item === 'object' && item.id
             );
 
-        // Enrichir les données avec des infos calculées
         const enrichedData = result.map(collecteur => ({
           ...collecteur,
           id: collecteur.id || collecteur.collecteurId,
@@ -94,14 +93,12 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   useEffect(() => {
     let filtered = collecteurs;
 
-    // Filtre par statut
     if (activeTab === 'active') {
       filtered = filtered.filter(c => c.isActive);
     } else if (activeTab === 'inactive') {
       filtered = filtered.filter(c => !c.isActive);
     }
 
-    // Filtre par recherche
     if (searchText.trim()) {
       filtered = filtered.filter(collecteur =>
         collecteur.displayName?.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -215,17 +212,7 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   if (loading && collecteurs.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header 
-          title="Supervision Collecteurs" 
-          rightComponent={() => (
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => loadCollecteurs()}
-            >
-              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          )}
-        />
+        {/* ❌ RETIRÉ : Header personnalisé */}
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
@@ -235,17 +222,7 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
-        title="Supervision Collecteurs" 
-        rightComponent={() => (
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => loadCollecteurs()}
-          >
-            <Ionicons name="refresh-outline" size={24} color="#007AFF" />
-          </TouchableOpacity>
-        )}
-      />
+      {/* ❌ RETIRÉ : Header personnalisé */}
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -336,9 +313,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerButton: {
-    padding: 8,
   },
   searchContainer: {
     flexDirection: 'row',

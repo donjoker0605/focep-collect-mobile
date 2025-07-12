@@ -11,8 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 // Écrans principaux
 import AdminDashboardScreen from '../screens/Admin/AdminDashboardScreen';
 import AdminNotificationsScreen from '../screens/Admin/AdminNotificationsScreen';
-
-// ✅ ÉCRANS DE SUPERVISION
 import AdminCollecteurSupervisionScreen from '../screens/Admin/AdminCollecteurSupervisionScreen';
 import AdminJournalActiviteScreen from '../screens/Admin/AdminJournalActiviteScreen';
 

@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminJournalActiviteScreen.js
+// src/screens/Admin/AdminJournalActiviteScreen.js - CORRIGÉ
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import Header from '../../components/Header/Header';
+// ❌ RETIRÉ : import Header from '../../components/Header/Header';
 import journalActiviteService from '../../services/journalActiviteService';
 import collecteurService from '../../services/collecteurService';
 
@@ -63,15 +63,24 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
     try {
       console.log(`📅 Chargement activités pour collecteur: ${collecteurId} date: ${format(selectedDate, 'yyyy-MM-dd')}`);
       
+      // 🔥 CORRECTION : Utiliser le bon service avec le bon format de date
       const response = await journalActiviteService.getUserActivities(
         collecteurId,
-        selectedDate
+        selectedDate // Le service va gérer le formatage
       );
 
       if (response && response.data) {
-        const activitiesData = Array.isArray(response.data) 
-          ? response.data 
-          : Object.values(response.data).filter(item => item && item.id);
+        // Gérer à la fois les formats Array et Page
+        let activitiesData = [];
+        
+        if (Array.isArray(response.data)) {
+          activitiesData = response.data;
+        } else if (response.data.content && Array.isArray(response.data.content)) {
+          // Format Page de Spring
+          activitiesData = response.data.content;
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          activitiesData = response.data.data;
+        }
 
         // Enrichir les données
         const enrichedActivities = activitiesData.map(activity => ({
@@ -94,20 +103,13 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
       console.error('❌ Erreur chargement activités:', error);
       setError(error.message);
       
-      // Si l'erreur est liée au format de date, essayer un format alternatif
-      if (error.response?.status === 400 && error.response?.data?.detail?.includes('date')) {
-        console.log('🔄 Tentative avec format de date alternatif...');
-        try {
-          const alternativeResponse = await journalActiviteService.getUserActivities(
-            collecteurId,
-            format(selectedDate, 'yyyy-MM-dd')
-          );
-          if (alternativeResponse && alternativeResponse.data) {
-            setActivities(alternativeResponse.data);
-          }
-        } catch (retryError) {
-          Alert.alert('Erreur', 'Impossible de charger le journal d\'activité');
-        }
+      // Gestion d'erreur améliorée
+      if (error.response?.status === 400) {
+        Alert.alert('Erreur', 'Format de date invalide');
+      } else if (error.response?.status === 403) {
+        Alert.alert('Erreur', 'Vous n\'avez pas accès à ces données');
+      } else {
+        Alert.alert('Erreur', 'Impossible de charger le journal d\'activité');
       }
     } finally {
       setLoading(false);
@@ -220,7 +222,6 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
       style={styles.activityCard}
       onPress={() => {
         if (item.entityId && item.entityType === 'CLIENT') {
-          // Navigation vers le détail du client si applicable
           navigation.navigate('ClientDetailScreen', { clientId: item.entityId });
         }
       }}
@@ -272,7 +273,6 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
       <TouchableOpacity
         style={styles.dateDisplay}
         onPress={() => {
-          // TODO: Implémenter un date picker
           Alert.alert('Info', 'Sélecteur de date à implémenter');
         }}
       >
@@ -321,10 +321,7 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
   if (loading && activities.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Header 
-          title={`Journal - ${collecteurNom || 'Collecteur'}`}
-          onBack={() => navigation.goBack()}
-        />
+        {/* ❌ RETIRÉ : Header personnalisé */}
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
         </View>
@@ -334,22 +331,7 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header 
-        title={`Journal - ${collecteurNom || 'Collecteur'}`}
-        subtitle={agenceNom}
-        onBack={() => navigation.goBack()}
-        rightComponent={() => (
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => {
-              // TODO: Implémenter export
-              Alert.alert('Info', 'Export à implémenter');
-            }}
-          >
-            <Ionicons name="download-outline" size={24} color="#007AFF" />
-          </TouchableOpacity>
-        )}
-      />
+      {/* ❌ RETIRÉ : Header personnalisé */}
 
       {renderDateNavigation()}
       {renderStats()}
@@ -381,9 +363,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerButton: {
-    padding: 8,
   },
   dateNavContainer: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-// src/services/adminCollecteurService.js - SERVICE ADMIN COLLECTEURS
+// src/services/adminCollecteurService.js - SERVICE ADMIN COLLECTEURS ENRICHI
 import BaseApiService from './base/BaseApiService';
 
 /**
@@ -116,13 +116,25 @@ class AdminCollecteurService extends BaseApiService {
       if (dateDebut) params.dateDebut = dateDebut;
       if (dateFin) params.dateFin = dateFin;
 
-      const response = await this.axios.get(`/collecteurs/${collecteurId}/stats`, { params });
-      return this.formatResponse(response, 'Statistiques collecteur récupérées');
-    } catch (error) {
-      // Fallback: créer des stats basiques si l'endpoint n'existe pas
-      if (error.response?.status === 404) {
-        return this.createBasicStats(collecteurId);
+      // 🔥 NOUVELLE APPROCHE : Essayer plusieurs endpoints
+      try {
+        // Endpoint préféré avec statistics
+        const response = await this.axios.get(`/collecteurs/${collecteurId}/statistics`, { params });
+        return this.formatResponse(response, 'Statistiques collecteur récupérées');
+      } catch (statsError) {
+        if (statsError.response?.status === 404) {
+          // Fallback vers l'endpoint stats standard
+          try {
+            const response = await this.axios.get(`/collecteurs/${collecteurId}/stats`, { params });
+            return this.formatResponse(response, 'Statistiques collecteur récupérées');
+          } catch (fallbackError) {
+            // Si aucun endpoint stats n'existe, créer des stats basiques
+            return this.createBasicStats(collecteurId);
+          }
+        }
+        throw statsError;
       }
+    } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
     }
   }
@@ -146,7 +158,321 @@ class AdminCollecteurService extends BaseApiService {
   }
 
   // =====================================
-  // MÉTHODES UTILITAIRES
+  // 🔥 NOUVEAUX SERVICES MANQUANTS
+  // =====================================
+
+  /**
+   * 📋 Récupérer les activités d'un collecteur (journal d'activité)
+   * Service manquant identifié dans l'analyse
+   */
+  async getCollecteurActivities(collecteurId, params = {}) {
+    try {
+      console.log(`📋 API: GET /admin/collecteurs/${collecteurId}/activites`);
+      
+      // Formater la date si nécessaire
+      if (params.date && params.date instanceof Date) {
+        params.date = params.date.toISOString().split('T')[0];
+      }
+      
+      // Essayer l'endpoint admin spécialisé d'abord
+      try {
+        const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/activites`, { params });
+        return this.formatResponse(response, 'Activités collecteur récupérées');
+      } catch (adminError) {
+        if (adminError.response?.status === 404) {
+          // Fallback vers l'endpoint journal-activite standard
+          console.log('📋 Fallback vers journal-activite standard');
+          return await this.getCollecteurActivitiesFallback(collecteurId, params);
+        }
+        throw adminError;
+      }
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des activités');
+    }
+  }
+
+  /**
+   * 📋 Fallback pour les activités via l'endpoint journal-activite
+   */
+  async getCollecteurActivitiesFallback(collecteurId, params = {}) {
+    try {
+      // Utiliser l'endpoint journal-activite/user/{userId}
+      const date = params.date || new Date().toISOString().split('T')[0];
+      const fallbackParams = {
+        date,
+        page: params.page || 0,
+        size: params.size || 20,
+        sortBy: params.sortBy || 'timestamp',
+        sortDir: params.sortDir || 'desc'
+      };
+      
+      const response = await this.axios.get(`/journal-activite/user/${collecteurId}`, { params: fallbackParams });
+      return this.formatResponse(response, 'Activités récupérées (fallback)');
+    } catch (error) {
+      console.warn('❌ Fallback journal-activite échoué:', error.response?.status);
+      // Retourner structure vide si tout échoue
+      return this.formatResponse({
+        data: {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          size: params.size || 20,
+          number: params.page || 0
+        }
+      }, 'Aucune activité trouvée');
+    }
+  }
+
+  /**
+   * 🚨 Récupérer les activités critiques d'un collecteur
+   */
+  async getCriticalActivities(collecteurId, params = {}) {
+    try {
+      console.log(`🚨 API: GET /admin/collecteurs/${collecteurId}/activites/critiques`);
+      const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/activites/critiques`, { params });
+      return this.formatResponse(response, 'Activités critiques récupérées');
+    } catch (error) {
+      // Si l'endpoint n'existe pas, retourner une liste vide
+      if (error.response?.status === 404) {
+        return this.formatResponse({ data: [] }, 'Aucune activité critique');
+      }
+      throw this.handleError(error, 'Erreur lors de la récupération des activités critiques');
+    }
+  }
+
+  /**
+   * 🔍 Recherche d'activités avec filtres avancés
+   */
+  async searchActivities(collecteurId, filters = {}) {
+    try {
+      console.log(`🔍 API: GET /admin/collecteurs/${collecteurId}/activites/search`);
+      const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/activites/search`, { params: filters });
+      return this.formatResponse(response, 'Recherche activités effectuée');
+    } catch (error) {
+      if (error.response?.status === 404) {
+        // Fallback vers recherche simple
+        return await this.getCollecteurActivities(collecteurId, filters);
+      }
+      throw this.handleError(error, 'Erreur lors de la recherche d\'activités');
+    }
+  }
+
+  /**
+   * ⚡ Changer le statut d'un collecteur (activer/suspendre)
+   */
+  async toggleCollecteurStatus(collecteurId, active) {
+    try {
+      console.log(`⚡ API: PUT /admin/collecteurs/${collecteurId}/status`);
+      const response = await this.axios.put(`/admin/collecteurs/${collecteurId}/status`, { active });
+      
+      // Invalider le cache après modification
+      this.invalidateCache('collecteurs');
+      
+      return this.formatResponse(response, `Collecteur ${active ? 'activé' : 'suspendu'}`);
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du changement de statut');
+    }
+  }
+
+  /**
+   * 📧 Envoyer un message à un collecteur
+   */
+  async sendMessageToCollecteur(collecteurId, messageData) {
+    try {
+      console.log(`📧 API: POST /admin/collecteurs/${collecteurId}/message`);
+      const response = await this.axios.post(`/admin/collecteurs/${collecteurId}/message`, messageData);
+      return this.formatResponse(response, 'Message envoyé');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de l\'envoi du message');
+    }
+  }
+
+  /**
+   * ⚙️ Mettre à jour les paramètres d'un collecteur
+   */
+  async updateCollecteurSettings(collecteurId, updateData) {
+    try {
+      console.log(`⚙️ API: PUT /admin/collecteurs/${collecteurId}/settings`);
+      const response = await this.axios.put(`/admin/collecteurs/${collecteurId}/settings`, updateData);
+      
+      // Invalider le cache après modification
+      this.invalidateCache('collecteurs');
+      
+      return this.formatResponse(response, 'Paramètres mis à jour');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la mise à jour des paramètres');
+    }
+  }
+
+  /**
+   * 📈 Récupérer les performances d'un collecteur
+   */
+  async getCollecteurPerformance(collecteurId, params = {}) {
+    try {
+      console.log(`📈 API: GET /admin/collecteurs/${collecteurId}/performance`);
+      const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/performance`, { params });
+      return this.formatResponse(response, 'Performance récupérée');
+    } catch (error) {
+      // Fallback vers statistiques basiques
+      if (error.response?.status === 404) {
+        return await this.getCollecteurStats(collecteurId, params.dateDebut, params.dateFin);
+      }
+      throw this.handleError(error, 'Erreur lors de la récupération de la performance');
+    }
+  }
+
+  /**
+   * 📄 Générer un rapport pour un collecteur
+   */
+  async generateCollecteurReport(collecteurId, reportParams) {
+    try {
+      console.log(`📄 API: POST /admin/collecteurs/${collecteurId}/report`);
+      const response = await this.axios.post(`/admin/collecteurs/${collecteurId}/report`, reportParams, {
+        responseType: 'blob' // Pour les fichiers PDF/Excel
+      });
+      return this.formatResponse(response, 'Rapport généré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la génération du rapport');
+    }
+  }
+
+  /**
+   * 🔄 Transférer les clients d'un collecteur vers un autre
+   */
+  async transferClients(fromCollecteurId, toCollecteurId, clientIds = []) {
+    try {
+      console.log(`🔄 API: POST /admin/collecteurs/${fromCollecteurId}/transfer-clients`);
+      const response = await this.axios.post(`/admin/collecteurs/${fromCollecteurId}/transfer-clients`, {
+        toCollecteurId,
+        clientIds
+      });
+      
+      // Invalider le cache après transfert
+      this.invalidateCache('collecteurs');
+      this.invalidateCache('clients');
+      
+      return this.formatResponse(response, 'Clients transférés');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du transfert des clients');
+    }
+  }
+
+  /**
+   * ✅ Valider les données d'un collecteur
+   */
+  async validateCollecteurData(collecteurId) {
+    try {
+      console.log(`✅ API: POST /admin/collecteurs/${collecteurId}/validate`);
+      const response = await this.axios.post(`/admin/collecteurs/${collecteurId}/validate`);
+      return this.formatResponse(response, 'Validation effectuée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la validation');
+    }
+  }
+
+  /**
+   * 📚 Récupérer l'historique des modifications d'un collecteur
+   */
+  async getCollecteurHistory(collecteurId, params = {}) {
+    try {
+      console.log(`📚 API: GET /admin/collecteurs/${collecteurId}/history`);
+      const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/history`, { params });
+      return this.formatResponse(response, 'Historique récupéré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération de l\'historique');
+    }
+  }
+
+  /**
+   * 🚨 Récupérer les alertes liées à un collecteur
+   */
+  async getCollecteurAlerts(collecteurId, params = {}) {
+    try {
+      console.log(`🚨 API: GET /admin/collecteurs/${collecteurId}/alerts`);
+      const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/alerts`, { params });
+      return this.formatResponse(response, 'Alertes récupérées');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des alertes');
+    }
+  }
+
+  // =====================================
+  // 🔥 MÉTHODES DE DIAGNOSTIC ET DEBUG
+  // =====================================
+
+  /**
+   * 🧪 Tester la connexion aux endpoints admin collecteurs
+   */
+  async testConnection() {
+    try {
+      console.log('🧪 Test de connexion admin collecteurs');
+      
+      // Test endpoint de base
+      const response = await this.axios.get('/collecteurs', { params: { page: 0, size: 1 } });
+      console.log('✅ Endpoint collecteurs de base OK');
+      
+      return {
+        success: true,
+        status: response.status,
+        message: 'Connexion admin collecteurs OK'
+      };
+    } catch (error) {
+      console.error('❌ Échec test connexion admin collecteurs:', error);
+      return {
+        success: false,
+        error: error.response?.status || error.message,
+        message: 'Connexion admin collecteurs échouée'
+      };
+    }
+  }
+
+  /**
+   * 🔍 Diagnostiquer les endpoints disponibles
+   */
+  async diagnoseEndpoints(collecteurId = 4) {
+    console.log('🔍 Diagnostic endpoints admin collecteurs...');
+    
+    const endpoints = [
+      `/collecteurs`,
+      `/collecteurs/${collecteurId}`,
+      `/collecteurs/${collecteurId}/statistics`,
+      `/clients/collecteur/${collecteurId}`,
+      `/admin/collecteurs/${collecteurId}/activites`,
+      `/journal-activite/user/${collecteurId}`,
+      `/admin/collecteurs/${collecteurId}/performance`
+    ];
+    
+    const results = {};
+    
+    for (const endpoint of endpoints) {
+      try {
+        const testParams = endpoint.includes('journal-activite') 
+          ? { date: new Date().toISOString().split('T')[0] }
+          : {};
+          
+        const response = await this.axios.get(endpoint, { params: testParams });
+        results[endpoint] = {
+          status: response.status,
+          available: true,
+          dataType: typeof response.data
+        };
+        console.log(`✅ ${endpoint} → ${response.status}`);
+      } catch (error) {
+        results[endpoint] = {
+          status: error.response?.status || 'NETWORK_ERROR',
+          available: false,
+          error: error.response?.data?.message || error.message
+        };
+        console.log(`❌ ${endpoint} → ${error.response?.status || 'ERROR'}`);
+      }
+    }
+    
+    console.log('📊 Résultats diagnostic:', results);
+    return results;
+  }
+
+  // =====================================
+  // MÉTHODES UTILITAIRES EXISTANTES
   // =====================================
 
   /**
@@ -258,11 +584,16 @@ class AdminCollecteurService extends BaseApiService {
     return {
       success: true,
       data: {
+        collecteurId,
         nombreClients: 0,
         collecteJour: 0,
+        totalEpargne: 0,
+        totalRetraits: 0,
+        soldeNet: 0,
         transactionsDuJour: 0,
         dernierConnexion: null,
-        performance: 0
+        performance: 0,
+        dateCalcul: new Date().toISOString()
       },
       message: 'Statistiques basiques générées'
     };
