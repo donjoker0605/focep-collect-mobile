@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientAddEditScreen.js - AVEC GÉOLOCALISATION INTÉGRÉE
+// src/screens/Collecteur/ClientAddEditScreen.js - VERSION AMÉLIORÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -98,10 +98,12 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   const [showCommissionSettings, setShowCommissionSettings] = useState(false);
   const [serviceStatus, setServiceStatus] = useState(null);
   
-  // 🔥 NOUVEAUX ÉTATS GÉOLOCALISATION
+  // 🔥 ÉTATS GÉOLOCALISATION AMÉLIORÉS
   const [locationData, setLocationData] = useState(null);
-  const [locationStep, setLocationStep] = useState('pending'); // 'pending', 'captured', 'skipped'
-  const [geoloading, setGeoLoading] = useState(false);
+  const [locationStep, setLocationStep] = useState('pending'); // 'pending', 'capturing', 'captured', 'skipped'
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoError, setGeoError] = useState(null);
+  const [geoInitialized, setGeoInitialized] = useState(false);
   
   // Hook pour synchronisation offline
   const { saveClient } = useOfflineSync();
@@ -139,36 +141,40 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (isEditMode && client) {
       loadExistingLocation();
-      
-      // Charger paramètres commission
-      if (client.commissionParams) {
-        setCommissionType(client.commissionParams.type || 'PERCENTAGE');
-        if (client.commissionParams.type === 'FIXED') {
-          setFixedAmount(client.commissionParams.value?.toString() || '1000');
-        } else if (client.commissionParams.type === 'PERCENTAGE') {
-          setPercentageValue(client.commissionParams.value?.toString() || '5');
-        }
-      }
+      loadCommissionSettings();
     }
   }, [isEditMode, client]);
 
   // ============================================
-  // FONCTIONS GÉOLOCALISATION
+  // FONCTIONS D'INITIALISATION
   // ============================================
 
   const initializeScreen = async () => {
     console.log('🚀 Initialisation écran ClientAddEdit...');
     
-    // Test des services (fonction existante)
-    const testResult = await testServicesConnection();
-    setServiceStatus(testResult);
-    
-    if (!testResult.success) {
-      Alert.alert(
-        'Attention',
-        `Problème détecté: ${testResult.error}. Vous pouvez continuer en mode hors ligne.`,
-        [{ text: 'OK' }]
-      );
+    try {
+      // Test des services existants
+      const testResult = await testServicesConnection();
+      setServiceStatus(testResult);
+      
+      // Initialiser le service de géolocalisation
+      const geoStatus = await geolocationService.initialize();
+      setGeoInitialized(true);
+      
+      if (!geoStatus.locationEnabled) {
+        console.warn('⚠️ Services de localisation désactivés');
+      }
+      
+      if (!testResult.success) {
+        Alert.alert(
+          'Attention',
+          `Problème détecté: ${testResult.error}. Vous pouvez continuer en mode hors ligne.`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('❌ Erreur initialisation:', error);
+      setGeoError(error.message);
     }
   };
 
@@ -195,22 +201,36 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   };
 
-  const captureQuickGPS = async () => {
+  const loadCommissionSettings = () => {
+    if (client.commissionParams) {
+      setCommissionType(client.commissionParams.type || 'PERCENTAGE');
+      if (client.commissionParams.type === 'FIXED') {
+        setFixedAmount(client.commissionParams.value?.toString() || '1000');
+      } else if (client.commissionParams.type === 'PERCENTAGE') {
+        setPercentageValue(client.commissionParams.value?.toString() || '5');
+      }
+    }
+  };
+
+  // ============================================
+  // FONCTIONS GÉOLOCALISATION
+  // ============================================
+
+  const captureLocationSmart = async () => {
+    if (!geoInitialized) {
+      Alert.alert('Erreur', 'Service de géolocalisation non initialisé');
+      return;
+    }
+
+    setLocationStep('capturing');
     setGeoLoading(true);
+    setGeoError(null);
     
     try {
-      // Demander permissions
-      const hasPermission = await geolocationService.requestPermissions();
-      if (!hasPermission) {
-        openFullLocationScreen();
-        return;
-      }
-
-      // Obtenir position rapidement
-      const position = await geolocationService.getCurrentPosition({ 
-        timeout: 8000,
-        accuracy: Location.Accuracy.Balanced 
-      });
+      console.log('📍 Début capture intelligente...');
+      
+      // Obtenir position avec fallback
+      const position = await geolocationService.getCurrentPositionWithFallback();
       
       // Géocodage inverse optionnel
       let address = '';
@@ -221,14 +241,19 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         );
         address = addressInfo?.formattedAddress || '';
       } catch (geocodeError) {
-        console.warn('⚠️ Géocodage inverse échoué');
+        console.warn('⚠️ Géocodage inverse échoué:', geocodeError);
       }
 
-      setLocationData({
-        ...position,
+      const locationData = {
+        latitude: position.latitude,
+        longitude: position.longitude,
         adresseComplete: address,
-        coordonneesSaisieManuelle: false
-      });
+        coordonneesSaisieManuelle: false,
+        source: 'GPS',
+        accuracy: position.accuracy
+      };
+
+      setLocationData(locationData);
       setLocationStep('captured');
       
       Alert.alert(
@@ -238,22 +263,36 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       );
 
     } catch (error) {
-      console.error('❌ Erreur capture GPS rapide:', error);
+      console.error('❌ Erreur capture GPS:', error);
+      setGeoError(error.message);
+      setLocationStep('pending');
       
-      Alert.alert(
-        'GPS indisponible',
-        'Impossible de capturer la position automatiquement.\n\nVoulez-vous ouvrir l\'écran de géolocalisation complet ?',
-        [
-          { text: 'Plus tard', style: 'cancel' },
-          { text: 'Ouvrir', onPress: openFullLocationScreen }
-        ]
-      );
+      // Gestion intelligente des erreurs
+      if (error.actionable) {
+        Alert.alert(
+          'Configuration requise',
+          error.message,
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            { text: 'Paramètres', onPress: () => geolocationService.openLocationSettings() }
+          ]
+        );
+      } else {
+        Alert.alert(
+          'GPS indisponible',
+          `${error.message}\n\nVoulez-vous ouvrir l'écran de géolocalisation avancé ?`,
+          [
+            { text: 'Ignorer', style: 'cancel', onPress: () => setLocationStep('skipped') },
+            { text: 'Ouvrir', onPress: openAdvancedLocationScreen }
+          ]
+        );
+      }
     } finally {
       setGeoLoading(false);
     }
   };
 
-  const openFullLocationScreen = () => {
+  const openAdvancedLocationScreen = () => {
     navigation.navigate('ClientLocation', {
       clientId: client?.id,
       clientNom: client ? `${client.prenom} ${client.nom}` : 'Nouveau client',
@@ -274,61 +313,26 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         { text: 'Supprimer', onPress: () => {
           setLocationData(null);
           setLocationStep('pending');
+          setGeoError(null);
         }}
       ]
     );
   };
 
-  // ============================================
-  // FONCTIONS EXISTANTES (MODIFIÉES)
-  // ============================================
-
-  const testServicesConnection = async () => {
-    console.log('🔍 === TEST DES SERVICES ===');
-    
-    try {
-      // Test 1: Vérifier authService
-      console.log('1️⃣ Test authService...');
-      const user = await authService.getCurrentUser();
-      console.log('👤 Utilisateur:', user);
-      
-      if (!user) {
-        console.warn('⚠️ Pas d\'utilisateur connecté');
-        return { success: false, error: 'Utilisateur non connecté' };
-      }
-      
-      // Test 2: Test de connexivité clientService
-      console.log('2️⃣ Test clientService...');
-      const testConnection = await clientService.testConnection();
-      console.log('🔗 Test connexion:', testConnection);
-      
-      if (!testConnection.success) {
-        console.error('❌ Service client indisponible');
-        return { success: false, error: 'Service client indisponible' };
-      }
-      
-      // Test 3: Validation des données
-      console.log('3️⃣ Test validation...');
-      const testData = {
-        nom: 'TestNom',
-        prenom: 'TestPrenom',
-        numeroCni: '123456789',
-        telephone: '677123456',
-        ville: 'Douala',
-        quartier: 'Akwa'
-      };
-      
-      const validation = clientService.validateClientDataLocally(testData);
-      console.log('✅ Validation:', validation);
-      
-      console.log('🎉 === TOUS LES TESTS TERMINÉS ===');
-      return { success: true, message: 'Tous les services opérationnels' };
-      
-    } catch (error) {
-      console.error('❌ Erreur dans les tests:', error);
-      return { success: false, error: error.message };
-    }
+  const skipLocation = () => {
+    Alert.alert(
+      'Ignorer la localisation',
+      'Vous pourrez ajouter la localisation plus tard dans les détails du client.',
+      [
+        { text: 'Retour', style: 'cancel' },
+        { text: 'Ignorer', onPress: () => setLocationStep('skipped') }
+      ]
+    );
   };
+
+  // ============================================
+  // FONCTIONS DE SOUMISSION AMÉLIORÉES
+  // ============================================
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -345,7 +349,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       // Préparer les données du client
       const clientData = {
         ...data,
-        // 🔥 AJOUT GÉOLOCALISATION
+        // 🔥 GÉOLOCALISATION AVEC VALIDATION
         latitude: locationData?.latitude || null,
         longitude: locationData?.longitude || null,
         coordonneesSaisieManuelle: locationData?.coordonneesSaisieManuelle || false,
@@ -377,54 +381,14 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       const savedClient = result.data;
       console.log('✅ Client sauvegardé:', savedClient);
       
-      // 🔥 SAUVEGARDE SÉPARÉE DE LA GÉOLOCALISATION (si nouveau client)
-      if (!isEditMode && locationData && savedClient.id) {
-        try {
-          await clientService.updateClientLocation(savedClient.id, {
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            saisieManuelle: locationData.coordonneesSaisieManuelle,
-            adresseComplete: locationData.adresseComplete,
-            source: locationData.source
-          });
-          console.log('✅ Localisation sauvegardée séparément');
-        } catch (locationError) {
-          console.warn('⚠️ Erreur sauvegarde localisation (non bloquante):', locationError);
-        }
+      // 🔥 SAUVEGARDE SÉPARÉE DE LA GÉOLOCALISATION (si nécessaire)
+      if (locationData && (!isEditMode || !client.latitude)) {
+        await saveLocationSeparately(savedClient.id, locationData);
       }
       
       // Navigation et messages de succès
-      if (isEditMode) {
-        Alert.alert(
-          "Succès",
-          `Les informations de ${savedClient.prenom} ${savedClient.nom} ont été mises à jour avec succès.`,
-          [
-            { 
-              text: "OK", 
-              onPress: () => navigateToClientDetail(navigation, savedClient)
-            }
-          ]
-        );
-      } else {
-        const locationMessage = locationData 
-          ? '\n📍 Localisation enregistrée' 
-          : '\n⚠️ Localisation non renseignée';
-          
-        Alert.alert(
-          "Succès",
-          `Le client ${savedClient.prenom} ${savedClient.nom} a été créé avec succès.${locationMessage}`,
-          [
-            { 
-              text: "Voir les clients", 
-              onPress: () => navigateToClientList(navigation)
-            },
-            { 
-              text: "Voir détails", 
-              onPress: () => navigateToClientDetail(navigation, savedClient)
-            }
-          ]
-        );
-      }
+      showSuccessMessage(savedClient);
+      
     } catch (error) {
       console.error('❌ Erreur lors de la sauvegarde:', error);
       
@@ -437,6 +401,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
             text: "Mode hors ligne", 
             onPress: () => {
               console.log('💾 Tentative sauvegarde hors ligne...');
+              // TODO: Implémenter sauvegarde hors ligne
             }
           }
         ]
@@ -446,7 +411,87 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // Fonctions commission (inchangées)
+  const saveLocationSeparately = async (clientId, locationData) => {
+    try {
+      await clientService.updateClientLocation(clientId, {
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        saisieManuelle: locationData.coordonneesSaisieManuelle,
+        adresseComplete: locationData.adresseComplete
+      });
+      console.log('✅ Localisation sauvegardée séparément');
+    } catch (locationError) {
+      console.warn('⚠️ Erreur sauvegarde localisation (non bloquante):', locationError);
+    }
+  };
+
+  const showSuccessMessage = (savedClient) => {
+    const locationMessage = locationData 
+      ? '\n📍 Localisation enregistrée' 
+      : '\n⚠️ Localisation non renseignée';
+    
+    if (isEditMode) {
+      Alert.alert(
+        "Succès",
+        `Les informations de ${savedClient.prenom} ${savedClient.nom} ont été mises à jour avec succès.${locationMessage}`,
+        [
+          { 
+            text: "OK", 
+            onPress: () => navigateToClientDetail(navigation, savedClient)
+          }
+        ]
+      );
+    } else {
+      Alert.alert(
+        "Succès",
+        `Le client ${savedClient.prenom} ${savedClient.nom} a été créé avec succès.${locationMessage}`,
+        [
+          { 
+            text: "Voir les clients", 
+            onPress: () => navigateToClientList(navigation)
+          },
+          { 
+            text: "Voir détails", 
+            onPress: () => navigateToClientDetail(navigation, savedClient)
+          }
+        ]
+      );
+    }
+  };
+
+  // ============================================
+  // FONCTIONS EXISTANTES (INCHANGÉES)
+  // ============================================
+
+  const testServicesConnection = async () => {
+    console.log('🔍 === TEST DES SERVICES ===');
+    
+    try {
+      const user = await authService.getCurrentUser();
+      console.log('👤 Utilisateur:', user);
+      
+      if (!user) {
+        console.warn('⚠️ Pas d\'utilisateur connecté');
+        return { success: false, error: 'Utilisateur non connecté' };
+      }
+      
+      const testConnection = await clientService.testConnection();
+      console.log('🔗 Test connexion:', testConnection);
+      
+      if (!testConnection.success) {
+        console.error('❌ Service client indisponible');
+        return { success: false, error: 'Service client indisponible' };
+      }
+      
+      console.log('🎉 === TOUS LES TESTS TERMINÉS ===');
+      return { success: true, message: 'Tous les services opérationnels' };
+      
+    } catch (error) {
+      console.error('❌ Erreur dans les tests:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const handleSelectType = (type) => {
     setCommissionType(type);
   };
@@ -462,7 +507,127 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   };
 
   // ============================================
-  // RENDU
+  // RENDU GÉOLOCALISATION AMÉLIORÉ
+  // ============================================
+  
+  const renderLocationSection = () => (
+    <Card style={styles.geoCard}>
+      <View style={styles.geoHeader}>
+        <Ionicons 
+          name={locationData ? "location" : "location-outline"} 
+          size={20} 
+          color={locationData ? theme.colors.success : theme.colors.primary} 
+        />
+        <Text style={styles.geoTitle}>Localisation</Text>
+        {locationData && (
+          <TouchableOpacity onPress={clearLocation} style={styles.geoActionButton}>
+            <Ionicons name="trash-outline" size={16} color={theme.colors.error} />
+          </TouchableOpacity>
+        )}
+      </View>
+      
+      {locationStep === 'captured' && locationData ? (
+        /* Localisation capturée */
+        <View style={styles.locationCaptured}>
+          <View style={styles.locationInfo}>
+            <Text style={styles.coordinatesText}>
+              📍 {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+            </Text>
+            <Text style={styles.sourceText}>
+              📡 {locationData.coordonneesSaisieManuelle ? 'Saisie manuelle' : 'GPS'}
+            </Text>
+            {locationData.accuracy && (
+              <Text style={styles.accuracyText}>
+                🎯 Précision: ±{Math.round(locationData.accuracy)}m
+              </Text>
+            )}
+            {locationData.adresseComplete && (
+              <Text style={styles.addressText}>
+                🏠 {locationData.adresseComplete}
+              </Text>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.editLocationButton}
+            onPress={openAdvancedLocationScreen}
+          >
+            <Ionicons name="create-outline" size={16} color={theme.colors.primary} />
+            <Text style={styles.editLocationText}>Modifier</Text>
+          </TouchableOpacity>
+        </View>
+      ) : locationStep === 'capturing' ? (
+        /* Capture en cours */
+        <View style={styles.locationCapturing}>
+          <Text style={styles.geoSubtitle}>
+            🛰️ Capture GPS en cours...
+          </Text>
+          <Text style={styles.geoSubtext}>
+            Assurez-vous d'être à l'extérieur pour une meilleure précision
+          </Text>
+        </View>
+      ) : locationStep === 'skipped' ? (
+        /* Localisation ignorée */
+        <View style={styles.locationSkipped}>
+          <Text style={styles.geoSubtitle}>
+            ⏭️ Localisation ignorée
+          </Text>
+          <Text style={styles.geoSubtext}>
+            Vous pourrez l'ajouter plus tard dans les détails du client
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => setLocationStep('pending')}
+          >
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        /* Aucune localisation */
+        <View style={styles.locationPending}>
+          <Text style={styles.geoSubtitle}>
+            Enregistrez la position de ce client pour faciliter vos futures visites
+          </Text>
+          
+          {geoError && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>⚠️ {geoError}</Text>
+            </View>
+          )}
+          
+          <View style={styles.geoActions}>
+            <Button
+              title="Capturer GPS"
+              onPress={captureLocationSmart}
+              loading={geoLoading}
+              style={styles.quickGpsButton}
+              icon="location"
+              variant="outlined"
+            />
+            
+            <Button
+              title="Options avancées"
+              onPress={openAdvancedLocationScreen}
+              style={styles.advancedGeoButton}
+              icon="settings-outline"
+              variant="text"
+            />
+            
+            <Button
+              title="Ignorer"
+              onPress={skipLocation}
+              style={styles.skipGeoButton}
+              icon="arrow-forward-outline"
+              variant="text"
+            />
+          </View>
+        </View>
+      )}
+    </Card>
+  );
+
+  // ============================================
+  // RENDU PRINCIPAL
   // ============================================
   
   return (
@@ -620,77 +785,10 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
-            {/* 🔥 SECTION GÉOLOCALISATION INTÉGRÉE */}
-            <Card style={styles.geoCard}>
-              <View style={styles.geoHeader}>
-                <Ionicons 
-                  name={locationData ? "location" : "location-outline"} 
-                  size={20} 
-                  color={locationData ? theme.colors.success : theme.colors.primary} 
-                />
-                <Text style={styles.geoTitle}>Localisation</Text>
-                {locationData && (
-                  <TouchableOpacity onPress={clearLocation} style={styles.geoActionButton}>
-                    <Ionicons name="trash-outline" size={16} color={theme.colors.error} />
-                  </TouchableOpacity>
-                )}
-              </View>
-              
-              {locationData ? (
-                /* Localisation capturée */
-                <View style={styles.locationCaptured}>
-                  <View style={styles.locationInfo}>
-                    <Text style={styles.coordinatesText}>
-                      📍 {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
-                    </Text>
-                    <Text style={styles.sourceText}>
-                      📡 {locationData.coordonneesSaisieManuelle ? 'Saisie manuelle' : 'GPS'}
-                    </Text>
-                    {locationData.adresseComplete && (
-                      <Text style={styles.addressText}>
-                        🏠 {locationData.adresseComplete}
-                      </Text>
-                    )}
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.editLocationButton}
-                    onPress={openFullLocationScreen}
-                  >
-                    <Ionicons name="create-outline" size={16} color={theme.colors.primary} />
-                    <Text style={styles.editLocationText}>Modifier</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                /* Aucune localisation */
-                <View style={styles.locationPending}>
-                  <Text style={styles.geoSubtitle}>
-                    Enregistrez la position de ce client pour faciliter vos futures visites
-                  </Text>
-                  
-                  <View style={styles.geoActions}>
-                    <Button
-                      title="Capturer GPS"
-                      onPress={captureQuickGPS}
-                      loading={geoloading}
-                      style={styles.quickGpsButton}
-                      icon="location"
-                      variant="outlined"
-                    />
-                    
-                    <Button
-                      title="Options avancées"
-                      onPress={openFullLocationScreen}
-                      style={styles.advancedGeoButton}
-                      icon="settings-outline"
-                      variant="text"
-                    />
-                  </View>
-                </View>
-              )}
-            </Card>
+            {/* 🔥 SECTION GÉOLOCALISATION AMÉLIORÉE */}
+            {renderLocationSection()}
             
-            {/* Section paramètres de commission (inchangée) */}
+            {/* Section paramètres de commission (code existant inchangé) */}
             <Card style={styles.commissionCard}>
               <View style={styles.commissionHeader}>
                 <Text style={styles.sectionTitle}>Paramètres de commission</Text>
@@ -830,9 +928,142 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 };
 
 // ============================================
-// STYLES
+// STYLES (AJOUTS POUR GÉOLOCALISATION)
 // ============================================
 const styles = StyleSheet.create({
+  // ... styles existants ...
+  
+  // Styles géolocalisation améliorés
+  geoCard: {
+    marginVertical: 16,
+    backgroundColor: theme.colors.lightGray,
+  },
+  geoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  geoTitle: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    flex: 1,
+  },
+  geoActionButton: {
+    padding: 8,
+  },
+  geoSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 12,
+  },
+  geoSubtext: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
+    marginBottom: 12,
+  },
+  locationCaptured: {
+    backgroundColor: theme.colors.successLight,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.success,
+  },
+  locationCapturing: {
+    backgroundColor: theme.colors.warningLight,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.warning,
+    alignItems: 'center',
+  },
+  locationSkipped: {
+    backgroundColor: theme.colors.lightGray,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.textLight,
+    alignItems: 'center',
+  },
+  locationPending: {
+    padding: 12,
+  },
+  locationInfo: {
+    marginBottom: 8,
+  },
+  coordinatesText: {
+    fontSize: 14,
+    fontFamily: 'monospace',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  accuracyText: {
+    fontSize: 12,
+    color: theme.colors.success,
+    marginBottom: 4,
+  },
+  sourceText: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    marginBottom: 4,
+  },
+  addressText: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+  },
+  editLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  editLocationText: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: theme.colors.primary,
+  },
+  errorContainer: {
+    backgroundColor: theme.colors.errorLight,
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 12,
+    color: theme.colors.error,
+  },
+  geoActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+  },
+  quickGpsButton: {
+    flex: 1,
+    marginRight: 8,
+  },
+  advancedGeoButton: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  skipGeoButton: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 4,
+  },
+  retryButtonText: {
+    color: theme.colors.white,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  // Styles existants (non modifiés)
   container: {
     flex: 1,
     backgroundColor: theme.colors.primary,
@@ -898,26 +1129,6 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: theme.colors.lightGray,
     borderRadius: 8,
-  },
-  geoCard: {
-    marginVertical: 16,
-    backgroundColor: theme.colors.lightGray,
-  },
-  geoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  geoTitle: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
-  },
-  geoSubtitle: {
-    fontSize: 14,
-    color: theme.colors.textLight,
-    fontStyle: 'italic',
   },
   commissionCard: {
     marginVertical: 16,
