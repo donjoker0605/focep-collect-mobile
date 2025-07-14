@@ -1,4 +1,4 @@
-// src/screens/Collecteur/ClientAddEditScreen.js - Version améliorée
+// src/screens/Collecteur/ClientAddEditScreen.js - AVEC GÉOLOCALISATION INTÉGRÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,109 +16,97 @@ import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+
+// Components
 import Header from '../../components/Header/Header';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
 import Card from '../../components/Card/Card';
+
+// Services et hooks
 import theme from '../../theme';
 import { useOfflineSync } from '../../hooks/useOfflineSync';
 import clientService from '../../services/clientService';
+import geolocationService from '../../services/geolocationService';
 import authService from '../../services/authService';
 
-// Schéma de validation pour le formulaire client
+// Navigation
+import { navigateToClientList, navigateToClientDetail } from '../../navigation/CollecteurStack';
+
+// ============================================
+// SCHÉMAS DE VALIDATION
+// ============================================
+
 const createClientSchema = yup.object().shape({
   nom: yup
     .string()
+    .min(2, 'Le nom doit contenir au moins 2 caractères')
     .required('Le nom est requis'),
   prenom: yup
     .string()
+    .min(2, 'Le prénom doit contenir au moins 2 caractères')
     .required('Le prénom est requis'),
   numeroCni: yup
     .string()
+    .min(8, 'Le numéro CNI doit contenir au moins 8 caractères')
     .required('Le numéro CNI est requis'),
   telephone: yup
     .string()
-    .matches(/^(\+237|237)?[ ]?[6-9][0-9]{8}$/, 'Numéro de téléphone invalide')
+    .matches(/^(\+237|237)?[ ]?[6-9][0-9]{8}$/, 'Numéro de téléphone invalide (format camerounais)')
     .required('Le numéro de téléphone est requis'),
   ville: yup
     .string()
+    .min(2, 'La ville doit contenir au moins 2 caractères')
     .required('La ville est requise'),
   quartier: yup
     .string()
+    .min(2, 'Le quartier doit contenir au moins 2 caractères')
     .required('Le quartier est requis'),
 });
 
-const testServicesConnection = async () => {
-  console.log('🔍 === TEST DES SERVICES ===');
-  
-  try {
-    // Test 1: Vérifier authService
-    console.log('1️⃣ Test authService...');
-    const user = await authService.getCurrentUser();
-    console.log('👤 Utilisateur:', user);
-    
-    if (!user) {
-      console.warn('⚠️ Pas d\'utilisateur connecté');
-      return;
-    }
-    
-    // Test 2: Test de connexivité clientService
-    console.log('2️⃣ Test clientService...');
-    const testConnection = await clientService.testConnection();
-    console.log('🔗 Test connexion:', testConnection);
-    
-    // Test 3: Validation des données
-    console.log('3️⃣ Test validation...');
-    const testData = {
-      nom: 'TestNom',
-      prenom: 'TestPrenom',
-      numeroCni: '123456789',
-      telephone: '677123456',
-      ville: 'Douala'
-    };
-    
-    const validation = clientService.validateClientDataLocally(testData);
-    console.log('✅ Validation:', validation);
-    
-    console.log('🎉 === TOUS LES TESTS TERMINÉS ===');
-    
-  } catch (error) {
-    console.error('❌ Erreur dans les tests:', error);
-  }
-};
-
-// Schéma de validation pour l'édition (nom et prénom non modifiables)
 const editClientSchema = yup.object().shape({
   numeroCni: yup
     .string()
+    .min(8, 'Le numéro CNI doit contenir au moins 8 caractères')
     .required('Le numéro CNI est requis'),
   telephone: yup
     .string()
-    .matches(/^(\+237|237)?[ ]?[6-9][0-9]{8}$/, 'Numéro de téléphone invalide')
+    .matches(/^(\+237|237)?[ ]?[6-9][0-9]{8}$/, 'Numéro de téléphone invalide (format camerounais)')
     .required('Le numéro de téléphone est requis'),
   ville: yup
     .string()
+    .min(2, 'La ville doit contenir au moins 2 caractères')
     .required('La ville est requise'),
   quartier: yup
     .string()
+    .min(2, 'Le quartier doit contenir au moins 2 caractères')
     .required('Le quartier est requis'),
 });
 
+// ============================================
+// COMPOSANT PRINCIPAL
+// ============================================
 const ClientAddEditScreen = ({ navigation, route }) => {
   const { mode, client } = route.params || { mode: 'add' };
   const isEditMode = mode === 'edit';
+  
+  // États
   const [isLoading, setIsLoading] = useState(false);
-  const [commissionType, setCommissionType] = useState('PERCENTAGE'); // FIXED, PERCENTAGE, TIER
-  const [fixedAmount, setFixedAmount] = useState('1000'); // Montant fixe par défaut
-  const [percentageValue, setPercentageValue] = useState('5'); // Pourcentage par défaut (5%)
-  const [tiers, setTiers] = useState([
-  { montantMin: 0, montantMax: 50000, taux: 5 },
-  { montantMin: 50001, montantMax: 100000, taux: 4 },
-  { montantMin: 100001, montantMax: 999999999, taux: 3 }
-]);
+  const [commissionType, setCommissionType] = useState('PERCENTAGE');
+  const [fixedAmount, setFixedAmount] = useState('1000');
+  const [percentageValue, setPercentageValue] = useState('5');
   const [showCommissionSettings, setShowCommissionSettings] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState(null);
+  
+  // 🔥 NOUVEAUX ÉTATS GÉOLOCALISATION
+  const [locationData, setLocationData] = useState(null);
+  const [locationStep, setLocationStep] = useState('pending'); // 'pending', 'captured', 'skipped'
+  const [geoloading, setGeoLoading] = useState(false);
+  
+  // Hook pour synchronisation offline
   const { saveClient } = useOfflineSync();
 
+  // Configuration du formulaire
   const { control, handleSubmit, setValue, formState: { errors } } = useForm({
     resolver: yupResolver(isEditMode ? editClientSchema : createClientSchema),
     defaultValues: isEditMode && client
@@ -140,11 +128,19 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         }
   });
 
-  // Charger les paramètres de commission si nous sommes en mode édition
+  // ============================================
+  // EFFETS
+  // ============================================
+  
   useEffect(() => {
-	  testServicesConnection();
+    initializeScreen();
+  }, []);
+
+  useEffect(() => {
     if (isEditMode && client) {
-      // Si le client a des paramètres de commission personnalisés, les charger
+      loadExistingLocation();
+      
+      // Charger paramètres commission
       if (client.commissionParams) {
         setCommissionType(client.commissionParams.type || 'PERCENTAGE');
         if (client.commissionParams.type === 'FIXED') {
@@ -156,14 +152,205 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   }, [isEditMode, client]);
 
+  // ============================================
+  // FONCTIONS GÉOLOCALISATION
+  // ============================================
+
+  const initializeScreen = async () => {
+    console.log('🚀 Initialisation écran ClientAddEdit...');
+    
+    // Test des services (fonction existante)
+    const testResult = await testServicesConnection();
+    setServiceStatus(testResult);
+    
+    if (!testResult.success) {
+      Alert.alert(
+        'Attention',
+        `Problème détecté: ${testResult.error}. Vous pouvez continuer en mode hors ligne.`,
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const loadExistingLocation = async () => {
+    if (!client?.id) return;
+    
+    try {
+      const response = await clientService.getClientLocation(client.id);
+      if (response.success && response.data) {
+        const location = response.data;
+        if (location.latitude && location.longitude) {
+          setLocationData({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            adresseComplete: location.adresseComplete,
+            coordonneesSaisieManuelle: location.coordonneesSaisieManuelle,
+            source: location.coordonneesSaisieManuelle ? 'MANUAL' : 'GPS'
+          });
+          setLocationStep('captured');
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Pas de localisation existante pour ce client');
+    }
+  };
+
+  const captureQuickGPS = async () => {
+    setGeoLoading(true);
+    
+    try {
+      // Demander permissions
+      const hasPermission = await geolocationService.requestPermissions();
+      if (!hasPermission) {
+        openFullLocationScreen();
+        return;
+      }
+
+      // Obtenir position rapidement
+      const position = await geolocationService.getCurrentPosition({ 
+        timeout: 8000,
+        accuracy: Location.Accuracy.Balanced 
+      });
+      
+      // Géocodage inverse optionnel
+      let address = '';
+      try {
+        const addressInfo = await geolocationService.reverseGeocode(
+          position.latitude,
+          position.longitude
+        );
+        address = addressInfo?.formattedAddress || '';
+      } catch (geocodeError) {
+        console.warn('⚠️ Géocodage inverse échoué');
+      }
+
+      setLocationData({
+        ...position,
+        adresseComplete: address,
+        coordonneesSaisieManuelle: false
+      });
+      setLocationStep('captured');
+      
+      Alert.alert(
+        'Position capturée !',
+        `Localisation obtenue avec une précision de ${Math.round(position.accuracy || 0)}m`,
+        [{ text: 'OK' }]
+      );
+
+    } catch (error) {
+      console.error('❌ Erreur capture GPS rapide:', error);
+      
+      Alert.alert(
+        'GPS indisponible',
+        'Impossible de capturer la position automatiquement.\n\nVoulez-vous ouvrir l\'écran de géolocalisation complet ?',
+        [
+          { text: 'Plus tard', style: 'cancel' },
+          { text: 'Ouvrir', onPress: openFullLocationScreen }
+        ]
+      );
+    } finally {
+      setGeoLoading(false);
+    }
+  };
+
+  const openFullLocationScreen = () => {
+    navigation.navigate('ClientLocation', {
+      clientId: client?.id,
+      clientNom: client ? `${client.prenom} ${client.nom}` : 'Nouveau client',
+      isCreation: !isEditMode,
+      onLocationSaved: (savedLocationData) => {
+        setLocationData(savedLocationData);
+        setLocationStep('captured');
+      }
+    });
+  };
+
+  const clearLocation = () => {
+    Alert.alert(
+      'Supprimer la localisation',
+      'Voulez-vous supprimer la localisation de ce client ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Supprimer', onPress: () => {
+          setLocationData(null);
+          setLocationStep('pending');
+        }}
+      ]
+    );
+  };
+
+  // ============================================
+  // FONCTIONS EXISTANTES (MODIFIÉES)
+  // ============================================
+
+  const testServicesConnection = async () => {
+    console.log('🔍 === TEST DES SERVICES ===');
+    
+    try {
+      // Test 1: Vérifier authService
+      console.log('1️⃣ Test authService...');
+      const user = await authService.getCurrentUser();
+      console.log('👤 Utilisateur:', user);
+      
+      if (!user) {
+        console.warn('⚠️ Pas d\'utilisateur connecté');
+        return { success: false, error: 'Utilisateur non connecté' };
+      }
+      
+      // Test 2: Test de connexivité clientService
+      console.log('2️⃣ Test clientService...');
+      const testConnection = await clientService.testConnection();
+      console.log('🔗 Test connexion:', testConnection);
+      
+      if (!testConnection.success) {
+        console.error('❌ Service client indisponible');
+        return { success: false, error: 'Service client indisponible' };
+      }
+      
+      // Test 3: Validation des données
+      console.log('3️⃣ Test validation...');
+      const testData = {
+        nom: 'TestNom',
+        prenom: 'TestPrenom',
+        numeroCni: '123456789',
+        telephone: '677123456',
+        ville: 'Douala',
+        quartier: 'Akwa'
+      };
+      
+      const validation = clientService.validateClientDataLocally(testData);
+      console.log('✅ Validation:', validation);
+      
+      console.log('🎉 === TOUS LES TESTS TERMINÉS ===');
+      return { success: true, message: 'Tous les services opérationnels' };
+      
+    } catch (error) {
+      console.error('❌ Erreur dans les tests:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   const onSubmit = async (data) => {
     setIsLoading(true);
     
     try {
+      console.log('💾 Soumission formulaire:', { mode, data, locationData });
+      
+      // Validation supplémentaire
+      const validation = clientService.validateClientDataLocally(data);
+      if (!validation.isValid) {
+        throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
+      }
+      
       // Préparer les données du client
       const clientData = {
         ...data,
-        // Ajouter les paramètres de commission si activés
+        // 🔥 AJOUT GÉOLOCALISATION
+        latitude: locationData?.latitude || null,
+        longitude: locationData?.longitude || null,
+        coordonneesSaisieManuelle: locationData?.coordonneesSaisieManuelle || false,
+        adresseComplete: locationData?.adresseComplete || null,
+        // Commission
         commissionParams: showCommissionSettings ? {
           type: commissionType,
           value: commissionType === 'FIXED' 
@@ -173,22 +360,40 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       };
       
       if (isEditMode && client) {
-        // Mode édition: inclure l'ID du client existant et conserver les champs non modifiables
         clientData.id = client.id;
         clientData.nom = client.nom;
         clientData.prenom = client.prenom;
       }
       
-      // Appeler la méthode du hook pour sauvegarder/mettre à jour le client
+      console.log('📤 Données finales à envoyer:', clientData);
+      
+      // Sauvegarder le client
       const result = await saveClient(clientData, isEditMode);
       
       if (!result.success) {
-        throw new Error(result.error || "Une erreur est survenue lors de l'enregistrement du client");
+        throw new Error(result.error || "Une erreur est survenue lors de l'enregistrement");
       }
       
       const savedClient = result.data;
+      console.log('✅ Client sauvegardé:', savedClient);
       
-      // Afficher le message de succès
+      // 🔥 SAUVEGARDE SÉPARÉE DE LA GÉOLOCALISATION (si nouveau client)
+      if (!isEditMode && locationData && savedClient.id) {
+        try {
+          await clientService.updateClientLocation(savedClient.id, {
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            saisieManuelle: locationData.coordonneesSaisieManuelle,
+            adresseComplete: locationData.adresseComplete,
+            source: locationData.source
+          });
+          console.log('✅ Localisation sauvegardée séparément');
+        } catch (locationError) {
+          console.warn('⚠️ Erreur sauvegarde localisation (non bloquante):', locationError);
+        }
+      }
+      
+      // Navigation et messages de succès
       if (isEditMode) {
         Alert.alert(
           "Succès",
@@ -196,40 +401,52 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           [
             { 
               text: "OK", 
-              onPress: () => {
-                // Rediriger vers la page détail avec le client mis à jour
-                navigation.navigate('ClientDetail', { client: savedClient });
-              }
+              onPress: () => navigateToClientDetail(navigation, savedClient)
             }
           ]
         );
       } else {
+        const locationMessage = locationData 
+          ? '\n📍 Localisation enregistrée' 
+          : '\n⚠️ Localisation non renseignée';
+          
         Alert.alert(
           "Succès",
-          `Le client ${savedClient.prenom} ${savedClient.nom} a été créé avec succès.`,
+          `Le client ${savedClient.prenom} ${savedClient.nom} a été créé avec succès.${locationMessage}`,
           [
             { 
-              text: "OK", 
-              onPress: () => {
-                navigation.navigate('Clients');
-              }
+              text: "Voir les clients", 
+              onPress: () => navigateToClientList(navigation)
+            },
+            { 
+              text: "Voir détails", 
+              onPress: () => navigateToClientDetail(navigation, savedClient)
             }
           ]
         );
       }
     } catch (error) {
-      // Afficher l'erreur
+      console.error('❌ Erreur lors de la sauvegarde:', error);
+      
       Alert.alert(
         "Erreur",
-        error.message || "Une erreur est survenue lors de l'enregistrement du client",
-        [{ text: "OK" }]
+        `Impossible d'enregistrer le client: ${error.message}`,
+        [
+          { text: "Réessayer" },
+          { 
+            text: "Mode hors ligne", 
+            onPress: () => {
+              console.log('💾 Tentative sauvegarde hors ligne...');
+            }
+          }
+        ]
       );
-      console.error('Erreur lors de la sauvegarde du client:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Fonctions commission (inchangées)
   const handleSelectType = (type) => {
     setCommissionType(type);
   };
@@ -244,11 +461,22 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     return numValue.toLocaleString('fr-FR');
   };
 
+  // ============================================
+  // RENDU
+  // ============================================
+  
   return (
     <SafeAreaView style={styles.container}>
       <Header
         title={isEditMode ? "Modifier un client" : "Ajouter un client"}
         onBackPress={() => navigation.goBack()}
+        rightComponent={
+          serviceStatus && !serviceStatus.success ? (
+            <View style={styles.statusIndicator}>
+              <Ionicons name="cloud-offline" size={20} color={theme.colors.warning} />
+            </View>
+          ) : null
+        }
       />
       
       <KeyboardAvoidingView
@@ -260,11 +488,23 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.formContainer}>
-            {/* Champs d'identification (nom et prénom non modifiables en mode édition) */}
+            
+            {/* Indicateur de statut des services */}
+            {serviceStatus && !serviceStatus.success && (
+              <Card style={styles.warningCard}>
+                <View style={styles.warningContent}>
+                  <Ionicons name="warning" size={24} color={theme.colors.warning} />
+                  <Text style={styles.warningText}>
+                    Mode hors ligne - Vos données seront synchronisées plus tard
+                  </Text>
+                </View>
+              </Card>
+            )}
+            
+            {/* Section identification */}
             <Text style={styles.sectionTitle}>Informations d'identification</Text>
             
             {isEditMode ? (
-              // En mode édition, afficher nom et prénom en lecture seule
               <View style={styles.readOnlyFieldsContainer}>
                 <View style={styles.readOnlyField}>
                   <Text style={styles.readOnlyLabel}>Nom</Text>
@@ -277,7 +517,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                 </View>
               </View>
             ) : (
-              // En mode création, permettre la saisie du nom et prénom
               <>
                 <Controller
                   control={control}
@@ -329,6 +568,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
+            {/* Section coordonnées */}
             <Text style={styles.sectionTitle}>Coordonnées</Text>
             
             <Controller
@@ -380,7 +620,77 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
-            {/* Paramètres de commission */}
+            {/* 🔥 SECTION GÉOLOCALISATION INTÉGRÉE */}
+            <Card style={styles.geoCard}>
+              <View style={styles.geoHeader}>
+                <Ionicons 
+                  name={locationData ? "location" : "location-outline"} 
+                  size={20} 
+                  color={locationData ? theme.colors.success : theme.colors.primary} 
+                />
+                <Text style={styles.geoTitle}>Localisation</Text>
+                {locationData && (
+                  <TouchableOpacity onPress={clearLocation} style={styles.geoActionButton}>
+                    <Ionicons name="trash-outline" size={16} color={theme.colors.error} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              {locationData ? (
+                /* Localisation capturée */
+                <View style={styles.locationCaptured}>
+                  <View style={styles.locationInfo}>
+                    <Text style={styles.coordinatesText}>
+                      📍 {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+                    </Text>
+                    <Text style={styles.sourceText}>
+                      📡 {locationData.coordonneesSaisieManuelle ? 'Saisie manuelle' : 'GPS'}
+                    </Text>
+                    {locationData.adresseComplete && (
+                      <Text style={styles.addressText}>
+                        🏠 {locationData.adresseComplete}
+                      </Text>
+                    )}
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={styles.editLocationButton}
+                    onPress={openFullLocationScreen}
+                  >
+                    <Ionicons name="create-outline" size={16} color={theme.colors.primary} />
+                    <Text style={styles.editLocationText}>Modifier</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                /* Aucune localisation */
+                <View style={styles.locationPending}>
+                  <Text style={styles.geoSubtitle}>
+                    Enregistrez la position de ce client pour faciliter vos futures visites
+                  </Text>
+                  
+                  <View style={styles.geoActions}>
+                    <Button
+                      title="Capturer GPS"
+                      onPress={captureQuickGPS}
+                      loading={geoloading}
+                      style={styles.quickGpsButton}
+                      icon="location"
+                      variant="outlined"
+                    />
+                    
+                    <Button
+                      title="Options avancées"
+                      onPress={openFullLocationScreen}
+                      style={styles.advancedGeoButton}
+                      icon="settings-outline"
+                      variant="text"
+                    />
+                  </View>
+                </View>
+              )}
+            </Card>
+            
+            {/* Section paramètres de commission (inchangée) */}
             <Card style={styles.commissionCard}>
               <View style={styles.commissionHeader}>
                 <Text style={styles.sectionTitle}>Paramètres de commission</Text>
@@ -447,25 +757,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                         Pourcentage
                       </Text>
                     </TouchableOpacity>
-					<TouchableOpacity
-					  style={[
-						styles.typeButton,
-						commissionType === 'TIER' && styles.selectedType
-					  ]}
-					  onPress={() => handleSelectType('TIER')}
-					>
-					  <Ionicons
-						name="stats-chart-outline"
-						size={24}
-						color={commissionType === 'TIER' ? theme.colors.white : theme.colors.primary}
-					  />
-					  <Text style={[
-						styles.typeText,
-						commissionType === 'TIER' && styles.selectedTypeText
-					  ]}>
-						Par paliers
-					  </Text>
-					</TouchableOpacity>
                   </View>
                   
                   {commissionType === 'FIXED' && (
@@ -484,7 +775,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                       
                       <View style={styles.descriptionBox}>
                         <Text style={styles.descriptionText}>
-                          Un montant fixe de <Text style={styles.highlightText}>{formatCurrency(fixedAmount)} FCFA</Text> sera prélevé comme commission sur chaque période de calcul.
+                          Un montant fixe de <Text style={styles.highlightText}>{formatCurrency(fixedAmount)} FCFA</Text> sera prélevé comme commission.
                         </Text>
                       </View>
                     </View>
@@ -506,39 +797,16 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                       
                       <View style={styles.descriptionBox}>
                         <Text style={styles.descriptionText}>
-                          Un pourcentage de <Text style={styles.highlightText}>{percentageValue}%</Text> sera appliqué au montant total collecté pour calculer la commission.
+                          Un pourcentage de <Text style={styles.highlightText}>{percentageValue}%</Text> sera appliqué au montant collecté.
                         </Text>
                       </View>
                     </View>
                   )}
-				  {commissionType === 'TIER' && (
-					  <View style={styles.configSection}>
-						<Text style={styles.configTitle}>Configuration des paliers</Text>
-						{tiers.map((tier, index) => (
-						  <View key={index} style={styles.tierRow}>
-							<Text style={styles.tierLabel}>
-							  {tier.montantMin.toLocaleString()} - {tier.montantMax.toLocaleString()} FCFA
-							</Text>
-							<TextInput
-							  style={styles.tierInput}
-							  value={tier.taux.toString()}
-							  onChangeText={(value) => {
-								const newTiers = [...tiers];
-								newTiers[index].taux = parseFloat(value) || 0;
-								setTiers(newTiers);
-							  }}
-							  keyboardType="numeric"
-							  placeholder="Taux %"
-							/>
-							<Text style={styles.tierUnit}>%</Text>
-						  </View>
-						))}
-					  </View>
-					)}
                 </View>
               )}
             </Card>
             
+            {/* Boutons d'action */}
             <Button
               title={isEditMode ? "Mettre à jour" : "Ajouter le client"}
               onPress={handleSubmit(onSubmit)}
@@ -561,6 +829,9 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   );
 };
 
+// ============================================
+// STYLES
+// ============================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -581,6 +852,23 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: '100%',
+  },
+  statusIndicator: {
+    padding: 4,
+  },
+  warningCard: {
+    marginBottom: 16,
+    backgroundColor: theme.colors.warningLight,
+  },
+  warningContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  warningText: {
+    marginLeft: 8,
+    color: theme.colors.warning,
+    fontSize: 14,
+    flex: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -610,6 +898,26 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: theme.colors.lightGray,
     borderRadius: 8,
+  },
+  geoCard: {
+    marginVertical: 16,
+    backgroundColor: theme.colors.lightGray,
+  },
+  geoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  geoTitle: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  geoSubtitle: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
   },
   commissionCard: {
     marginVertical: 16,

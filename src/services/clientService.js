@@ -41,6 +41,14 @@ class ClientService extends BaseApiService {
   async createClient(clientData) {
     try {
       console.log('📱 API: POST /clients');
+      console.log('📤 Données envoyées:', clientData);
+      
+      // Validation locale avant envoi
+      const validation = this.validateClientDataLocally(clientData);
+      if (!validation.isValid) {
+        throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
+      }
+      
       const response = await this.axios.post('/clients', clientData);
       return this.formatResponse(response, 'Client créé avec succès');
     } catch (error) {
@@ -54,6 +62,14 @@ class ClientService extends BaseApiService {
   async updateClient(clientId, clientData) {
     try {
       console.log('📱 API: PUT /clients/', clientId);
+      console.log('📤 Données envoyées:', clientData);
+      
+      // Validation locale avant envoi
+      const validation = this.validateClientDataLocally(clientData);
+      if (!validation.isValid) {
+        throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
+      }
+      
       const response = await this.axios.put(`/clients/${clientId}`, clientData);
       return this.formatResponse(response, 'Client mis à jour');
     } catch (error) {
@@ -117,6 +133,7 @@ class ClientService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la récupération des détails du client');
     }
   }
+
 
   /**
    * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
@@ -348,7 +365,7 @@ class ClientService extends BaseApiService {
   }
 
   // ============================================
-  // NOUVELLES MÉTHODES GÉOLOCALISATION
+  // MÉTHODES GÉOLOCALISATION
   // ============================================
 
   /**
@@ -436,6 +453,82 @@ class ClientService extends BaseApiService {
     console.log('📊 Résultats diagnostic:', results);
     return results;
   }
+  
+  /**
+   * Tester la connexion au service client
+   */
+  async testConnection() {
+    try {
+      console.log('🧪 Test connexion service client...');
+      
+      // Tester avec un appel simple (ping ou summary)
+      const response = await this.axios.get('/clients/summary');
+      
+      if (response && response.status === 200) {
+        console.log('✅ Service client disponible');
+        return { success: true, message: 'Service client opérationnel' };
+      } else {
+        console.log('❌ Service client indisponible');
+        return { success: false, message: 'Service client indisponible' };
+      }
+    } catch (error) {
+      console.error('❌ Erreur test connexion client:', error);
+      return { success: false, message: error.message };
+    }
+  }
+  
+  /**
+   * 🔥 MÉTHODE MANQUANTE - Validation locale des données client
+   * @param {Object} clientData - Données du client à valider
+   */
+  validateClientDataLocally(clientData) {
+    try {
+      console.log('✅ Validation locale données client:', clientData);
+      
+      const errors = [];
+      
+      // Validation nom
+      if (!clientData.nom || clientData.nom.trim().length < 2) {
+        errors.push('Le nom doit contenir au moins 2 caractères');
+      }
+      
+      // Validation prénom
+      if (!clientData.prenom || clientData.prenom.trim().length < 2) {
+        errors.push('Le prénom doit contenir au moins 2 caractères');
+      }
+      
+      // Validation CNI
+      if (!clientData.numeroCni || clientData.numeroCni.trim().length < 8) {
+        errors.push('Le numéro CNI doit contenir au moins 8 caractères');
+      }
+      
+      // Validation téléphone (format camerounais)
+      const phoneRegex = /^(\+237|237)?[ ]?[6-9][0-9]{8}$/;
+      if (!clientData.telephone || !phoneRegex.test(clientData.telephone)) {
+        errors.push('Le numéro de téléphone n\'est pas valide (format camerounais requis)');
+      }
+      
+      // Validation ville
+      if (!clientData.ville || clientData.ville.trim().length < 2) {
+        errors.push('La ville est requise');
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors: errors,
+        message: errors.length === 0 ? 'Données valides' : 'Erreurs de validation détectées'
+      };
+    } catch (error) {
+      console.error('❌ Erreur validation locale:', error);
+      return {
+        isValid: false,
+        errors: ['Erreur lors de la validation'],
+        message: error.message
+      };
+    }
+  }
+  
+  
 }
 
 export default new ClientService();
