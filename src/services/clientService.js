@@ -71,9 +71,9 @@ class ClientService extends BaseApiService {
       }
       
       const response = await this.axios.put(`/clients/${clientId}`, clientData);
-      return this.formatResponse(response, 'Client mis à jour');
+      return this.formatResponse(response, 'Client mis à jour avec succès');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la mise à jour');
+      throw this.handleError(error, 'Erreur lors de la mise à jour du client');
     }
   }
 
@@ -95,9 +95,12 @@ class ClientService extends BaseApiService {
   /**
    * Récupérer les clients d'un collecteur
    */
-  async getClientsByCollecteur(collecteurId, params = {}) {
+  async getClientsByCollecteur(collecteurId, { page = 0, size = 20, search = '' } = {}) {
     try {
       console.log('📱 API: GET /clients/collecteur/', collecteurId);
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      
       const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
       return this.formatResponse(response, 'Clients du collecteur récupérés');
     } catch (error) {
@@ -108,12 +111,13 @@ class ClientService extends BaseApiService {
   /**
    * Rechercher des clients
    */
-  async searchClients(searchQuery) {
+  async searchClients(query, collecteurId = null) {
     try {
       console.log('📱 API: GET /clients/search');
-      const response = await this.axios.get('/clients/search', {
-        params: { q: searchQuery }
-      });
+      const params = { q: query };
+      if (collecteurId) params.collecteurId = collecteurId;
+      
+      const response = await this.axios.get('/clients/search', { params });
       return this.formatResponse(response, 'Recherche effectuée');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la recherche');
@@ -360,7 +364,7 @@ class ClientService extends BaseApiService {
       const response = await this.axios.delete(`/clients/${clientId}`);
       return this.formatResponse(response, 'Client supprimé');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la suppression');
+      throw this.handleError(error, 'Erreur lors de la suppression du client');
     }
   }
 
@@ -374,27 +378,26 @@ class ClientService extends BaseApiService {
   async updateClientLocation(clientId, locationData) {
     try {
       console.log('📍 Mise à jour localisation client:', clientId);
+      console.log('📤 Données localisation:', locationData);
       
-      const response = await this.axios.put(
-        `/clients/${clientId}/location`, 
-        locationData
-      );
-      
-      return this.formatResponse(response, 'Localisation mise à jour');
+      const response = await this.axios.put(`/clients/${clientId}/location`, locationData);
+      return this.formatResponse(response, 'Localisation mise à jour avec succès');
     } catch (error) {
-      throw this.handleError(error, 'Erreur mise à jour localisation');
+      throw this.handleError(error, 'Erreur lors de la mise à jour de la localisation');
     }
   }
 
   /**
-   * Obtenir la localisation d'un client
+   * Récupérer la localisation d'un client
    */
   async getClientLocation(clientId) {
     try {
+      console.log('📍 Récupération localisation client:', clientId);
+      
       const response = await this.axios.get(`/clients/${clientId}/location`);
       return this.formatResponse(response, 'Localisation récupérée');
     } catch (error) {
-      throw this.handleError(error, 'Erreur récupération localisation');
+      throw this.handleError(error, 'Erreur lors de la récupération de la localisation');
     }
   }
 
@@ -461,24 +464,73 @@ class ClientService extends BaseApiService {
     try {
       console.log('🧪 Test connexion service client...');
       
-      // Tester avec un appel simple (ping ou summary)
-      const response = await this.axios.get('/clients/summary');
-      
-      if (response && response.status === 200) {
-        console.log('✅ Service client disponible');
-        return { success: true, message: 'Service client opérationnel' };
-      } else {
-        console.log('❌ Service client indisponible');
-        return { success: false, message: 'Service client indisponible' };
+      // Option 1: Utiliser l'endpoint ping du BaseApiService s'il existe
+      try {
+        const pingResponse = await this.ping();
+        if (pingResponse) {
+          console.log('✅ Service client disponible (ping)');
+          return { success: true, message: 'Service client opérationnel via ping' };
+        }
+      } catch (pingError) {
+        console.warn('⚠️ Ping échoué, test avec endpoint alternatif...');
       }
+      
+      // Option 2: Utiliser l'endpoint GET /clients avec des paramètres qui ne retournent pas de données
+      try {
+        const response = await this.axios.get('/clients', { 
+          params: { 
+            page: 0, 
+            size: 1,
+            search: '__test_connection__' // Recherche qui ne devrait rien retourner
+          } 
+        });
+        
+        // Si on arrive ici, c'est que l'endpoint répond correctement
+        console.log('✅ Service client disponible (endpoint /clients)');
+        return { success: true, message: 'Service client opérationnel' };
+        
+      } catch (clientsError) {
+        // Si c'est une erreur 401 (non autorisé), le service fonctionne mais on n'est pas connecté
+        if (clientsError.response && clientsError.response.status === 401) {
+          console.log('✅ Service client disponible (erreur 401 = service OK, auth requise)');
+          return { success: true, message: 'Service client opérationnel (authentification requise)' };
+        }
+        
+        // Si c'est une erreur 403 (forbidden), le service fonctionne mais on n'a pas les droits
+        if (clientsError.response && clientsError.response.status === 403) {
+          console.log('✅ Service client disponible (erreur 403 = service OK, droits insuffisants)');
+          return { success: true, message: 'Service client opérationnel (droits insuffisants)' };
+        }
+        
+        throw clientsError;
+      }
+      
     } catch (error) {
       console.error('❌ Erreur test connexion client:', error);
-      return { success: false, message: error.message };
+      
+      // Analyser l'erreur pour donner un message plus précis
+      let message = 'Service client indisponible';
+      
+      if (error.code === 'NETWORK_ERROR') {
+        message = 'Erreur réseau - Vérifiez votre connexion';
+      } else if (error.code === 'ECONNREFUSED') {
+        message = 'Serveur backend non démarré';
+      } else if (error.response) {
+        if (error.response.status >= 500) {
+          message = `Erreur serveur (${error.response.status})`;
+        } else if (error.response.status === 404) {
+          message = 'Endpoint client non trouvé';
+        } else {
+          message = `Erreur client (${error.response.status})`;
+        }
+      }
+      
+      return { success: false, message, error: error.message };
     }
   }
   
   /**
-   * 🔥 MÉTHODE MANQUANTE - Validation locale des données client
+   * MÉTHODE MANQUANTE - Validation locale des données client
    * @param {Object} clientData - Données du client à valider
    */
   validateClientDataLocally(clientData) {
@@ -504,13 +556,31 @@ class ClientService extends BaseApiService {
       
       // Validation téléphone (format camerounais)
       const phoneRegex = /^(\+237|237)?[ ]?[6-9][0-9]{8}$/;
-      if (!clientData.telephone || !phoneRegex.test(clientData.telephone)) {
+      if (!clientData.telephone || !phoneRegex.test(clientData.telephone.trim())) {
         errors.push('Le numéro de téléphone n\'est pas valide (format camerounais requis)');
       }
       
       // Validation ville
       if (!clientData.ville || clientData.ville.trim().length < 2) {
         errors.push('La ville est requise');
+      }
+      
+      // Validation quartier (requis seulement pour création)
+      if (!clientData.id && (!clientData.quartier || clientData.quartier.trim().length < 2)) {
+        errors.push('Le quartier est requis');
+      }
+      
+      // Validation coordonnées GPS (optionnelles mais doivent être valides si présentes)
+      if (clientData.latitude !== null && clientData.latitude !== undefined) {
+        if (typeof clientData.latitude !== 'number' || clientData.latitude < -90 || clientData.latitude > 90) {
+          errors.push('La latitude doit être un nombre entre -90 et 90');
+        }
+      }
+      
+      if (clientData.longitude !== null && clientData.longitude !== undefined) {
+        if (typeof clientData.longitude !== 'number' || clientData.longitude < -180 || clientData.longitude > 180) {
+          errors.push('La longitude doit être un nombre entre -180 et 180');
+        }
       }
       
       return {

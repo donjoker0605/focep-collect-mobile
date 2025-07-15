@@ -1,12 +1,11 @@
-// src/services/geolocationService.js - VERSION AMÉLIORÉE
+// src/services/geolocationService.js - VERSION CORRIGÉE ET SIMPLIFIÉE
 import * as Location from 'expo-location';
-import { Platform, Linking, Alert } from 'react-native';
+import { Platform, Linking } from 'react-native';
 
 class GeolocationService {
   constructor() {
     this.isLocationEnabled = false;
     this.hasPermission = false;
-    this.currentAccuracy = null;
     this.lastKnownLocation = null;
   }
 
@@ -100,20 +99,8 @@ class GeolocationService {
         }
       }
 
-      // Tentative de capture avec haute précision
-      let location;
-      try {
-        location = await Location.getCurrentPositionAsync(defaultOptions);
-      } catch (highAccuracyError) {
-        console.warn('⚠️ Haute précision échouée, tentative avec précision équilibrée...');
-        
-        // Fallback vers précision équilibrée
-        location = await Location.getCurrentPositionAsync({
-          ...defaultOptions,
-          accuracy: Location.Accuracy.Balanced,
-          timeout: 10000
-        });
-      }
+      // Tentative de capture
+      const location = await Location.getCurrentPositionAsync(defaultOptions);
 
       const result = {
         latitude: location.coords.latitude,
@@ -123,11 +110,7 @@ class GeolocationService {
         source: 'GPS'
       };
 
-      // Validation des coordonnées
-      this.validateCoordinates(result.latitude, result.longitude);
-      
       this.lastKnownLocation = result;
-      this.currentAccuracy = result.accuracy;
       
       console.log('✅ Position obtenue:', {
         lat: result.latitude.toFixed(6),
@@ -173,13 +156,61 @@ class GeolocationService {
   }
 
   /**
+   * 🔥 NOUVEAU : Validation des coordonnées GPS pour le Cameroun
+   */
+  validateCoordinates(latitude, longitude) {
+    if (latitude == null || longitude == null) {
+      return { valid: false, error: 'Coordonnées nulles' };
+    }
+    
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return { valid: false, error: 'Coordonnées doivent être des nombres' };
+    }
+    
+    if (latitude < -90 || latitude > 90) {
+      return { valid: false, error: 'Latitude invalide (doit être entre -90 et 90)' };
+    }
+    
+    if (longitude < -180 || longitude > 180) {
+      return { valid: false, error: 'Longitude invalide (doit être entre -180 et 180)' };
+    }
+    
+    // Validation spécifique au Cameroun
+    const CAMEROON_BOUNDS = {
+      minLat: 1.5, maxLat: 13.0,
+      minLng: 8.0, maxLng: 16.5
+    };
+    
+    let warning = null;
+    if (latitude < CAMEROON_BOUNDS.minLat || latitude > CAMEROON_BOUNDS.maxLat ||
+        longitude < CAMEROON_BOUNDS.minLng || longitude > CAMEROON_BOUNDS.maxLng) {
+      warning = 'Ces coordonnées semblent être en dehors du Cameroun. Voulez-vous continuer ?';
+    }
+    
+    // Vérifier les coordonnées nulles exactes (0,0) - Golfe de Guinée
+    if (Math.abs(latitude) < 0.001 && Math.abs(longitude) < 0.001) {
+      return { valid: false, error: 'Coordonnées (0,0) non autorisées' };
+    }
+    
+    // Coordonnées de l'émulateur Android (Mountain View, CA)
+    if (Math.abs(latitude - 37.4219983) < 0.001 && Math.abs(longitude - (-122.084))) {
+      warning = 'Coordonnées de l\'émulateur détectées (Mountain View, CA). Ceci est normal en développement.';
+    }
+    
+    return { valid: true, warning };
+  }
+
+  /**
    * Géocodage inverse avec gestion d'erreurs
    */
   async reverseGeocode(latitude, longitude) {
     console.log('🏠 Géocodage inverse...');
     
     try {
-      this.validateCoordinates(latitude, longitude);
+      const validation = this.validateCoordinates(latitude, longitude);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
       
       const addresses = await Location.reverseGeocodeAsync({ 
         latitude, 
@@ -204,46 +235,6 @@ class GeolocationService {
       console.error('❌ Erreur géocodage inverse:', error);
       return null; // Non bloquant
     }
-  }
-
-  /**
-   * Validation des coordonnées
-   */
-  validateCoordinates(latitude, longitude) {
-    if (latitude == null || longitude == null) {
-      return { valid: false, error: 'Coordonnées nulles' };
-    }
-    
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return { valid: false, error: 'Coordonnées doivent être des nombres' };
-    }
-    
-    if (latitude < -90 || latitude > 90) {
-      return { valid: false, error: 'Latitude invalide (doit être entre -90 et 90)' };
-    }
-    
-    if (longitude < -180 || longitude > 180) {
-      return { valid: false, error: 'Longitude invalide (doit être entre -180 et 180)' };
-    }
-    
-    // Validation spécifique au Cameroun (avec avertissement)
-    const CAMEROON_BOUNDS = {
-      minLat: 1.5, maxLat: 13.0,
-      minLng: 8.0, maxLng: 16.5
-    };
-    
-    let warning = null;
-    if (latitude < CAMEROON_BOUNDS.minLat || latitude > CAMEROON_BOUNDS.maxLat ||
-        longitude < CAMEROON_BOUNDS.minLng || longitude > CAMEROON_BOUNDS.maxLng) {
-      warning = 'Ces coordonnées semblent être en dehors du Cameroun';
-    }
-    
-    // Vérifier les coordonnées nulles exactes
-    if (Math.abs(latitude) < 0.001 && Math.abs(longitude) < 0.001) {
-      return { valid: false, error: 'Coordonnées (0,0) non autorisées' };
-    }
-    
-    return { valid: true, warning };
   }
 
   /**
@@ -300,14 +291,14 @@ class GeolocationService {
     
     if (error.message) {
       if (error.message.includes('timeout')) {
-        message = 'Délai d\'attente dépassé. Assurez-vous d\'être à l\'extérieur.';
-      } else if (error.message.includes('permission')) {
+        message = 'Délai d\'attente dépassé. Assurez-vous d\'être à l\'extérieur avec une bonne réception GPS.';
+      } else if (error.message.includes('permission') || error.message.includes('denied')) {
         message = 'Permission de localisation refusée. Veuillez l\'autoriser dans les paramètres.';
         actionable = true;
-      } else if (error.message.includes('disabled')) {
+      } else if (error.message.includes('disabled') || error.message.includes('services')) {
         message = 'Services de localisation désactivés. Veuillez les activer dans les paramètres.';
         actionable = true;
-      } else if (error.message.includes('unavailable')) {
+      } else if (error.message.includes('unavailable') || error.message.includes('network')) {
         message = 'GPS indisponible. Vérifiez votre connexion et réessayez.';
       } else {
         message = error.message;
@@ -329,8 +320,7 @@ class GeolocationService {
     return {
       isLocationEnabled: await Location.hasServicesEnabledAsync(),
       hasPermission: this.hasPermission,
-      lastKnownLocation: this.lastKnownLocation,
-      currentAccuracy: this.currentAccuracy
+      lastKnownLocation: this.lastKnownLocation
     };
   }
 
@@ -346,7 +336,6 @@ class GeolocationService {
    */
   cleanup() {
     this.lastKnownLocation = null;
-    this.currentAccuracy = null;
     console.log('🧹 GeolocationService nettoyé');
   }
 }

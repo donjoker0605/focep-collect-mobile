@@ -1,4 +1,4 @@
-// src/screens/Collecteur/DashboardScreen.js - FIX TEMPORAIRE POUR PRÉSENTATION
+// src/screens/Collecteur/DashboardScreen.js - NAVIGATION CORRIGÉE
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -18,6 +18,9 @@ import { collecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
 import journalActiviteService from '../../services/journalActiviteService';
+
+// 🔥 CORRECTION: Import des fonctions de navigation
+import { useCollecteurNavigation } from '../../navigation/CollecteurStack';
 
 // COMPOSANTS DE REMPLACEMENT TEMPORAIRES
 const Header = ({ title, showNotificationButton, onNotificationPress }) => (
@@ -140,7 +143,7 @@ const RecentActivitiesPreview = ({ userId }) => {
   );
 };
 
-// Fonctions utilitaires pour l'aperçu (ajouter dans le même fichier)
+// Fonctions utilitaires pour l'aperçu
 const getActivityIcon = (action) => {
   const icons = {
     'CREATE_CLIENT': 'person-add',
@@ -166,6 +169,9 @@ const getActivityColor = (action) => {
 const DashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  
+  // 🔥 CORRECTION: Utilisation des fonctions de navigation appropriées
+  const { goToAddClient, goToClientList } = useCollecteurNavigation(navigation);
   
   // États
   const [dashboard, setDashboard] = useState(null);
@@ -216,9 +222,32 @@ const DashboardScreen = ({ navigation }) => {
     loadDashboard();
   }, [loadDashboard]);
 
-  // Naviguer vers un écran spécifique
+  // 🔥 CORRECTION: Naviguer vers un écran spécifique avec les bonnes méthodes
   const navigateToScreen = (screenName, params = {}) => {
-    navigation.navigate(screenName, params);
+    switch (screenName) {
+      case 'AddClient':
+        // Utiliser la fonction de navigation appropriée
+        goToAddClient();
+        break;
+      case 'Clients':
+        goToClientList();
+        break;
+      case 'Collecte':
+        navigation.navigate('Collecte', params);
+        break;
+      case 'Journal':
+        navigation.navigate('Journal', params);
+        break;
+      case 'JournalActivite':
+        navigation.navigate('JournalActivite', params);
+        break;
+      case 'Notifications':
+        navigation.navigate('Notifications', params);
+        break;
+      default:
+        console.warn(`Navigation vers ${screenName} non configurée`);
+        break;
+    }
   };
 
   // Affichage de l'état de chargement
@@ -347,9 +376,10 @@ const DashboardScreen = ({ navigation }) => {
               <Text style={styles.quickActionText}>Retrait</Text>
             </TouchableOpacity>
             
+            {/* 🔥 CORRECTION: Utilisation de la fonction de navigation appropriée */}
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => navigateToScreen('ClientAddEdit', { mode: 'add' })}
+              onPress={() => navigateToScreen('AddClient')}
             >
               <Ionicons name="person-add" size={24} color={theme.colors.primary} />
               <Text style={styles.quickActionText}>Nouveau client</Text>
