@@ -1,12 +1,16 @@
-// src/services/geolocationService.js - VERSION CORRIGÉE
+// src/services/geolocationService.js - VERSION COMPLÈTE CORRIGÉE
 import * as Location from 'expo-location';
 import { Platform, Linking, Alert } from 'react-native';
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config/apiConfig';
 
 class GeolocationService {
   constructor() {
     this.isLocationEnabled = false;
     this.hasPermission = false;
     this.lastKnownLocation = null;
+    this.geocodingCache = new Map();
   }
 
   /**
@@ -28,6 +32,9 @@ class GeolocationService {
         throw new Error('Permission de localisation refusée');
       }
 
+      // 3. Charger le cache de géocodage
+      await this.loadGeocodeCache();
+
       return true;
     } catch (error) {
       console.error('Erreur initialisation:', error);
@@ -35,30 +42,196 @@ class GeolocationService {
     }
   }
   
+  /**
+   * NOUVEAU : Géocodage inverse avec cache et fallback
+   * Utilise l'API backend pour sécuriser les clés API
+   */
+  async reverseGeocode(latitude, longitude) {
+    try {
+      console.log('📍 Géocodage inverse pour:', latitude, longitude);
+      
+      // 1. Vérifier le cache local
+      const cacheKey = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
+      if (this.geocodingCache.has(cacheKey)) {
+        console.log('✅ Adresse trouvée dans le cache');
+        return this.geocodingCache.get(cacheKey);
+      }
+
+      // 2. Essayer l'API Expo Location (gratuit mais limité)
+      try {
+        const addresses = await Location.reverseGeocodeAsync({ 
+          latitude, 
+          longitude 
+        });
+        
+        if (addresses && addresses.length > 0) {
+          const address = addresses[0];
+          const formattedAddress = this.formatAddress(address);
+          
+          // Mettre en cache
+          this.geocodingCache.set(cacheKey, formattedAddress);
+          await this.saveGeocodeCache();
+          
+          return formattedAddress;
+        }
+      } catch (expoError) {
+        console.warn('⚠️ Expo geocoding échoué:', expoError);
+      }
+
+      // 3. Fallback vers l'API backend
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/geocoding/reverse`, {
+          latitude,
+          longitude
+        });
+        
+        if (response.data && response.data.address) {
+          const result = {
+            formattedAddress: response.data.address,
+            city: response.data.city,
+            region: response.data.region,
+            country: response.data.country
+          };
+          
+          // Mettre en cache
+          this.geocodingCache.set(cacheKey, result);
+          await this.saveGeocodeCache();
+          
+          return result;
+        }
+      } catch (backendError) {
+        console.error('❌ Backend geocoding échoué:', backendError);
+      }
+
+      // 4. Fallback final : génération d'adresse approximative
+      return this.generateApproximateAddress(latitude, longitude);
+      
+    } catch (error) {
+      console.error('❌ Erreur géocodage inverse:', error);
+      return this.generateApproximateAddress(latitude, longitude);
+    }
+  }
+
+  /**
+   * Formater l'adresse depuis les données Expo
+   */
+  formatAddress(address) {
+    const parts = [];
+    
+    if (address.name) parts.push(address.name);
+    if (address.street) parts.push(address.street);
+    if (address.district) parts.push(address.district);
+    if (address.city) parts.push(address.city);
+    if (address.region) parts.push(address.region);
+    if (address.country) parts.push(address.country);
+    
+    const formattedAddress = parts.filter(Boolean).join(', ');
+    
+    return {
+      formattedAddress: formattedAddress || 'Adresse inconnue',
+      city: address.city || address.subregion || 'Ville inconnue',
+      region: address.region || '',
+      country: address.country || 'Cameroun'
+    };
+  }
+
+  /**
+   * Générer une adresse approximative basée sur les coordonnées
+   */
+  generateApproximateAddress(latitude, longitude) {
+    // Déterminer la région approximative du Cameroun
+    let region = 'Cameroun';
+    let city = 'Localisation approximative';
+    
+    // Régions approximatives du Cameroun
+    if (latitude >= 9.0 && latitude <= 13.0 && longitude >= 13.0 && longitude <= 16.0) {
+      region = 'Extrême-Nord';
+    } else if (latitude >= 7.0 && latitude <= 9.0 && longitude >= 13.0 && longitude <= 15.0) {
+      region = 'Nord';
+    } else if (latitude >= 5.0 && latitude <= 7.0 && longitude >= 13.0 && longitude <= 15.0) {
+      region = 'Adamaoua';
+    } else if (latitude >= 3.5 && latitude <= 5.0 && longitude >= 11.0 && longitude <= 13.0) {
+      region = 'Centre';
+      if (Math.abs(latitude - 3.848) < 0.2 && Math.abs(longitude - 11.502) < 0.2) {
+        city = 'Yaoundé';
+      }
+    } else if (latitude >= 3.5 && latitude <= 4.5 && longitude >= 9.0 && longitude <= 10.0) {
+      region = 'Littoral';
+      if (Math.abs(latitude - 4.0483) < 0.1 && Math.abs(longitude - 9.7043) < 0.1) {
+        city = 'Douala';
+      }
+    }
+    
+    return {
+      formattedAddress: `${city}, ${region}`,
+      city: city,
+      region: region,
+      country: 'Cameroun',
+      isApproximate: true
+    };
+  }
+
+  /**
+   * Gestion du cache de géocodage
+   */
+  async loadGeocodeCache() {
+    try {
+      const cacheData = await AsyncStorage.getItem('geocode_cache');
+      if (cacheData) {
+        const cache = JSON.parse(cacheData);
+        this.geocodingCache = new Map(Object.entries(cache));
+      }
+    } catch (error) {
+      console.warn('Impossible de charger le cache de géocodage');
+    }
+  }
+
+  async saveGeocodeCache() {
+    try {
+      // Limiter la taille du cache à 100 entrées
+      if (this.geocodingCache.size > 100) {
+        const entries = Array.from(this.geocodingCache.entries());
+        this.geocodingCache = new Map(entries.slice(-100));
+      }
+      
+      const cacheObj = Object.fromEntries(this.geocodingCache);
+      await AsyncStorage.setItem('geocode_cache', JSON.stringify(cacheObj));
+    } catch (error) {
+      console.warn('Impossible de sauvegarder le cache de géocodage');
+    }
+  }
+
+  /**
+   * Obtenir la position avec gestion intelligente des erreurs
+   */
   async getRealPosition() {
     try {
       await this.initialize();
 
-      // Configuration pour forcer une vraie position
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeout: 20000,
-        distanceInterval: 0, // Désactive le cache
-        mayShowUserSettingsDialog: true, // Force le dialogue système
-      });
+      // Configuration adaptée au contexte
+      const isDev = __DEV__;
+      const config = {
+        accuracy: isDev ? Location.Accuracy.High : Location.Accuracy.BestForNavigation,
+        timeout: isDev ? 10000 : 20000,
+        distanceInterval: 0,
+        mayShowUserSettingsDialog: true,
+      };
 
-      // Vérification spéciale pour les émulateurs
-      if (__DEV__ && Platform.OS === 'android') {
-        if (location.mocked) {
-          throw new Error('Position simulée détectée - Activez le GPS physique');
-        }
+      const location = await Location.getCurrentPositionAsync(config);
+
+      // En développement, accepter les positions simulées
+      if (isDev && location.mocked) {
+        console.warn('⚠️ Position simulée détectée (mode développement)');
+      } else if (!isDev && location.mocked) {
+        throw new Error('Position simulée détectée - Activez le GPS physique');
       }
 
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         accuracy: location.coords.accuracy,
-        mocked: location.mocked || false
+        mocked: location.mocked || false,
+        timestamp: location.timestamp
       };
     } catch (error) {
       console.error('Erreur capture position:', error);
@@ -66,6 +239,9 @@ class GeolocationService {
     }
   }
   
+  /**
+   * Stratégie de fallback améliorée
+   */
   async getCurrentPositionWithFallback() {
     try {
       // 1. Essayer d'obtenir une vraie position
@@ -74,134 +250,55 @@ class GeolocationService {
       console.warn('Échec position réelle, tentative fallback...');
 
       // 2. Fallback: dernière position connue
-      const lastPosition = await Location.getLastKnownPositionAsync();
-      if (lastPosition) {
-        return {
-          latitude: lastPosition.coords.latitude,
-          longitude: lastPosition.coords.longitude,
-          accuracy: lastPosition.coords.accuracy,
-          isFallback: true
-        };
-      }
-
-      // 3. Fallback final: coordonnées par défaut (Yaoundé)
-      return {
-        latitude: 3.8480,
-        longitude: 11.5021,
-        accuracy: 1000,
-        isFallback: true,
-        isDefault: true
-      };
-    }
-  }
-
-  /**
-   * Obtenir la position actuelle avec haute précision
-   */
-  async getCurrentPosition() {
-    try {
-      // Vérification préalable
-      if (!this.hasPermission) {
-        await this.initialize();
-      }
-
-      // Configuration pour maximiser la précision
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeout: 20000,
-        distanceInterval: 10, // Minimum de 10m entre les updates
-      });
-
-      // Validation des coordonnées
-      const validation = this.validateCoordinates(
-        location.coords.latitude, 
-        location.coords.longitude
-      );
-
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
-
-      // Sauvegarde de la position
-      const position = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy,
-        timestamp: location.timestamp,
-        mocked: location.mocked || false // Détection des faux GPS
-      };
-
-      this.lastKnownLocation = position;
-      return position;
-
-    } catch (error) {
-      console.error('Erreur capture position:', error);
-      throw this.handleLocationError(error);
-    }
-  }
-
-  /**
-   * Stratégie de fallback pour obtenir une position
-   */
-  async getPositionWithFallback() {
-    try {
-      // 1. Essai avec haute précision
-      return await this.getCurrentPosition();
-    } catch (error) {
-      console.warn('Fallback niveau 1:', error.message);
-      
       try {
-        // 2. Essai avec précision réduite
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeout: 15000
-        });
-        return {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-          isFallback: true
-        };
-      } catch (fallbackError) {
-        console.warn('Fallback niveau 2:', fallbackError.message);
-        
-        // 3. Utiliser la dernière position connue
-        if (this.lastKnownLocation) {
-          return {
-            ...this.lastKnownLocation,
-            isFallback: true,
-            warning: 'Position potentiellement obsolète'
-          };
+        const lastPosition = await Location.getLastKnownPositionAsync();
+        if (lastPosition && lastPosition.timestamp) {
+          const age = Date.now() - lastPosition.timestamp;
+          const maxAge = 5 * 60 * 1000; // 5 minutes
+          
+          if (age < maxAge) {
+            return {
+              latitude: lastPosition.coords.latitude,
+              longitude: lastPosition.coords.longitude,
+              accuracy: lastPosition.coords.accuracy,
+              isFallback: true,
+              age: Math.round(age / 1000) // âge en secondes
+            };
+          }
         }
-
-        throw new Error('Impossible d\'obtenir une position');
+      } catch (lastPosError) {
+        console.warn('Pas de dernière position disponible');
       }
+
+      // 3. En développement seulement: position par défaut
+      if (__DEV__) {
+        Alert.alert(
+          'Position GPS indisponible',
+          'Utiliser la position par défaut (Yaoundé) ?',
+          [
+            { text: 'Non', style: 'cancel' },
+            { 
+              text: 'Oui', 
+              onPress: () => {
+                return {
+                  latitude: 3.8480,
+                  longitude: 11.5021,
+                  accuracy: 1000,
+                  isFallback: true,
+                  isDefault: true
+                };
+              }
+            }
+          ]
+        );
+      }
+
+      throw new Error('Impossible d\'obtenir une position');
     }
   }
 
   /**
-   * Obtenir la dernière position connue
-   */
-  async getLastKnownPosition() {
-    try {
-      const location = await Location.getLastKnownPositionAsync();
-      if (location) {
-        return {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy,
-          timestamp: location.timestamp
-        };
-      }
-      return null;
-    } catch (error) {
-      console.warn('Erreur dernière position:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Validation renforcée des coordonnées
+   * Validation des coordonnées avec tolérance
    */
   validateCoordinates(latitude, longitude) {
     // 1. Vérification de base
@@ -209,29 +306,29 @@ class GeolocationService {
       return { valid: false, error: 'Coordonnées invalides' };
     }
 
-    // 2. Plages valides
+    // 2. Plages valides globales
     if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
       return { valid: false, error: 'Coordonnées hors limites' };
     }
 
-    // 3. Détection des valeurs simulées (0,0 ou coordonnées de test)
-    const isSimulated = (
-      (latitude === 0 && longitude === 0) || // Point nul
-      (latitude === 37.4219983 && longitude === -122.084) || // Googleplex
-      (latitude === 48.8588443 && longitude === 2.2943506) // Tour Eiffel
-    );
-
-    if (isSimulated) {
-      return { 
-        valid: false, 
-        error: 'Coordonnées simulées détectées' 
-      };
+    // 3. En développement, accepter toutes les coordonnées valides
+    if (__DEV__) {
+      return { valid: true, warning: null };
     }
 
-    // 4. Validation pour le Cameroun
+    // 4. En production, vérifier les coordonnées du Cameroun avec tolérance
+    const cameroonBounds = {
+      minLat: 1.0,
+      maxLat: 13.5,
+      minLng: 8.0,
+      maxLng: 16.5
+    };
+
     const isInCameroon = (
-      latitude >= 1.0 && latitude <= 13.0 &&
-      longitude >= 8.0 && longitude <= 16.5
+      latitude >= cameroonBounds.minLat && 
+      latitude <= cameroonBounds.maxLat &&
+      longitude >= cameroonBounds.minLng && 
+      longitude <= cameroonBounds.maxLng
     );
 
     return {
@@ -273,6 +370,40 @@ class GeolocationService {
       await Linking.openURL('app-settings:');
     } else {
       await Linking.openSettings();
+    }
+  }
+
+  /**
+   * Méthodes utilitaires
+   */
+  async requestPermissions() {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    return status === 'granted';
+  }
+
+  async getCurrentPosition() {
+    return this.getRealPosition();
+  }
+
+  async getPositionWithFallback() {
+    return this.getCurrentPositionWithFallback();
+  }
+
+  async getLastKnownPosition() {
+    try {
+      const location = await Location.getLastKnownPositionAsync();
+      if (location) {
+        return {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy,
+          timestamp: location.timestamp
+        };
+      }
+      return null;
+    } catch (error) {
+      console.warn('Erreur dernière position:', error);
+      return null;
     }
   }
 }
