@@ -151,54 +151,58 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   };
 
-  const captureLocation = async () => {
-    setLocationStatus('capturing');
-    setGeoError(null);
-    
-    try {
-      console.log('📍 Début capture GPS...');
-      
-      // Initialiser le service
-      await geolocationService.initialize();
-      
-      // Obtenir position
-      const position = await geolocationService.getCurrentPositionWithFallback();
-      
-      // Validation pour le Cameroun
-      const validation = geolocationService.validateCoordinates(
-        position.latitude, 
-        position.longitude
-      );
-      
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
-      
-      if (validation.warning) {
-        Alert.alert('Attention', validation.warning, [
-          { text: 'Continuer', onPress: () => saveLocationData(position) },
-          { text: 'Ignorer', style: 'cancel', onPress: () => setLocationStatus('idle') }
-        ]);
-        return;
-      }
-      
-      saveLocationData(position);
-      
-    } catch (error) {
-      console.error('❌ Erreur capture GPS:', error);
-      setGeoError(error.message);
-      setLocationStatus('failed');
-      
-      Alert.alert(
-        'GPS indisponible',
-        `${error.message}\n\nVoulez-vous saisir les coordonnées manuellement ?`,
-        [
-          { text: 'Ignorer', style: 'cancel', onPress: () => setLocationStatus('skipped') },
-          { text: 'Saisie manuelle', onPress: openManualLocationDialog }
-        ]
-      );
-    }
-  };
+	const captureLocation = async () => {
+	  setLocationStatus('capturing');
+	  setGeoError(null);
+
+	  try {
+		console.log('📍 Tentative de capture GPS réelle...');
+		const position = await geolocationService.getRealPosition();
+
+		if (position.mocked) {
+		  Alert.alert(
+			'GPS simulé détecté',
+			'Votre appareil utilise une position simulée. Veuillez désactiver les applications de mock GPS.',
+			[
+			  { text: 'OK', onPress: () => setLocationStatus('failed') },
+			  { text: 'Paramètres', onPress: () => Linking.openSettings() }
+			]
+		  );
+		  return;
+		}
+
+		await saveLocationData(position);
+		
+	  } catch (error) {
+		console.error('❌ Erreur capture GPS:', error);
+		
+		// Solution temporaire pour développement
+		if (__DEV__) {
+		  Alert.alert(
+			'Mode développement actif',
+			'En développement, utilisez-vous un émulateur ?',
+			[
+			  {
+				text: 'Utiliser Yaoundé',
+				onPress: () => saveLocationData({
+				  latitude: 3.8480,
+				  longitude: 11.5021,
+				  accuracy: 50,
+				  mocked: false
+				})
+			  },
+			  {
+				text: 'Saisie manuelle',
+				onPress: openManualLocationDialog
+			  }
+			]
+		  );
+		} else {
+		  setGeoError(error.message);
+		  setLocationStatus('failed');
+		}
+	  }
+	};
 
   const saveLocationData = async (position) => {
     try {
@@ -643,7 +647,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
-            {/* 🔥 SECTION GÉOLOCALISATION SIMPLIFIÉE */}
+            {/* SECTION GÉOLOCALISATION SIMPLIFIÉE */}
             {renderLocationSection()}
             
             {/* Section paramètres de commission (code existant) */}

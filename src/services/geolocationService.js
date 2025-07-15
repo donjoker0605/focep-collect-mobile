@@ -1,6 +1,6 @@
-// src/services/geolocationService.js - VERSION CORRIGÉE ET SIMPLIFIÉE
+// src/services/geolocationService.js - VERSION CORRIGÉE
 import * as Location from 'expo-location';
-import { Platform, Linking } from 'react-native';
+import { Platform, Linking, Alert } from 'react-native';
 
 class GeolocationService {
   constructor() {
@@ -10,301 +10,253 @@ class GeolocationService {
   }
 
   /**
-   * Initialisation du service avec vérification des permissions
+   * Initialisation robuste avec vérification des services et permissions
    */
   async initialize() {
-    console.log('🔧 Initialisation GeolocationService...');
-    
     try {
-      // Vérifier si les services de localisation sont activés
+      // 1. Vérifier si les services sont activés
       this.isLocationEnabled = await Location.hasServicesEnabledAsync();
-      
-      // Vérifier les permissions
-      const { status } = await Location.getForegroundPermissionsAsync();
-      this.hasPermission = status === 'granted';
-      
-      console.log('✅ GeolocationService initialisé:', {
-        locationEnabled: this.isLocationEnabled,
-        hasPermission: this.hasPermission
-      });
-      
-      return {
-        locationEnabled: this.isLocationEnabled,
-        hasPermission: this.hasPermission
-      };
-    } catch (error) {
-      console.error('❌ Erreur initialisation GeolocationService:', error);
-      return {
-        locationEnabled: false,
-        hasPermission: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Demander les permissions de géolocalisation avec gestion robuste
-   */
-  async requestPermissions() {
-    console.log('🔒 Demande permissions géolocalisation...');
-    
-    try {
-      // Vérifier d'abord si les services sont activés
-      const servicesEnabled = await Location.hasServicesEnabledAsync();
-      if (!servicesEnabled) {
-        throw new Error('Les services de localisation sont désactivés. Veuillez les activer dans les paramètres.');
+      if (!this.isLocationEnabled) {
+        throw new Error('Les services de localisation sont désactivés');
       }
 
-      // Demander les permissions
+      // 2. Demander les permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
       this.hasPermission = status === 'granted';
-      
+
       if (!this.hasPermission) {
-        // Analyser le type de refus
-        if (status === 'denied') {
-          throw new Error('Permission refusée. Veuillez autoriser l\'accès à la localisation.');
-        } else if (status === 'undetermined') {
-          throw new Error('Permission indéterminée. Veuillez réessayer.');
-        }
+        throw new Error('Permission de localisation refusée');
       }
-      
-      console.log('✅ Permissions obtenues:', this.hasPermission);
-      return this.hasPermission;
-      
+
+      return true;
     } catch (error) {
-      console.error('❌ Erreur permissions:', error);
+      console.error('Erreur initialisation:', error);
       throw error;
     }
   }
-
-  /**
-   * Obtenir la position actuelle avec fallback et retry
-   */
-  async getCurrentPosition(options = {}) {
-    console.log('📍 Capture position GPS...');
-    
-    const defaultOptions = {
-      accuracy: Location.Accuracy.High,
-      timeout: 15000,
-      maximumAge: 30000,
-      ...options
-    };
-
+  
+  async getRealPosition() {
     try {
-      // Vérifier les prérequis
-      if (!this.hasPermission) {
-        const hasPermission = await this.requestPermissions();
-        if (!hasPermission) {
-          throw new Error('Permissions géolocalisation requises');
+      await this.initialize();
+
+      // Configuration pour forcer une vraie position
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeout: 20000,
+        distanceInterval: 0, // Désactive le cache
+        mayShowUserSettingsDialog: true, // Force le dialogue système
+      });
+
+      // Vérification spéciale pour les émulateurs
+      if (__DEV__ && Platform.OS === 'android') {
+        if (location.mocked) {
+          throw new Error('Position simulée détectée - Activez le GPS physique');
         }
       }
 
-      // Tentative de capture
-      const location = await Location.getCurrentPositionAsync(defaultOptions);
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+        mocked: location.mocked || false
+      };
+    } catch (error) {
+      console.error('Erreur capture position:', error);
+      throw error;
+    }
+  }
+  
+  async getCurrentPositionWithFallback() {
+    try {
+      // 1. Essayer d'obtenir une vraie position
+      return await this.getRealPosition();
+    } catch (error) {
+      console.warn('Échec position réelle, tentative fallback...');
 
-      const result = {
+      // 2. Fallback: dernière position connue
+      const lastPosition = await Location.getLastKnownPositionAsync();
+      if (lastPosition) {
+        return {
+          latitude: lastPosition.coords.latitude,
+          longitude: lastPosition.coords.longitude,
+          accuracy: lastPosition.coords.accuracy,
+          isFallback: true
+        };
+      }
+
+      // 3. Fallback final: coordonnées par défaut (Yaoundé)
+      return {
+        latitude: 3.8480,
+        longitude: 11.5021,
+        accuracy: 1000,
+        isFallback: true,
+        isDefault: true
+      };
+    }
+  }
+
+  /**
+   * Obtenir la position actuelle avec haute précision
+   */
+  async getCurrentPosition() {
+    try {
+      // Vérification préalable
+      if (!this.hasPermission) {
+        await this.initialize();
+      }
+
+      // Configuration pour maximiser la précision
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeout: 20000,
+        distanceInterval: 10, // Minimum de 10m entre les updates
+      });
+
+      // Validation des coordonnées
+      const validation = this.validateCoordinates(
+        location.coords.latitude, 
+        location.coords.longitude
+      );
+
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      // Sauvegarde de la position
+      const position = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         accuracy: location.coords.accuracy,
         timestamp: location.timestamp,
-        source: 'GPS'
+        mocked: location.mocked || false // Détection des faux GPS
       };
 
-      this.lastKnownLocation = result;
-      
-      console.log('✅ Position obtenue:', {
-        lat: result.latitude.toFixed(6),
-        lng: result.longitude.toFixed(6),
-        accuracy: Math.round(result.accuracy || 0) + 'm'
-      });
-      
-      return result;
-      
+      this.lastKnownLocation = position;
+      return position;
+
     } catch (error) {
-      console.error('❌ Erreur capture GPS:', error);
-      throw this.createLocationError(error);
+      console.error('Erreur capture position:', error);
+      throw this.handleLocationError(error);
     }
   }
 
   /**
-   * Obtenir position avec fallback progressif
+   * Stratégie de fallback pour obtenir une position
    */
-  async getCurrentPositionWithFallback() {
-    console.log('📍 Capture GPS avec fallback...');
-    
-    const attempts = [
-      { accuracy: Location.Accuracy.High, timeout: 15000 },
-      { accuracy: Location.Accuracy.Balanced, timeout: 10000 },
-      { accuracy: Location.Accuracy.Low, timeout: 8000 }
-    ];
-
-    for (let i = 0; i < attempts.length; i++) {
-      try {
-        console.log(`🔄 Tentative ${i + 1}/${attempts.length}...`);
-        return await this.getCurrentPosition(attempts[i]);
-      } catch (error) {
-        console.warn(`⚠️ Tentative ${i + 1} échouée:`, error.message);
-        
-        if (i === attempts.length - 1) {
-          throw error; // Dernière tentative échouée
-        }
-        
-        // Attendre avant la prochaine tentative
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-  }
-
-  /**
-   * 🔥 NOUVEAU : Validation des coordonnées GPS pour le Cameroun
-   */
-  validateCoordinates(latitude, longitude) {
-    if (latitude == null || longitude == null) {
-      return { valid: false, error: 'Coordonnées nulles' };
-    }
-    
-    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-      return { valid: false, error: 'Coordonnées doivent être des nombres' };
-    }
-    
-    if (latitude < -90 || latitude > 90) {
-      return { valid: false, error: 'Latitude invalide (doit être entre -90 et 90)' };
-    }
-    
-    if (longitude < -180 || longitude > 180) {
-      return { valid: false, error: 'Longitude invalide (doit être entre -180 et 180)' };
-    }
-    
-    // Validation spécifique au Cameroun
-    const CAMEROON_BOUNDS = {
-      minLat: 1.5, maxLat: 13.0,
-      minLng: 8.0, maxLng: 16.5
-    };
-    
-    let warning = null;
-    if (latitude < CAMEROON_BOUNDS.minLat || latitude > CAMEROON_BOUNDS.maxLat ||
-        longitude < CAMEROON_BOUNDS.minLng || longitude > CAMEROON_BOUNDS.maxLng) {
-      warning = 'Ces coordonnées semblent être en dehors du Cameroun. Voulez-vous continuer ?';
-    }
-    
-    // Vérifier les coordonnées nulles exactes (0,0) - Golfe de Guinée
-    if (Math.abs(latitude) < 0.001 && Math.abs(longitude) < 0.001) {
-      return { valid: false, error: 'Coordonnées (0,0) non autorisées' };
-    }
-    
-    // Coordonnées de l'émulateur Android (Mountain View, CA)
-    if (Math.abs(latitude - 37.4219983) < 0.001 && Math.abs(longitude - (-122.084))) {
-      warning = 'Coordonnées de l\'émulateur détectées (Mountain View, CA). Ceci est normal en développement.';
-    }
-    
-    return { valid: true, warning };
-  }
-
-  /**
-   * Géocodage inverse avec gestion d'erreurs
-   */
-  async reverseGeocode(latitude, longitude) {
-    console.log('🏠 Géocodage inverse...');
-    
+  async getPositionWithFallback() {
     try {
-      const validation = this.validateCoordinates(latitude, longitude);
-      if (!validation.valid) {
-        throw new Error(validation.error);
-      }
+      // 1. Essai avec haute précision
+      return await this.getCurrentPosition();
+    } catch (error) {
+      console.warn('Fallback niveau 1:', error.message);
       
-      const addresses = await Location.reverseGeocodeAsync({ 
-        latitude, 
-        longitude 
-      });
-      
-      if (addresses && addresses.length > 0) {
-        const address = addresses[0];
+      try {
+        // 2. Essai avec précision réduite
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeout: 15000
+        });
         return {
-          street: address.street,
-          city: address.city,
-          region: address.region,
-          country: address.country,
-          postalCode: address.postalCode,
-          formattedAddress: this.formatAddress(address)
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy,
+          isFallback: true
+        };
+      } catch (fallbackError) {
+        console.warn('Fallback niveau 2:', fallbackError.message);
+        
+        // 3. Utiliser la dernière position connue
+        if (this.lastKnownLocation) {
+          return {
+            ...this.lastKnownLocation,
+            isFallback: true,
+            warning: 'Position potentiellement obsolète'
+          };
+        }
+
+        throw new Error('Impossible d\'obtenir une position');
+      }
+    }
+  }
+
+  /**
+   * Obtenir la dernière position connue
+   */
+  async getLastKnownPosition() {
+    try {
+      const location = await Location.getLastKnownPositionAsync();
+      if (location) {
+        return {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy,
+          timestamp: location.timestamp
         };
       }
-      
       return null;
-      
     } catch (error) {
-      console.error('❌ Erreur géocodage inverse:', error);
-      return null; // Non bloquant
+      console.warn('Erreur dernière position:', error);
+      return null;
     }
   }
 
   /**
-   * Calculer la distance entre deux points (Haversine)
+   * Validation renforcée des coordonnées
    */
-  calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Rayon de la Terre en km
-    const dLat = this.toRad(lat2 - lat1);
-    const dLon = this.toRad(lon2 - lon1);
-    
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; // Distance en km
-  }
-
-  /**
-   * Formatage d'adresse
-   */
-  formatAddress(address) {
-    const parts = [];
-    
-    if (address.street) parts.push(address.street);
-    if (address.city) parts.push(address.city);
-    if (address.region) parts.push(address.region);
-    if (address.country) parts.push(address.country);
-    
-    return parts.join(', ');
-  }
-
-  /**
-   * Ouvrir les paramètres de localisation
-   */
-  async openLocationSettings() {
-    try {
-      if (Platform.OS === 'ios') {
-        await Linking.openURL('app-settings:');
-      } else {
-        await Linking.openSettings();
-      }
-    } catch (error) {
-      console.error('❌ Erreur ouverture paramètres:', error);
+  validateCoordinates(latitude, longitude) {
+    // 1. Vérification de base
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return { valid: false, error: 'Coordonnées invalides' };
     }
+
+    // 2. Plages valides
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return { valid: false, error: 'Coordonnées hors limites' };
+    }
+
+    // 3. Détection des valeurs simulées (0,0 ou coordonnées de test)
+    const isSimulated = (
+      (latitude === 0 && longitude === 0) || // Point nul
+      (latitude === 37.4219983 && longitude === -122.084) || // Googleplex
+      (latitude === 48.8588443 && longitude === 2.2943506) // Tour Eiffel
+    );
+
+    if (isSimulated) {
+      return { 
+        valid: false, 
+        error: 'Coordonnées simulées détectées' 
+      };
+    }
+
+    // 4. Validation pour le Cameroun
+    const isInCameroon = (
+      latitude >= 1.0 && latitude <= 13.0 &&
+      longitude >= 8.0 && longitude <= 16.5
+    );
+
+    return {
+      valid: true,
+      warning: !isInCameroon ? 'Localisation hors Cameroun' : null
+    };
   }
 
   /**
-   * Créer une erreur de localisation avec message explicite
+   * Gestion des erreurs avec messages clairs
    */
-  createLocationError(error) {
-    let message = 'Erreur de géolocalisation';
+  handleLocationError(error) {
+    let message = error.message;
     let actionable = false;
-    
-    if (error.message) {
-      if (error.message.includes('timeout')) {
-        message = 'Délai d\'attente dépassé. Assurez-vous d\'être à l\'extérieur avec une bonne réception GPS.';
-      } else if (error.message.includes('permission') || error.message.includes('denied')) {
-        message = 'Permission de localisation refusée. Veuillez l\'autoriser dans les paramètres.';
-        actionable = true;
-      } else if (error.message.includes('disabled') || error.message.includes('services')) {
-        message = 'Services de localisation désactivés. Veuillez les activer dans les paramètres.';
-        actionable = true;
-      } else if (error.message.includes('unavailable') || error.message.includes('network')) {
-        message = 'GPS indisponible. Vérifiez votre connexion et réessayez.';
-      } else {
-        message = error.message;
-      }
+
+    if (error.code === 'ERR_LOCATION_SERVICES_DISABLED') {
+      message = 'Activez les services de localisation';
+      actionable = true;
+    } else if (error.code === 'ERR_LOCATION_PERMISSION_DENIED') {
+      message = 'Autorisez l\'accès à la localisation';
+      actionable = true;
+    } else if (error.message.includes('timeout')) {
+      message = 'Signal GPS faible - déplacez-vous à l\'extérieur';
     }
-    
+
     return {
       ...error,
       message,
@@ -314,30 +266,16 @@ class GeolocationService {
   }
 
   /**
-   * Obtenir le statut complet du service
+   * Ouvrir les paramètres système
    */
-  async getStatus() {
-    return {
-      isLocationEnabled: await Location.hasServicesEnabledAsync(),
-      hasPermission: this.hasPermission,
-      lastKnownLocation: this.lastKnownLocation
-    };
-  }
-
-  /**
-   * Conversion degrés vers radians
-   */
-  toRad(degrees) {
-    return degrees * (Math.PI / 180);
-  }
-
-  /**
-   * Nettoyer les ressources
-   */
-  cleanup() {
-    this.lastKnownLocation = null;
-    console.log('🧹 GeolocationService nettoyé');
+  async openSettings() {
+    if (Platform.OS === 'ios') {
+      await Linking.openURL('app-settings:');
+    } else {
+      await Linking.openSettings();
+    }
   }
 }
 
+// Export en tant que singleton
 export default new GeolocationService();
