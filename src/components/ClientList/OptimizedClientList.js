@@ -2,10 +2,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { FlatList, View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { useClients } from '../../hooks/useClients';
-import ClientListItem from './ClientListItem';
-import ClientListSkeleton from './ClientListSkeleton';
 import EmptyState from '../EmptyState/EmptyState';
-import { useTranslation } from '../../hooks/useTranslation';
 import theme from '../../theme';
 import { useFocusEffect } from '@react-navigation/native';
 

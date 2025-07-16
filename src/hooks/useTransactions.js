@@ -13,8 +13,22 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
   const [refreshing, setRefreshing] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const { handleError } = useErrorHandler();
   const netInfo = useNetInfo();
+  
+  const handleError = useCallback((err) => {
+    console.error('Error in useTransactions:', err);
+    let message = 'Une erreur est survenue';
+    
+    if (err?.message) {
+      message = err.message;
+    } else if (err?.response?.data?.message) {
+      message = err.response.data.message;
+    } else if (typeof err === 'string') {
+      message = err;
+    }
+    
+    return message;
+  }, []);
 
   // Paramètres mémorisés pour éviter les recalculs inutiles
   const params = useMemo(() => ({
@@ -24,54 +38,64 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
   }), [clientId, collecteurId, journalId]);
 
   const fetchTransactions = useCallback(async (page = 0, size = pageSize) => {
-    // Éviter les requêtes si déjà en cours de chargement ou hors ligne
-    if (loading || !netInfo.isConnected) {
-      return;
-    }
-    
     try {
       setLoading(true);
       setError(null);
       
-      // Appel API avec les paramètres appropriés
+      // ✅ CORRIGÉ : Utiliser les bonnes méthodes selon les cas
       let response;
       
       if (clientId) {
-        response = await TransactionService.getTransactionsByClient(clientId, page, size);
-      } else if (journalId) {
-        response = await TransactionService.getTransactionsByJournal(journalId, page, size);
+        // Récupérer les transactions d'un client
+        response = await transactionService.getTransactionsByClient(clientId, { 
+          page, 
+          size 
+        });
       } else if (collecteurId) {
-        response = await TransactionService.getTransactionsByCollecteur(collecteurId, page, size);
+        // Récupérer les transactions d'un collecteur
+        response = await transactionService.getTransactionsByCollecteur(collecteurId, { 
+          page, 
+          size 
+        });
+      } else if (journalId) {
+        // Récupérer les transactions d'un journal
+        response = await transactionService.getTransactionsByJournal(journalId, { 
+          page, 
+          size 
+        });
       } else {
-        // Si aucun paramètre, charger toutes les transactions (admin)
-        response = await TransactionService.getAllTransactions(page, size);
+        // Récupérer toutes les transactions (pour admin)
+        response = await transactionService.getAllTransactions({ 
+          page, 
+          size 
+        });
       }
       
-      // Mise à jour de l'état en fonction de la page
-      if (page === 0) {
-        setTransactions(response.content);
-      } else {
-        setTransactions(prevTransactions => [...prevTransactions, ...response.content]);
-      }
-      
-      // Mettre à jour les informations de pagination
-      setCurrentPage(page);
-      setHasMore(page < response.totalPages - 1);
-      setTotalItems(response.totalElements);
-      setPageSize(response.size);
-    } catch (err) {
-      handleError(err, {
-        context: {
-          componentInfo: 'useTransactions',
-          action: 'fetchTransactions',
-          params,
+      if (response.success) {
+        const transactionsData = response.data || [];
+        const transactionsArray = Array.isArray(transactionsData) ? transactionsData : [];
+        
+        // Mise à jour de l'état en fonction de la page
+        if (page === 0) {
+          setTransactions(transactionsArray);
+        } else {
+          setTransactions(prevTransactions => [...prevTransactions, ...transactionsArray]);
         }
-      });
-      setError(err);
+        
+        setCurrentPage(page);
+        setHasMore(transactionsArray.length === size);
+        setTotalItems(response.total || transactionsArray.length);
+      } else {
+        throw new Error(response.error || 'Erreur lors de la récupération des transactions');
+      }
+      
+    } catch (err) {
+      const errorMessage = handleError(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [clientId, collecteurId, journalId, loading, netInfo.isConnected, pageSize, handleError, params]);
+  }, [clientId, collecteurId, journalId, pageSize, handleError]);
 
   const refreshTransactions = useCallback(async () => {
     if (!netInfo.isConnected) {
@@ -125,8 +149,8 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
 
   // Charger les transactions au montage ou lorsque les paramètres changent
   useEffect(() => {
-    fetchTransactions(0);
-  }, [params, fetchTransactions]);
+    fetchTransactions();
+  }, [clientId, collecteurId, journalId]);
 
   return {
     transactions,

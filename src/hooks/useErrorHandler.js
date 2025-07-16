@@ -1,4 +1,4 @@
-// src/hooks/useErrorHandler.js 
+// src/hooks/useErrorHandler.js - VERSION CORRIGÉE
 import { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 
@@ -6,7 +6,7 @@ export const useErrorHandler = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const [errorSeverity, setErrorSeverity] = useState('error');
 
-  const handleError = useCallback(async (error, options = {}) => {
+  const handleError = useCallback((error, options = {}) => {
     console.error('🚨 Error Handler:', error);
     
     let message = 'Une erreur est survenue';
@@ -16,6 +16,8 @@ export const useErrorHandler = () => {
       message = error.message;
     } else if (error?.response?.data?.message) {
       message = error.response.data.message;
+    } else if (error?.response?.data?.error) {
+      message = error.response.data.error;
     } else if (typeof error === 'string') {
       message = error;
     }
@@ -32,6 +34,11 @@ export const useErrorHandler = () => {
     return message;
   }, []);
 
+  // ✅ AJOUTÉ : Alias pour compatibility avec l'ancien code
+  const handleApiError = useCallback((error, options = {}) => {
+    return handleError(error, options);
+  }, [handleError]);
+
   const clearError = useCallback(() => {
     setErrorMessage(null);
     setErrorSeverity('error');
@@ -41,6 +48,9 @@ export const useErrorHandler = () => {
     errorMessage,
     errorSeverity,
     handleError,
+    handleApiError, // ✅ AJOUTÉ : Pour compatibilité
     clearError,
   };
 };
+
+export default useErrorHandler;

@@ -1,6 +1,6 @@
 // src/hooks/useCollecteurs.js
 import { useState, useEffect, useCallback } from 'react';
-import { collecteurService } from '../../services';
+import { collecteurS²ervice } from '../../services';
 import { useErrorHandler } from './useErrorHandler'; // Nouveau hook de gestion d'erreurs
 
 export const useCollecteurs = () => {
@@ -10,31 +10,57 @@ export const useCollecteurs = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { handleApiError } = useErrorHandler();
+  
+  const handleError = useCallback((err) => {
+    console.error('Error in useCollecteurs:', err);
+    let message = 'Une erreur est survenue';
+    
+    if (err?.message) {
+      message = err.message;
+    } else if (err?.response?.data?.message) {
+      message = err.response.data.message;
+    } else if (typeof err === 'string') {
+      message = err;
+    }
+    
+    return message;
+  }, []);
 
-  const fetchCollecteurs = useCallback(async (page = 0, size = 10, search = '') => {
+  const fetchCollecteurs = useCallback(async (page = 0, size = 20, search = '') => {
     try {
       setLoading(true);
       setError(null);
       
-      // Appel API réel avec pagination et recherche
-      const response = await CollecteurService.getAllCollecteurs(page, size, search);
+      // ✅ CORRIGÉ : Utiliser la bonne signature de méthode
+      const response = await collecteurService.getAllCollecteurs({ 
+        page, 
+        size, 
+        search 
+      });
       
-      if (page === 0) {
-        setCollecteurs(response.content);
+      if (response.success) {
+        const collecteursData = response.data || [];
+        const collecteursArray = Array.isArray(collecteursData) ? collecteursData : [];
+        
+        if (page === 0) {
+          setCollecteurs(collecteursArray);
+        } else {
+          setCollecteurs(prevCollecteurs => [...prevCollecteurs, ...collecteursArray]);
+        }
+        
+        setCurrentPage(page);
+        setHasMore(collecteursArray.length === size);
       } else {
-        setCollecteurs(prevCollecteurs => [...prevCollecteurs, ...response.content]);
+        throw new Error(response.error || 'Erreur lors de la récupération des collecteurs');
       }
       
-      setCurrentPage(page);
-      setHasMore(page < response.totalPages - 1);
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   const refreshCollecteurs = useCallback(async () => {
     setRefreshing(true);
@@ -116,7 +142,7 @@ export const useCollecteurs = () => {
   // Charger les collecteurs au montage du composant
   useEffect(() => {
     fetchCollecteurs();
-  }, [fetchCollecteurs]);
+  }, []);
 
   return {
     collecteurs,

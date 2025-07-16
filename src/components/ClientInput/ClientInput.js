@@ -1,6 +1,6 @@
-// components/ClientInput/ClientInput.js
+// components/ClientInput/ClientInput.js - VERSION SIMPLIFIÉE TEMPORAIRE
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,12 @@ import {
   ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Input } from '../Input';
+import { clientService } from '../../services';
 import theme from '../../theme';
 
 /**
- * Composant optimisé pour la saisie client avec liaison bidirectionnelle
- * Utilise le hook useClientSearch pour une UX parfaite
+ * Version simplifiée du composant ClientInput
+ * Cette version utilise les services existants sans le hook useClientSearch
  */
 const ClientInput = ({
   collecteurId,
@@ -26,56 +26,174 @@ const ClientInput = ({
   style
 }) => {
   
-  const {
-    clientName,
-    accountNumber,
-    selectedClient: hookSelectedClient,
-    nameSuggestions,
-    accountSuggestions,
-    showNameSuggestions,
-    showAccountSuggestions,
-    loading,
-    error,
-    handleClientNameChange,
-    handleAccountNumberChange,
-    handleNameSuggestionSelect,
-    handleAccountSuggestionSelect,
-    setShowNameSuggestions,
-    setShowAccountSuggestions,
-    hasSelectedClient,
-    isSynced,
-    lastUpdateSource
-  } = useClientSearch(collecteurId);
+  const [clientName, setClientName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Synchroniser avec le parent
-  React.useEffect(() => {
-    if (hookSelectedClient && hookSelectedClient !== selectedClient) {
-      onClientSelect?.(hookSelectedClient);
+  // Synchroniser avec le client sélectionné du parent
+  useEffect(() => {
+    if (selectedClient) {
+      setClientName(selectedClient.displayName || `${selectedClient.prenom} ${selectedClient.nom}`);
+      setAccountNumber(selectedClient.numeroCompte || '');
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
-  }, [hookSelectedClient, selectedClient, onClientSelect]);
+  }, [selectedClient]);
 
-  // Notifier les erreurs au parent
-  React.useEffect(() => {
-    if (error) {
-      onError?.(error);
+  // Recherche de clients avec debounce simple
+  useEffect(() => {
+    if (clientName.length > 2) {
+      const timeoutId = setTimeout(() => {
+        searchClients(clientName);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
-  }, [error, onError]);
+  }, [clientName, collecteurId]);
 
-  // ========================================
-  // 🎨 COMPOSANTS DE RENDU
-  // ========================================
+  // Recherche par numéro de compte
+  useEffect(() => {
+    if (accountNumber.length > 3) {
+      const timeoutId = setTimeout(() => {
+        searchByAccount(accountNumber);
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [accountNumber, collecteurId]);
 
-  const renderNameSuggestions = () => {
-    if (!showNameSuggestions || nameSuggestions.length === 0) return null;
+  const searchClients = async (query) => {
+    if (!collecteurId || loading) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await clientService.getClientsByCollecteur(collecteurId, { 
+        size: 20, 
+        search: query 
+      });
+
+      if (response.success && response.data) {
+        const clients = Array.isArray(response.data) ? response.data : [];
+        const formattedClients = clients.map(client => ({
+          id: client.id,
+          nom: client.nom,
+          prenom: client.prenom,
+          numeroCompte: client.numeroCompte,
+          numeroCni: client.numeroCni,
+          telephone: client.telephone,
+          displayName: `${client.prenom} ${client.nom}`,
+          hasPhone: !!(client.telephone && client.telephone.trim() !== '')
+        }));
+
+        setSuggestions(formattedClients);
+        setShowSuggestions(true);
+
+        // Vérifier correspondance exacte
+        const exactMatch = formattedClients.find(client => 
+          client.displayName.toLowerCase() === query.toLowerCase()
+        );
+
+        if (exactMatch) {
+          handleClientSelect(exactMatch);
+        }
+      }
+    } catch (err) {
+      console.error('Erreur recherche clients:', err);
+      setError('Erreur lors de la recherche');
+      onError?.(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchByAccount = async (account) => {
+    if (!collecteurId || loading) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await clientService.getClientsByCollecteur(collecteurId, { size: 1000 });
+      
+      if (response.success && response.data) {
+        const clients = Array.isArray(response.data) ? response.data : [];
+        const matchingClient = clients.find(client => client.numeroCompte === account);
+
+        if (matchingClient) {
+          const formattedClient = {
+            id: matchingClient.id,
+            nom: matchingClient.nom,
+            prenom: matchingClient.prenom,
+            numeroCompte: matchingClient.numeroCompte,
+            numeroCni: matchingClient.numeroCni,
+            telephone: matchingClient.telephone,
+            displayName: `${matchingClient.prenom} ${matchingClient.nom}`,
+            hasPhone: !!(matchingClient.telephone && matchingClient.telephone.trim() !== '')
+          };
+
+          setClientName(formattedClient.displayName);
+          handleClientSelect(formattedClient);
+        }
+      }
+    } catch (err) {
+      console.error('Erreur recherche par compte:', err);
+      setError('Erreur lors de la recherche par compte');
+      onError?.(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClientSelect = (client) => {
+    setClientName(client.displayName);
+    setAccountNumber(client.numeroCompte);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setError(null);
+    onClientSelect?.(client);
+  };
+
+  const handleClientNameChange = (text) => {
+    setClientName(text);
+    setError(null);
+    
+    if (!text.trim()) {
+      setAccountNumber('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+      onClientSelect?.(null);
+    }
+  };
+
+  const handleAccountNumberChange = (text) => {
+    setAccountNumber(text);
+    setError(null);
+    
+    if (!text.trim()) {
+      if (!clientName) {
+        setClientName('');
+        onClientSelect?.(null);
+      }
+    }
+  };
+
+  const renderSuggestions = () => {
+    if (!showSuggestions || suggestions.length === 0) return null;
     
     return (
       <View style={styles.suggestionsContainer}>
         <ScrollView style={styles.suggestionsScroll} nestedScrollEnabled>
-          {nameSuggestions.map((client) => (
+          {suggestions.map((client) => (
             <TouchableOpacity
               key={client.id}
               style={styles.suggestionItem}
-              onPress={() => handleNameSuggestionSelect(client)}
+              onPress={() => handleClientSelect(client)}
               disabled={disabled}
             >
               <View style={styles.suggestionContent}>
@@ -108,86 +226,40 @@ const ClientInput = ({
     );
   };
 
-  const renderAccountSuggestions = () => {
-    if (!showAccountSuggestions || accountSuggestions.length === 0) return null;
-    
-    return (
-      <View style={styles.suggestionsContainer}>
-        <ScrollView style={styles.suggestionsScroll} nestedScrollEnabled>
-          {accountSuggestions.map((suggestion, index) => (
-            <TouchableOpacity
-              key={`${suggestion.numeroCompte}-${index}`}
-              style={styles.suggestionItem}
-              onPress={() => handleAccountSuggestionSelect(suggestion)}
-              disabled={disabled}
-            >
-              <View style={styles.suggestionContent}>
-                <Text style={styles.suggestionAccount}>
-                  {suggestion.numeroCompte}
-                </Text>
-                {suggestion.displayName && suggestion.type !== 'account' && (
-                  <Text style={styles.suggestionName}>{suggestion.displayName}</Text>
-                )}
-              </View>
-              <Ionicons 
-                name="chevron-forward" 
-                size={16} 
-                color={theme.colors.textLight} 
-              />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    );
-  };
-
   const renderClientInfo = () => {
-    if (!hasSelectedClient || !isSynced) return null;
+    if (!selectedClient) return null;
 
     return (
       <View style={styles.clientInfoContainer}>
         <View style={styles.clientInfoHeader}>
           <Ionicons name="person-circle" size={24} color={theme.colors.success} />
           <Text style={styles.clientInfoTitle}>Client sélectionné</Text>
-          <View style={styles.syncIndicator}>
-            <Ionicons name="sync" size={16} color={theme.colors.success} />
-            <Text style={styles.syncText}>Synchronisé</Text>
-          </View>
         </View>
         
         <View style={styles.clientInfoDetails}>
-          <Text style={styles.clientInfoName}>{hookSelectedClient.displayName}</Text>
+          <Text style={styles.clientInfoName}>{selectedClient.displayName}</Text>
           <Text style={styles.clientInfoAccount}>
-            Compte: {hookSelectedClient.numeroCompte}
+            Compte: {selectedClient.numeroCompte}
           </Text>
-          {hookSelectedClient.numeroCni && (
-            <Text style={styles.clientInfoCni}>
-              CNI: {hookSelectedClient.numeroCni}
-            </Text>
-          )}
           
           {/* Indicateur téléphone */}
           <View style={styles.phoneIndicator}>
             <Ionicons 
-              name={hookSelectedClient.hasPhone ? "call" : "call-outline"} 
+              name={selectedClient.hasPhone ? "call" : "call-outline"} 
               size={16} 
-              color={hookSelectedClient.hasPhone ? theme.colors.success : theme.colors.warning} 
+              color={selectedClient.hasPhone ? theme.colors.success : theme.colors.warning} 
             />
             <Text style={[
               styles.phoneText,
-              { color: hookSelectedClient.hasPhone ? theme.colors.success : theme.colors.warning }
+              { color: selectedClient.hasPhone ? theme.colors.success : theme.colors.warning }
             ]}>
-              {hookSelectedClient.hasPhone ? "Téléphone OK" : "Pas de téléphone"}
+              {selectedClient.hasPhone ? "Téléphone OK" : "Pas de téléphone"}
             </Text>
           </View>
         </View>
       </View>
     );
   };
-
-  // ========================================
-  // 🎨 RENDU PRINCIPAL
-  // ========================================
 
   return (
     <View style={[styles.container, style]}>
@@ -205,30 +277,30 @@ const ClientInput = ({
               error={error}
               disabled={disabled || loading}
               onFocus={() => {
-                if (nameSuggestions.length > 0) {
-                  setShowNameSuggestions(true);
+                if (suggestions.length > 0) {
+                  setShowSuggestions(true);
                 }
               }}
               rightIcon={loading ? (
                 <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : hasSelectedClient && lastUpdateSource === 'name' ? (
+              ) : selectedClient ? (
                 <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
               ) : null}
               style={styles.nameInput}
             />
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowNameSuggestions(!showNameSuggestions)}
+              onPress={() => setShowSuggestions(!showSuggestions)}
               disabled={disabled || loading}
             >
               <Ionicons 
-                name={showNameSuggestions ? "chevron-up" : "chevron-down"} 
+                name={showSuggestions ? "chevron-up" : "chevron-down"} 
                 size={20} 
                 color={theme.colors.gray} 
               />
             </TouchableOpacity>
           </View>
-          {renderNameSuggestions()}
+          {renderSuggestions()}
         </View>
       </View>
 
@@ -237,44 +309,23 @@ const ClientInput = ({
         <Text style={styles.fieldLabel}>
           Numéro de compte <Text style={styles.required}>*</Text>
         </Text>
-        <View style={styles.inputWithSuggestions}>
-          <View style={styles.inputContainer}>
-            <Input
-              placeholder="Numéro de compte du client"
-              value={accountNumber}
-              onChangeText={handleAccountNumberChange}
-              disabled={disabled || loading}
-              onFocus={() => {
-                if (accountSuggestions.length > 0) {
-                  setShowAccountSuggestions(true);
-                }
-              }}
-              rightIcon={hasSelectedClient && lastUpdateSource === 'account' ? (
-                <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
-              ) : null}
-              style={styles.accountInput}
-            />
-            <TouchableOpacity
-              style={styles.dropdownButton}
-              onPress={() => setShowAccountSuggestions(!showAccountSuggestions)}
-              disabled={disabled || loading}
-            >
-              <Ionicons 
-                name={showAccountSuggestions ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color={theme.colors.gray} 
-              />
-            </TouchableOpacity>
-          </View>
-          {renderAccountSuggestions()}
-        </View>
+        <Input
+          placeholder="Numéro de compte du client"
+          value={accountNumber}
+          onChangeText={handleAccountNumberChange}
+          disabled={disabled || loading}
+          rightIcon={selectedClient ? (
+            <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+          ) : null}
+          style={styles.accountInput}
+        />
       </View>
 
       {/* Info client sélectionné */}
       {renderClientInfo()}
 
-      {/* Indicateur de liaison */}
-      {(clientName || accountNumber) && !hasSelectedClient && (
+      {/* Indicateur de recherche */}
+      {(clientName || accountNumber) && !selectedClient && (
         <View style={styles.statusIndicator}>
           <Ionicons 
             name="search" 
@@ -289,10 +340,6 @@ const ClientInput = ({
     </View>
   );
 };
-
-// ========================================
-// 🎨 STYLES
-// ========================================
 
 const styles = StyleSheet.create({
   container: {
@@ -400,20 +447,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
-  syncIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${theme.colors.success}15`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  syncText: {
-    fontSize: 12,
-    color: theme.colors.success,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
   clientInfoDetails: {
     gap: 4,
   },
@@ -424,10 +457,6 @@ const styles = StyleSheet.create({
   },
   clientInfoAccount: {
     fontSize: 14,
-    color: theme.colors.textLight,
-  },
-  clientInfoCni: {
-    fontSize: 12,
     color: theme.colors.textLight,
   },
   phoneIndicator: {

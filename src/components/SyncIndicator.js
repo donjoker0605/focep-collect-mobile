@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SYNC_STATUS } from '../services/syncService';
+import { SYNC_STATUS } from '../services/SyncService';
 import useSyncStatus from '../hooks/useSyncStatus';
 import theme from '../theme';
 

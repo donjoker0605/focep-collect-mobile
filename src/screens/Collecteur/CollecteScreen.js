@@ -1,4 +1,4 @@
-// screens/Collecteur/CollecteScreen.js - VERSION FINALE PRODUCTION
+// screens/Collecteur/CollecteScreen.js - VERSION CORRIGÉE IMPORTS
 
 import React, { useState } from 'react';
 import {
@@ -18,20 +18,18 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 // Services optimisés
-import transactionService from '../../services/transactionService';
+import { transactionService } from '../../services';
 
-// Components
+// Components - imports corrigés
 import { 
   Header, 
   Card, 
   Button, 
   AmountInput,
-  Input
+  Input,
+  ClientInput,
+  PhoneVerificationModal
 } from '../../components';
-
-// Nouveau composant optimisé
-import ClientInput from '../../components/ClientInput/ClientInput';
-import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 
 // Hooks
 import { useAuth } from '../../hooks/useAuth';
@@ -193,7 +191,7 @@ const CollecteScreen = ({ navigation, route }) => {
       const confirmed = await new Promise(resolve => {
         Alert.alert(
           'Confirmation',
-          `Êtes-vous sûr de vouloir effectuer cette ${operationType} de ${formatCurrency(transactionData.montant)} FCFA pour ${selectedClient.displayName} ?\n\nCompte: ${selectedClient.numeroCompte}`,
+          `Êtes-vous sûr de vouloir effectuer cette ${operationType} de ${formatCurrency(transactionData.montant)} FCFA pour ${selectedClient.displayName || selectedClient.nom + ' ' + selectedClient.prenom} ?\n\nCompte: ${selectedClient.numeroCompte}`,
           [
             { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Confirmer', onPress: () => resolve(true) }
@@ -220,7 +218,7 @@ const CollecteScreen = ({ navigation, route }) => {
       
       Alert.alert(
         'Succès ! 🎉',
-        `${operationType} de ${formatCurrency(transactionData.montant)} FCFA effectuée avec succès pour ${selectedClient.displayName}`,
+        `${operationType} de ${formatCurrency(transactionData.montant)} FCFA effectuée avec succès pour ${selectedClient.displayName || selectedClient.nom + ' ' + selectedClient.prenom}`,
         [
           { 
             text: 'Voir Journal', 
@@ -446,7 +444,7 @@ const CollecteScreen = ({ navigation, route }) => {
 };
 
 // ========================================
-// 🎨 STYLES
+// 🎨 STYLES (inchangés)
 // ========================================
 
 const styles = StyleSheet.create({

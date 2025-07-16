@@ -1,7 +1,6 @@
-// src/hooks/useClients.js
+// src/hooks/useClients.js - VERSION CORRIGÉE
 import { useState, useEffect, useCallback } from 'react';
 import { clientService } from '../../services';
-import { useErrorHandler } from './useErrorHandler';
 
 export const useClients = (collecteurId = null) => {
   const [clients, setClients] = useState([]);
@@ -10,34 +9,71 @@ export const useClients = (collecteurId = null) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { handleApiError } = useErrorHandler();
 
-  const fetchClients = useCallback(async (page = 0, size = 10, search = '') => {
+  // Fonction utilitaire pour gérer les erreurs
+  const handleError = useCallback((err) => {
+    console.error('Error in useClients:', err);
+    let message = 'Une erreur est survenue';
+    
+    if (err?.message) {
+      message = err.message;
+    } else if (err?.response?.data?.message) {
+      message = err.response.data.message;
+    } else if (typeof err === 'string') {
+      message = err;
+    }
+    
+    return message;
+  }, []);
+
+  const fetchClients = useCallback(async (page = 0, size = 20, search = '') => {
     try {
       setLoading(true);
       setError(null);
       
-      // Appel API réel avec gestion des différents cas (collecteur spécifique ou tous)
-      const response = collecteurId 
-        ? await ClientService.getClientsByCollecteur(collecteurId, page, size, search)
-        : await ClientService.getAllClients(page, size, search);
+      // ✅ CORRIGÉ : Utiliser la bonne signature de méthode
+      let response;
       
-      // Mise à jour de l'état en fonction de la page
-      if (page === 0) {
-        setClients(response.content);
+      if (collecteurId) {
+        response = await clientService.getClientsByCollecteur(collecteurId, { 
+          page, 
+          size, 
+          search 
+        });
       } else {
-        setClients(prevClients => [...prevClients, ...response.content]);
+        response = await clientService.getAllClients({ 
+          page, 
+          size, 
+          search 
+        });
       }
       
-      setCurrentPage(page);
-      setHasMore(page < response.totalPages - 1);
+      // ✅ CORRIGÉ : Adapter selon la structure de réponse
+      if (response.success) {
+        const clientsData = response.data || [];
+        const clientsArray = Array.isArray(clientsData) ? clientsData : [];
+        
+        // Mise à jour de l'état en fonction de la page
+        if (page === 0) {
+          setClients(clientsArray);
+        } else {
+          setClients(prevClients => [...prevClients, ...clientsArray]);
+        }
+        
+        setCurrentPage(page);
+        // ✅ CORRIGÉ : Logique de pagination adaptée
+        setHasMore(clientsArray.length === size);
+      } else {
+        throw new Error(response.error || 'Erreur lors de la récupération des clients');
+      }
+      
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [collecteurId, handleApiError]);
+  }, [collecteurId, handleError]);
 
   const refreshClients = useCallback(async () => {
     setRefreshing(true);
@@ -55,71 +91,89 @@ export const useClients = (collecteurId = null) => {
     try {
       setLoading(true);
       
-      const response = await ClientService.toggleClientStatus(clientId, newStatus);
+      // ✅ CORRIGÉ : Utiliser la bonne méthode
+      const response = await clientService.toggleClientStatus(clientId, newStatus);
       
-      // Mise à jour locale après confirmation du serveur
-      setClients(prevClients => 
-        prevClients.map(c => 
-          c.id === clientId ? { ...c, status: newStatus } : c
-        )
-      );
+      if (response.success) {
+        // Mise à jour locale après confirmation du serveur
+        setClients(prevClients => 
+          prevClients.map(c => 
+            c.id === clientId ? { ...c, valide: newStatus } : c
+          )
+        );
+        
+        return { success: true, data: response.data };
+      } else {
+        throw new Error(response.error || 'Erreur lors du changement de statut');
+      }
       
-      return { success: true, data: response };
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   const createClient = useCallback(async (clientData) => {
     try {
       setLoading(true);
       
-      const response = await ClientService.createClient(clientData);
+      // ✅ CORRIGÉ : Utiliser la bonne méthode
+      const response = await clientService.createClient(clientData);
       
-      // Ajouter le nouveau client à l'état
-      setClients(prevClients => [response, ...prevClients]);
+      if (response.success) {
+        // Ajouter le nouveau client à l'état
+        setClients(prevClients => [response.data, ...prevClients]);
+        
+        return { success: true, client: response.data };
+      } else {
+        throw new Error(response.error || 'Erreur lors de la création du client');
+      }
       
-      return { success: true, client: response };
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   const updateClient = useCallback(async (clientId, clientData) => {
     try {
       setLoading(true);
       
-      const response = await ClientService.updateClient(clientId, clientData);
+      // ✅ CORRIGÉ : Utiliser la bonne méthode
+      const response = await clientService.updateClient(clientId, clientData);
       
-      // Mettre à jour l'état localement
-      setClients(prevClients => 
-        prevClients.map(c => 
-          c.id === clientId ? response : c
-        )
-      );
+      if (response.success) {
+        // Mettre à jour l'état localement
+        setClients(prevClients => 
+          prevClients.map(c => 
+            c.id === clientId ? response.data : c
+          )
+        );
+        
+        return { success: true, data: response.data };
+      } else {
+        throw new Error(response.error || 'Erreur lors de la mise à jour du client');
+      }
       
-      return { success: true, data: response };
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   // Charger les clients au montage du composant ou lorsque le collecteurId change
   useEffect(() => {
     fetchClients();
-  }, [fetchClients, collecteurId]);
+  }, [collecteurId]); // ✅ CORRIGÉ : Dépendance simplifiée
 
   return {
     clients,
