@@ -6,9 +6,9 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
 // Components
-import { Input, SelectInput, Button } from '../../components';
-import Card from '../Card/Card';
-import theme from '../../theme';
+import { Input, SelectInput, Button } from '../../../components';
+import Card from '../../Card/Card';
+import theme from '../../../theme';
 
 // Validation schema
 const schema = yup.object().shape({

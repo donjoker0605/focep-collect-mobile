@@ -34,7 +34,7 @@ export const useErrorHandler = () => {
     return message;
   }, []);
 
-  // ✅ AJOUTÉ : Alias pour compatibility avec l'ancien code
+  // ✅ AJOUTÉ : Alias pour compatibilité avec l'ancien code
   const handleApiError = useCallback((error, options = {}) => {
     return handleError(error, options);
   }, [handleError]);

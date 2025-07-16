@@ -1,4 +1,4 @@
-// components/ClientInput/ClientInput.js - VERSION SIMPLIFIÉE TEMPORAIRE
+// components/ClientInput/ClientInput.js - VERSION AMÉLIORÉE AVEC DROPDOWN
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -7,15 +7,21 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { clientService } from '../../services';
+
+import { Input } from '../index';
+import clientService from '../../services/clientService';
 import theme from '../../theme';
 
 /**
- * Version simplifiée du composant ClientInput
- * Cette version utilise les services existants sans le hook useClientSearch
+ * Composant ClientInput amélioré avec :
+ * - Liaison bidirectionnelle parfaite
+ * - Dropdown avec tous les clients
+ * - Recherche semi-automatique
+ * - Validation téléphone
  */
 const ClientInput = ({
   collecteurId,
@@ -33,6 +39,11 @@ const ClientInput = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // 🔥 NOUVEAU : État pour dropdown complet
+  const [allClients, setAllClients] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [dropdownLoading, setDropdownLoading] = useState(false);
+
   // Synchroniser avec le client sélectionné du parent
   useEffect(() => {
     if (selectedClient) {
@@ -43,7 +54,43 @@ const ClientInput = ({
     }
   }, [selectedClient]);
 
-  // Recherche de clients avec debounce simple
+  // 🔥 NOUVEAU : Charger tous les clients pour le dropdown
+  const loadAllClients = async () => {
+    if (!collecteurId || dropdownLoading) return;
+
+    try {
+      setDropdownLoading(true);
+      setError(null);
+      
+      const response = await clientService.getClientsByCollecteur(collecteurId, { 
+        size: 1000 // Récupérer tous les clients
+      });
+
+      if (response.success && response.data) {
+        const clients = Array.isArray(response.data) ? response.data : [];
+        const formattedClients = clients.map(client => ({
+          id: client.id,
+          nom: client.nom,
+          prenom: client.prenom,
+          numeroCompte: client.numeroCompte,
+          numeroCni: client.numeroCni,
+          telephone: client.telephone,
+          displayName: `${client.prenom} ${client.nom}`,
+          hasPhone: !!(client.telephone && client.telephone.trim() !== '')
+        }));
+
+        setAllClients(formattedClients);
+      }
+    } catch (err) {
+      console.error('Erreur chargement clients:', err);
+      setError('Erreur lors du chargement des clients');
+      onError?.(err.message);
+    } finally {
+      setDropdownLoading(false);
+    }
+  };
+
+  // Recherche de clients avec debounce
   useEffect(() => {
     if (clientName.length > 2) {
       const timeoutId = setTimeout(() => {
@@ -123,7 +170,7 @@ const ClientInput = ({
       
       if (response.success && response.data) {
         const clients = Array.isArray(response.data) ? response.data : [];
-        const matchingClient = clients.find(client => client.numeroCompte === account);
+        const matchingClient = clients.find(client => client.numeroCompte === account.trim());
 
         if (matchingClient) {
           const formattedClient = {
@@ -155,6 +202,7 @@ const ClientInput = ({
     setAccountNumber(client.numeroCompte);
     setSuggestions([]);
     setShowSuggestions(false);
+    setShowDropdown(false);
     setError(null);
     onClientSelect?.(client);
   };
@@ -180,6 +228,18 @@ const ClientInput = ({
         setClientName('');
         onClientSelect?.(null);
       }
+    }
+  };
+
+  // 🔥 NOUVEAU : Gestionnaire du dropdown
+  const handleDropdownToggle = () => {
+    if (showDropdown) {
+      setShowDropdown(false);
+    } else {
+      if (allClients.length === 0) {
+        loadAllClients();
+      }
+      setShowDropdown(true);
     }
   };
 
@@ -223,6 +283,73 @@ const ClientInput = ({
           ))}
         </ScrollView>
       </View>
+    );
+  };
+
+  // 🔥 NOUVEAU : Dropdown modal complet
+  const renderDropdownModal = () => {
+    return (
+      <Modal
+        visible={showDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sélectionner un client</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowDropdown(false)}
+              >
+                <Ionicons name="close" size={24} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {dropdownLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Chargement des clients...</Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.clientsList}>
+                {allClients.map((client) => (
+                  <TouchableOpacity
+                    key={client.id}
+                    style={styles.clientItem}
+                    onPress={() => handleClientSelect(client)}
+                  >
+                    <View style={styles.clientInfo}>
+                      <Text style={styles.clientName}>{client.displayName}</Text>
+                      <Text style={styles.clientAccount}>
+                        Compte: {client.numeroCompte || 'Non défini'}
+                      </Text>
+                      {client.numeroCni && (
+                        <Text style={styles.clientCni}>CNI: {client.numeroCni}</Text>
+                      )}
+                    </View>
+                    <View style={styles.clientMeta}>
+                      {!client.hasPhone && (
+                        <Ionicons 
+                          name="call-outline" 
+                          size={16} 
+                          color={theme.colors.warning} 
+                        />
+                      )}
+                      <Ionicons 
+                        name="chevron-forward" 
+                        size={16} 
+                        color={theme.colors.textLight} 
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -288,15 +415,16 @@ const ClientInput = ({
               ) : null}
               style={styles.nameInput}
             />
+            {/* 🔥 NOUVEAU : Bouton dropdown */}
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowSuggestions(!showSuggestions)}
+              onPress={handleDropdownToggle}
               disabled={disabled || loading}
             >
               <Ionicons 
-                name={showSuggestions ? "chevron-up" : "chevron-down"} 
+                name={showDropdown ? "chevron-up" : "chevron-down"} 
                 size={20} 
-                color={theme.colors.gray} 
+                color={theme.colors.primary} 
               />
             </TouchableOpacity>
           </View>
@@ -337,6 +465,9 @@ const ClientInput = ({
           </Text>
         </View>
       )}
+
+      {/* 🔥 NOUVEAU : Modal dropdown */}
+      {renderDropdownModal()}
     </View>
   );
 };
@@ -423,6 +554,78 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   suggestionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  // 🔥 NOUVEAU : Styles modal dropdown
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    width: '90%',
+    maxHeight: '80%',
+    ...theme.shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.textLight,
+  },
+  clientsList: {
+    maxHeight: 400,
+  },
+  clientItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  clientInfo: {
+    flex: 1,
+  },
+  clientName: {
+    fontSize: 16,
+    color: theme.colors.text,
+    fontWeight: '500',
+  },
+  clientAccount: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  clientCni: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 1,
+  },
+  clientMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

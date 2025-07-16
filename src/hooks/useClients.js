@@ -1,6 +1,6 @@
 // src/hooks/useClients.js - VERSION CORRIGÉE
 import { useState, useEffect, useCallback } from 'react';
-import { clientService } from '../../services';
+import clientService from '../services/clientService'; // ✅ CORRIGÉ : Import direct du service
 
 export const useClients = (collecteurId = null) => {
   const [clients, setClients] = useState([]);
@@ -35,12 +35,14 @@ export const useClients = (collecteurId = null) => {
       let response;
       
       if (collecteurId) {
+        // Utiliser la méthode pour récupérer les clients d'un collecteur
         response = await clientService.getClientsByCollecteur(collecteurId, { 
           page, 
           size, 
           search 
         });
       } else {
+        // Utiliser la méthode pour récupérer tous les clients
         response = await clientService.getAllClients({ 
           page, 
           size, 
@@ -49,7 +51,7 @@ export const useClients = (collecteurId = null) => {
       }
       
       // ✅ CORRIGÉ : Adapter selon la structure de réponse
-      if (response.success) {
+      if (response && response.success) {
         const clientsData = response.data || [];
         const clientsArray = Array.isArray(clientsData) ? clientsData : [];
         
@@ -64,7 +66,7 @@ export const useClients = (collecteurId = null) => {
         // ✅ CORRIGÉ : Logique de pagination adaptée
         setHasMore(clientsArray.length === size);
       } else {
-        throw new Error(response.error || 'Erreur lors de la récupération des clients');
+        throw new Error(response?.error || 'Erreur lors de la récupération des clients');
       }
       
     } catch (err) {
@@ -94,7 +96,7 @@ export const useClients = (collecteurId = null) => {
       // ✅ CORRIGÉ : Utiliser la bonne méthode
       const response = await clientService.toggleClientStatus(clientId, newStatus);
       
-      if (response.success) {
+      if (response && response.success) {
         // Mise à jour locale après confirmation du serveur
         setClients(prevClients => 
           prevClients.map(c => 
@@ -104,7 +106,7 @@ export const useClients = (collecteurId = null) => {
         
         return { success: true, data: response.data };
       } else {
-        throw new Error(response.error || 'Erreur lors du changement de statut');
+        throw new Error(response?.error || 'Erreur lors du changement de statut');
       }
       
     } catch (err) {
@@ -123,13 +125,13 @@ export const useClients = (collecteurId = null) => {
       // ✅ CORRIGÉ : Utiliser la bonne méthode
       const response = await clientService.createClient(clientData);
       
-      if (response.success) {
+      if (response && response.success) {
         // Ajouter le nouveau client à l'état
         setClients(prevClients => [response.data, ...prevClients]);
         
         return { success: true, client: response.data };
       } else {
-        throw new Error(response.error || 'Erreur lors de la création du client');
+        throw new Error(response?.error || 'Erreur lors de la création du client');
       }
       
     } catch (err) {
@@ -148,7 +150,7 @@ export const useClients = (collecteurId = null) => {
       // ✅ CORRIGÉ : Utiliser la bonne méthode
       const response = await clientService.updateClient(clientId, clientData);
       
-      if (response.success) {
+      if (response && response.success) {
         // Mettre à jour l'état localement
         setClients(prevClients => 
           prevClients.map(c => 
@@ -158,7 +160,7 @@ export const useClients = (collecteurId = null) => {
         
         return { success: true, data: response.data };
       } else {
-        throw new Error(response.error || 'Erreur lors de la mise à jour du client');
+        throw new Error(response?.error || 'Erreur lors de la mise à jour du client');
       }
       
     } catch (err) {
@@ -172,8 +174,10 @@ export const useClients = (collecteurId = null) => {
 
   // Charger les clients au montage du composant ou lorsque le collecteurId change
   useEffect(() => {
-    fetchClients();
-  }, [collecteurId]); // ✅ CORRIGÉ : Dépendance simplifiée
+    if (collecteurId) {
+      fetchClients();
+    }
+  }, [collecteurId, fetchClients]);
 
   return {
     clients,

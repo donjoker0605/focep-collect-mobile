@@ -1,5 +1,5 @@
-// src/components/index.js
-// Export des composants pour faciliter l'importation
+// src/components/index.js - VERSION CORRIGÉE
+// Export des composants existants pour faciliter l'importation
 
 // ========================================
 // 🔤 COMPOSANTS DE BASE
@@ -19,7 +19,6 @@ export { default as ProgressIndicator } from './ProgressIndicator/ProgressIndica
 export { default as BalanceCard } from './BalanceCard/BalanceCard';
 export { default as StatsCard } from './StatsCard/StatsCard';
 export { default as TransactionItem } from './TransactionItem/TransactionItem';
-export { default as EnhancedTransactionItem } from './TransactionItem/EnhancedTransactionItem';
 export { default as DataTable } from './DataTable/DataTable';
 export { default as Chart } from './Chart/Chart';
 
@@ -34,17 +33,17 @@ export { default as SignatureInput } from './SignatureInput/SignatureInput';
 export { default as FilterBar } from './FilterBar/FilterBar';
 
 // ========================================
-// 👥 COMPOSANTS CLIENT (NOUVEAUX)
+// 👥 COMPOSANTS CLIENT
 // ========================================
 export { default as ClientInput } from './ClientInput/ClientInput';
-export { default as ClientList } from './ClientList/OptimizedClientList';
+export { default as OptimizedClientList } from './ClientList/OptimizedClientList';
 
 // ========================================
 // 📱 COMPOSANTS DE NOTIFICATION ET STATUS
 // ========================================
 export { default as NotificationBadge } from './NotificationBadge/NotificationBadge';
 export { default as ErrorNotification } from './ErrorNotification/ErrorNotification';
-export { default as SyncStatusIndicator, SYNC_STATUS } from './SyncStatusIndicator/SyncStatusIndicator';
+export { default as SyncStatusIndicator } from './SyncStatusIndicator/SyncStatusIndicator';
 export { default as OfflineIndicator } from './OfflineIndicator/OfflineIndicator';
 
 // ========================================
@@ -63,33 +62,36 @@ export { default as FileUpload } from './FileUpload/FileUpload';
 export { default as TabView } from './TabView/TabView';
 
 // ========================================
-// 🔐 COMPOSANTS D'AUTHENTIFICATION
+// 📄 COMPOSANTS D'ACTIVITÉ ET LOGS
 // ========================================
-export { default as BiometricAuth } from './BiometricAuth/BiometricAuth';
-
-// ========================================
-// 📋 COMPOSANTS MÉTIER SPÉCIFIQUES
-// ========================================
-export { default as PrintableReceipt } from './PrintableReceipt/PrintableReceipt';
-export { default as ReportGenerator } from './ReportGenerator/ReportGenerator';
 export { default as ActivityLogItem } from './ActivityLogItem/ActivityLogItem';
 
 // ========================================
-// 🖼️ COMPOSANTS D'OPTIMISATION PERFORMANCE
+// 🎨 COMPOSANTS DE PERFORMANCE
 // ========================================
 export { default as OptimizedImage } from './OptimizedImage/OptimizedImage';
 export { default as OptimizedList } from './OptimizedList/OptimizedList';
 
 // ========================================
-// 🎀 WRAPPER D'APPLICATION
+// 🌐 COMPOSANTS RÉSEAU ET SYNC
 // ========================================
-export { default as AppWrapper } from './AppWrapper';
+export { default as SyncIndicator } from './SyncIndicator';
 
 // ========================================
-// 🚧 COMPOSANTS EN DÉVELOPPEMENT
+// 🔒 COMPOSANTS DE SÉCURITÉ
 // ========================================
-// Note: Les composants Commission sont commentés temporairement pour éviter les cycles de dépendances
-// Une fois le problème de cycle résolu, vous pourrez les réactiver
+export { default as BiometricAuth } from './BiometricAuth/BiometricAuth';
 
-// export { default as CommissionParametersForm } from './Commission/CommissionParametersForm';
-// export { default as CommissionVisualization } from './Commission/CommissionVisualization';
+// ========================================
+// 📋 COMPOSANTS DE FORMULAIRE AVANCÉS
+// ========================================
+export { default as RoleSwitcher } from './RoleSwitcher/RoleSwitcher';
+
+// ========================================
+// 🎛️ COMPOSANTS DE CONTRÔLE
+// ========================================
+export { default as Commission } from './Commission/Commission/CommissionParametersForm';
+export { default as CommissionVisualization } from './Commission/CommissionVisualization';
+export { default as CommissionParametersForm } from './Commission/CommissionParametersForm';
+export { default as PrintableReceipt } from './PrintableReceipt/PrintableReceipt';
+export { default as ReportGenerator } from './ReportGenerator/ReportGenerator';

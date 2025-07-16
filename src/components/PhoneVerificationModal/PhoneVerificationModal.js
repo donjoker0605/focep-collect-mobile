@@ -1,246 +1,226 @@
-// components/PhoneVerificationModal/PhoneVerificationModal.js
+// components/PhoneVerificationModal/PhoneVerificationModal.js - VERSION CORRIGÉE
 
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  Modal,
   TouchableOpacity,
-  Alert
+  TouchableWithoutFeedback,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal } from '../../components';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// ✅ CORRECTION : Imports locaux
+import { Button } from '../index';
 import theme from '../../theme';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 /**
- * Modal pour vérifier/ajouter le numéro de téléphone d'un client
- * avant de procéder à une transaction
+ * Modal de vérification téléphone pour les transactions
+ * Averti l'utilisateur quand un client n'a pas de téléphone renseigné
  */
 const PhoneVerificationModal = ({
   visible,
   client,
+  transactionType = 'epargne',
   onClose,
   onAddPhone,
   onContinueWithoutPhone,
-  transactionType = 'épargne'
 }) => {
-  
+  const insets = useSafeAreaInsets();
+
+  if (!client) return null;
+
   const handleAddPhone = () => {
     onClose();
     onAddPhone(client);
   };
 
-  const handleContinue = () => {
-    Alert.alert(
-      'Confirmer',
-      `Êtes-vous sûr de vouloir continuer cette ${transactionType} sans numéro de téléphone pour ${client?.displayName || client?.nom + ' ' + client?.prenom} ?`,
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel'
-        },
-        {
-          text: 'Continuer',
-          style: 'destructive',
-          onPress: () => {
-            onClose();
-            onContinueWithoutPhone();
-          }
-        }
-      ]
-    );
+  const handleContinueWithoutPhone = () => {
+    onContinueWithoutPhone();
+    onClose();
   };
 
-  if (!visible || !client) return null;
+  const renderContent = () => (
+    <View style={[styles.modalContent, { paddingTop: insets.top + 20 }]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Ionicons name="close" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
+      </View>
 
-  const clientName = client.displayName || `${client.prenom || ''} ${client.nom || ''}`.trim();
-  const accountNumber = client.numeroCompte || client.numerCompte || 'N/A';
+      {/* Icon warning */}
+      <View style={styles.iconContainer}>
+        <View style={styles.warningIcon}>
+          <Ionicons name="call-outline" size={40} color={theme.colors.warning} />
+        </View>
+      </View>
+
+      {/* Title */}
+      <Text style={styles.title}>
+        Numéro de téléphone manquant
+      </Text>
+
+      {/* Client info */}
+      <View style={styles.clientInfo}>
+        <Text style={styles.clientName}>
+          {client.displayName || `${client.prenom} ${client.nom}`}
+        </Text>
+        <Text style={styles.clientAccount}>
+          Compte: {client.numeroCompte}
+        </Text>
+      </View>
+
+      {/* Warning message */}
+      <Text style={styles.warningText}>
+        Ce client n'a pas de numéro de téléphone renseigné. Il est recommandé d'avoir un contact téléphonique pour les transactions d'{transactionType}.
+      </Text>
+
+      {/* Action buttons */}
+      <View style={styles.actions}>
+        <Button
+          title="Ajouter un téléphone"
+          onPress={handleAddPhone}
+          style={styles.primaryButton}
+          icon="call"
+        />
+        
+        <Button
+          title="Continuer sans téléphone"
+          onPress={handleContinueWithoutPhone}
+          style={styles.secondaryButton}
+          textStyle={styles.secondaryButtonText}
+          variant="outline"
+        />
+      </View>
+
+      {/* Info footer */}
+      <View style={styles.infoFooter}>
+        <Ionicons name="information-circle-outline" size={16} color={theme.colors.textLight} />
+        <Text style={styles.infoText}>
+          Le téléphone permet de contacter le client en cas de problème avec la transaction.
+        </Text>
+      </View>
+    </View>
+  );
 
   return (
     <Modal
-      isVisible={visible}
-      title="Numéro de téléphone manquant"
-      onClose={onClose}
-      showCloseButton={true}
-      size="medium"
-      scrollable={false}
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={styles.content}>
-        {/* Icône d'avertissement */}
-        <View style={styles.iconContainer}>
-          <Ionicons 
-            name="call-outline" 
-            size={48} 
-            color={theme.colors.warning} 
-          />
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            {renderContent()}
+          </TouchableWithoutFeedback>
         </View>
-
-        {/* Informations client */}
-        <View style={styles.clientInfo}>
-          <Text style={styles.clientName}>
-            {clientName}
-          </Text>
-          <Text style={styles.accountNumber}>
-            Compte: {accountNumber}
-          </Text>
-        </View>
-        
-        {/* Message principal */}
-        <Text style={styles.message}>
-          Ce client n'a pas de numéro de téléphone renseigné. 
-          Il est recommandé d'ajouter un numéro pour faciliter 
-          les communications futures.
-        </Text>
-
-        {/* Avertissement */}
-        <View style={styles.warningBox}>
-          <Ionicons 
-            name="warning" 
-            size={20} 
-            color={theme.colors.warning} 
-          />
-          <Text style={styles.warningText}>
-            Sans numéro de téléphone, le client ne pourra pas 
-            recevoir de notifications sur ses transactions.
-          </Text>
-        </View>
-
-        {/* Boutons d'action */}
-        <View style={styles.actions}>
-          <TouchableOpacity 
-            style={[styles.button, styles.secondaryButton]}
-            onPress={onClose}
-          >
-            <Text style={styles.secondaryButtonText}>
-              Annuler
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.warningButton]}
-            onPress={handleContinue}
-          >
-            <Text style={styles.warningButtonText}>
-              Continuer sans téléphone
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.primaryButton]}
-            onPress={handleAddPhone}
-          >
-            <Ionicons 
-              name="add" 
-              size={16} 
-              color="white" 
-              style={styles.buttonIcon}
-            />
-            <Text style={styles.primaryButtonText}>
-              Ajouter téléphone
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  content: {
-    alignItems: 'center',
-    paddingVertical: 20,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 30,
+    maxHeight: SCREEN_HEIGHT * 0.8,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 10,
+  },
+  closeButton: {
+    padding: 8,
   },
   iconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  warningIcon: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: `${theme.colors.warning}15`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: theme.colors.text,
+    marginBottom: 16,
   },
   clientInfo: {
-    alignItems: 'center',
+    padding: 16,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: 12,
     marginBottom: 20,
+    alignItems: 'center',
   },
   clientName: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: theme.colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  accountNumber: {
+  clientAccount: {
     fontSize: 14,
     color: theme.colors.textLight,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 16,
-    color: theme.colors.text,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  warningBox: {
-    flexDirection: 'row',
-    backgroundColor: `${theme.colors.warning}10`,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.warning,
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 30,
-    alignItems: 'flex-start',
   },
   warningText: {
-    flex: 1,
-    fontSize: 14,
-    color: theme.colors.warning,
-    marginLeft: 12,
-    lineHeight: 20,
+    fontSize: 16,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 30,
   },
   actions: {
-    width: '100%',
     gap: 12,
-  },
-  button: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 48,
+    marginBottom: 20,
   },
   primaryButton: {
     backgroundColor: theme.colors.primary,
   },
   secondaryButton: {
-    backgroundColor: theme.colors.lightGray,
-    borderWidth: 1,
+    backgroundColor: 'transparent',
     borderColor: theme.colors.border,
-  },
-  warningButton: {
-    backgroundColor: theme.colors.warning,
-  },
-  primaryButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
+    borderWidth: 1,
   },
   secondaryButtonText: {
     color: theme.colors.text,
-    fontWeight: '500',
-    fontSize: 16,
   },
-  warningButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 16,
+  infoFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    backgroundColor: `${theme.colors.info}10`,
+    borderRadius: 8,
+    gap: 8,
   },
-  buttonIcon: {
-    marginRight: 8,
+  infoText: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    flex: 1,
+    lineHeight: 16,
   },
 });
 

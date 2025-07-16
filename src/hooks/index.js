@@ -38,3 +38,20 @@ export { default as useTheme } from './useTheme';
 
 // Hooks de réseau
 export { default as useNetworkStatus } from './useNetworkStatus';
+
+// Hooks admin
+export { default as useAdmin } from './useAdmin';
+export { default as useAdminCollecteurs } from './useAdminCollecteurs';
+export { default as useAdminCommissions } from './useAdminCommissions';
+
+// Hooks de recherche
+export { default as useClientSearch } from './useClientSearch';
+
+// Hooks d'activité
+export { default as useJournalActivite } from './useJournalActivite';
+
+// Hooks de performance
+export { default as useLazyLoad } from './useLazyLoad';
+
+// Hooks de synchronisation
+export { default as useSyncStatus } from './useSyncStatus';

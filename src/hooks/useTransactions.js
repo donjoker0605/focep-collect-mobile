@@ -1,8 +1,6 @@
-// src/hooks/useTransactions.js
+// src/hooks/useTransactions.js - VERSION CORRIGÉE
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { transactionService } from '../../services';
-import { useErrorHandler } from './useErrorHandler';
-import { useNetInfo } from '@react-native-community/netinfo';
+import transactionService from '../services/transactionService'; // ✅ CORRIGÉ : Import direct
 
 export const useTransactions = (clientId = null, collecteurId = null, journalId = null) => {
   const [transactions, setTransactions] = useState([]);
@@ -12,8 +10,7 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
   const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
-  const netInfo = useNetInfo();
+  const [pageSize] = useState(20);
   
   const handleError = useCallback((err) => {
     console.error('Error in useTransactions:', err);
@@ -71,7 +68,7 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
         });
       }
       
-      if (response.success) {
+      if (response && response.success) {
         const transactionsData = response.data || [];
         const transactionsArray = Array.isArray(transactionsData) ? transactionsData : [];
         
@@ -86,7 +83,7 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
         setHasMore(transactionsArray.length === size);
         setTotalItems(response.total || transactionsArray.length);
       } else {
-        throw new Error(response.error || 'Erreur lors de la récupération des transactions');
+        throw new Error(response?.error || 'Erreur lors de la récupération des transactions');
       }
       
     } catch (err) {
@@ -98,20 +95,16 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
   }, [clientId, collecteurId, journalId, pageSize, handleError]);
 
   const refreshTransactions = useCallback(async () => {
-    if (!netInfo.isConnected) {
-      return;
-    }
-    
     setRefreshing(true);
     await fetchTransactions(0);
     setRefreshing(false);
-  }, [fetchTransactions, netInfo.isConnected]);
+  }, [fetchTransactions]);
 
   const loadMoreTransactions = useCallback(async () => {
-    if (!loading && hasMore && netInfo.isConnected) {
+    if (!loading && hasMore) {
       await fetchTransactions(currentPage + 1);
     }
-  }, [loading, hasMore, currentPage, fetchTransactions, netInfo.isConnected]);
+  }, [loading, hasMore, currentPage, fetchTransactions]);
 
   // Données statistiques mémorisées
   const stats = useMemo(() => {
@@ -125,11 +118,11 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
     }
     
     // Calculer les statistiques en un seul passage
-    return transactions.reduce((acc, transaction) => {
+    const calculated = transactions.reduce((acc, transaction) => {
       if (transaction.type === 'DEPOT' || transaction.sens === 'CREDIT') {
-        acc.totalDeposits += transaction.montant;
+        acc.totalDeposits += transaction.montant || 0;
       } else if (transaction.type === 'RETRAIT' || transaction.sens === 'DEBIT') {
-        acc.totalWithdrawals += transaction.montant;
+        acc.totalWithdrawals += transaction.montant || 0;
       }
       
       acc.transactionCount++;
@@ -137,15 +130,13 @@ export const useTransactions = (clientId = null, collecteurId = null, journalId 
     }, {
       totalDeposits: 0,
       totalWithdrawals: 0,
-      netAmount: 0,
       transactionCount: 0,
     });
+    
+    calculated.netAmount = calculated.totalDeposits - calculated.totalWithdrawals;
+    
+    return calculated;
   }, [transactions]);
-
-  // Mettre à jour le montant net calculé
-  useEffect(() => {
-    stats.netAmount = stats.totalDeposits - stats.totalWithdrawals;
-  }, [stats]);
 
   // Charger les transactions au montage ou lorsque les paramètres changent
   useEffect(() => {

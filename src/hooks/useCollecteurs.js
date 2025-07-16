@@ -1,7 +1,6 @@
-// src/hooks/useCollecteurs.js
+// src/hooks/useCollecteurs.js - VERSION CORRIGÉE
 import { useState, useEffect, useCallback } from 'react';
-import { collecteurS²ervice } from '../../services';
-import { useErrorHandler } from './useErrorHandler'; // Nouveau hook de gestion d'erreurs
+import collecteurService from '../services/collecteurService'; // ✅ CORRIGÉ : Import direct
 
 export const useCollecteurs = () => {
   const [collecteurs, setCollecteurs] = useState([]);
@@ -38,7 +37,7 @@ export const useCollecteurs = () => {
         search 
       });
       
-      if (response.success) {
+      if (response && response.success) {
         const collecteursData = response.data || [];
         const collecteursArray = Array.isArray(collecteursData) ? collecteursData : [];
         
@@ -51,7 +50,7 @@ export const useCollecteurs = () => {
         setCurrentPage(page);
         setHasMore(collecteursArray.length === size);
       } else {
-        throw new Error(response.error || 'Erreur lors de la récupération des collecteurs');
+        throw new Error(response?.error || 'Erreur lors de la récupération des collecteurs');
       }
       
     } catch (err) {
@@ -78,71 +77,83 @@ export const useCollecteurs = () => {
     try {
       setLoading(true);
       
-      const response = await CollecteurService.updateStatus(collecteurId, newStatus);
+      const response = await collecteurService.updateStatus(collecteurId, newStatus);
       
-      // Mise à jour locale de l'état après confirmation par le serveur
-      setCollecteurs(prevCollecteurs => 
-        prevCollecteurs.map(c => 
-          c.id === collecteurId ? { ...c, status: newStatus } : c
-        )
-      );
-      
-      return { success: true, data: response };
+      if (response && response.success) {
+        // Mise à jour locale de l'état après confirmation par le serveur
+        setCollecteurs(prevCollecteurs => 
+          prevCollecteurs.map(c => 
+            c.id === collecteurId ? { ...c, status: newStatus } : c
+          )
+        );
+        
+        return { success: true, data: response.data };
+      } else {
+        throw new Error(response?.error || 'Erreur lors du changement de statut');
+      }
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   const createCollecteur = useCallback(async (collecteurData) => {
     try {
       setLoading(true);
       
-      const response = await CollecteurService.createCollecteur(collecteurData);
+      const response = await collecteurService.createCollecteur(collecteurData);
       
-      // Ajouter le nouveau collecteur à l'état
-      setCollecteurs(prevCollecteurs => [response, ...prevCollecteurs]);
-      
-      return { success: true, collecteur: response };
+      if (response && response.success) {
+        // Ajouter le nouveau collecteur à l'état
+        setCollecteurs(prevCollecteurs => [response.data, ...prevCollecteurs]);
+        
+        return { success: true, collecteur: response.data };
+      } else {
+        throw new Error(response?.error || 'Erreur lors de la création du collecteur');
+      }
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   const updateCollecteur = useCallback(async (collecteurId, collecteurData) => {
     try {
       setLoading(true);
       
-      const response = await CollecteurService.updateCollecteur(collecteurId, collecteurData);
+      const response = await collecteurService.updateCollecteur(collecteurId, collecteurData);
       
-      // Mettre à jour l'état localement après confirmation du serveur
-      setCollecteurs(prevCollecteurs => 
-        prevCollecteurs.map(c => 
-          c.id === collecteurId ? response : c
-        )
-      );
-      
-      return { success: true, data: response };
+      if (response && response.success) {
+        // Mettre à jour l'état localement après confirmation du serveur
+        setCollecteurs(prevCollecteurs => 
+          prevCollecteurs.map(c => 
+            c.id === collecteurId ? response.data : c
+          )
+        );
+        
+        return { success: true, data: response.data };
+      } else {
+        throw new Error(response?.error || 'Erreur lors de la mise à jour du collecteur');
+      }
     } catch (err) {
-      const errorMessage = handleApiError(err);
+      const errorMessage = handleError(err);
       setError(errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [handleApiError]);
+  }, [handleError]);
 
   // Charger les collecteurs au montage du composant
   useEffect(() => {
     fetchCollecteurs();
-  }, []);
+  }, [fetchCollecteurs]);
 
   return {
     collecteurs,

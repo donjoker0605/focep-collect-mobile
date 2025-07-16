@@ -1,6 +1,6 @@
-// screens/Collecteur/CollecteScreen.js - VERSION CORRIGÉE IMPORTS
+// screens/Collecteur/CollecteScreen.js - VERSION AVEC IMPORTS CORRIGÉS
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -8,530 +8,586 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
   ActivityIndicator,
-  Keyboard,
-  TouchableWithoutFeedback,
-  Platform
+  SafeAreaView
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 
-// Services optimisés
-import { transactionService } from '../../services';
-
-// Components - imports corrigés
+// 🔥 CORRECTION : Suppression des composants inexistants
 import { 
-  Header, 
-  Card, 
   Button, 
-  AmountInput,
-  Input,
-  ClientInput,
-  PhoneVerificationModal
+  Input
 } from '../../components';
-
-// Hooks
-import { useAuth } from '../../hooks/useAuth';
-
-// Theme et utils
+import ClientInput from '../../components/ClientInput/ClientInput';
+import { AuthContext } from '../../context/AuthContext';
 import theme from '../../theme';
-import { formatCurrency } from '../../utils/formatters';
 
-// Fonction utilitaire pour les haptics
-const triggerHaptic = (type) => {
-  if (Platform.OS !== 'web') {
-    if (type === 'impact') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } else if (type === 'success') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (type === 'error') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  }
-};
+// Services
+import transactionService from '../../services/transactionService';
+import clientService from '../../services/clientService';
 
-const CollecteScreen = ({ navigation, route }) => {
-  const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+const CollecteScreen = () => {
+  const navigation = useNavigation();
+  const { user } = useContext(AuthContext);
   
-  // Récupérer les paramètres de route
-  const { selectedTab = 'epargne', preSelectedClient } = route.params || {};
-  
-  // ========================================
-  // 🔄 ÉTATS PRINCIPAUX
-  // ========================================
-  
-  const [activeTab, setActiveTab] = useState(selectedTab);
-  const [selectedClient, setSelectedClient] = useState(preSelectedClient || null);
-  const [amount, setAmount] = useState('');
+  // États principaux
+  const [operationType, setOperationType] = useState('epargne');
+  const [selectedClient, setSelectedClient] = useState(null);
+  const [montant, setMontant] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // ========================================
-  // 📞 ÉTATS VÉRIFICATION TÉLÉPHONE
-  // ========================================
-  
+  // États pour la modal de vérification téléphone
   const [showPhoneModal, setShowPhoneModal] = useState(false);
-  const [pendingTransaction, setPendingTransaction] = useState(null);
-  const [validationResult, setValidationResult] = useState(null);
+  const [validationData, setValidationData] = useState(null);
+  
+  // États pour la validation
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationError, setValidationError] = useState(null);
 
-  // ========================================
-  // 📝 GESTIONNAIRES D'ÉVÉNEMENTS
-  // ========================================
+  // Validation des données avant soumission
+  const validateForm = () => {
+    if (!selectedClient) {
+      setError('Veuillez sélectionner un client');
+      return false;
+    }
+    
+    if (!montant || parseFloat(montant) <= 0) {
+      setError('Veuillez saisir un montant valide');
+      return false;
+    }
+    
+    if (parseFloat(montant) > 1000000) {
+      setError('Le montant ne peut pas dépasser 1 000 000 FCFA');
+      return false;
+    }
+    
+    return true;
+  };
 
-  const handleTabChange = (tab) => {
-    if (tab !== activeTab) {
-      setActiveTab(tab);
-      resetForm();
-      triggerHaptic('impact');
+  // Validation de l'opération
+  const handleValidateOperation = async () => {
+    if (!validateForm()) return;
+    
+    try {
+      setValidationLoading(true);
+      setValidationError(null);
+      
+      const montantFloat = parseFloat(montant);
+      
+      // Appel à la validation via le service corrigé
+      const validationResult = operationType === 'epargne' 
+        ? await transactionService.validateEpargne(
+            selectedClient.id, 
+            user.id, 
+            montantFloat,
+            description
+          )
+        : await transactionService.validateRetrait(
+            selectedClient.id, 
+            user.id, 
+            montantFloat,
+            description
+          );
+      
+      if (validationResult.success && validationResult.data) {
+        const validation = validationResult.data;
+        
+        // Vérifier si client a un téléphone
+        if (!validation.hasValidPhone) {
+          setValidationData(validation);
+          setShowPhoneModal(true);
+          return;
+        }
+        
+        // Vérifier si peut procéder (pour les retraits)
+        if (!validation.canProceed) {
+          setValidationError(validation.errorMessage || validation.soldeCollecteurMessage);
+          return;
+        }
+        
+        // Validation réussie, procéder à l'opération
+        await handleSubmitOperation();
+      } else {
+        setValidationError('Erreur lors de la validation');
+      }
+    } catch (err) {
+      console.error('Erreur validation:', err);
+      setValidationError(err.message || 'Erreur lors de la validation');
+    } finally {
+      setValidationLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setAmount('');
-    setDescription('');
-    setError(null);
-    setValidationResult(null);
-    setShowPhoneModal(false);
-    setPendingTransaction(null);
-    // Note: selectedClient est géré par ClientInput
+  // Soumission de l'opération
+  const handleSubmitOperation = async () => {
+    if (!validateForm()) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const operationData = {
+        clientId: selectedClient.id,
+        collecteurId: user.id,
+        montant: parseFloat(montant),
+        description: description || `${operationType} pour ${selectedClient.displayName}`
+      };
+      
+      // Utilisation du bon service
+      const result = operationType === 'epargne' 
+        ? await transactionService.effectuerEpargne(operationData)
+        : await transactionService.effectuerRetrait(operationData);
+      
+      if (result.success) {
+        // Reset du formulaire
+        setSelectedClient(null);
+        setMontant('');
+        setDescription('');
+        setError(null);
+        
+        Alert.alert(
+          'Succès',
+          `${operationType === 'epargne' ? 'Épargne' : 'Retrait'} effectué avec succès !`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Rediriger vers l'écran des transactions ou dashboard
+                navigation.navigate('Dashboard');
+              }
+            }
+          ]
+        );
+      } else {
+        setError(result.message || 'Erreur lors de l\'opération');
+      }
+    } catch (err) {
+      console.error('Erreur soumission:', err);
+      setError(err.message || 'Erreur lors de l\'opération');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Gestion de la sélection client
   const handleClientSelect = (client) => {
     setSelectedClient(client);
     setError(null);
+    setValidationError(null);
     console.log('✅ Client sélectionné:', client);
   };
 
-  const handleClientInputError = (error) => {
-    setError(error);
-    setSelectedClient(null);
+  // Gestion erreur client
+  const handleClientError = (errorMessage) => {
+    setError(errorMessage);
   };
 
-  // ========================================
-  // 🔐 VALIDATION COMPLÈTE AVANT TRANSACTION
-  // ========================================
-
-  const validateAndProceedTransaction = async () => {
-    try {
-      if (!selectedClient) {
-        setError('Veuillez sélectionner un client');
-        return;
-      }
-
-      if (!amount || parseFloat(amount) <= 0) {
-        setError('Veuillez saisir un montant valide');
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      const transactionData = {
-        clientId: selectedClient.id,
-        collecteurId: user.id,
-        montant: parseFloat(amount),
-        description: description.trim()
-      };
-
-      // ✅ VALIDATION BACK-END COMPLÈTE
-      let validation;
-      if (activeTab === 'epargne') {
-        validation = await transactionService.validateEpargne(
-          selectedClient.id, user.id, parseFloat(amount), description
-        );
-      } else {
-        validation = await transactionService.validateRetrait(
-          selectedClient.id, user.id, parseFloat(amount), description
-        );
-      }
-
-      setValidationResult(validation.data);
-
-      if (!validation.data.canProceed) {
-        setError(validation.data.errorMessage);
-        triggerHaptic('error');
-        return;
-      }
-
-      // ✅ VÉRIFICATION TÉLÉPHONE
-      if (!validation.data.hasValidPhone) {
-        // Montrer modal de vérification téléphone
-        setPendingTransaction(transactionData);
-        setShowPhoneModal(true);
-        return;
-      }
-
-      // ✅ PROCÉDER DIRECTEMENT SI TOUT EST OK
-      await executeTransaction(transactionData);
-
-    } catch (err) {
-      console.error('Erreur validation transaction:', err);
-      setError(err.message || 'Erreur lors de la validation');
-      triggerHaptic('error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ========================================
-  // 💰 EXÉCUTION TRANSACTION
-  // ========================================
-
-  const executeTransaction = async (transactionData) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const operationType = activeTab === 'epargne' ? 'épargne' : 'retrait';
-
-      // Confirmation utilisateur
-      const confirmed = await new Promise(resolve => {
-        Alert.alert(
-          'Confirmation',
-          `Êtes-vous sûr de vouloir effectuer cette ${operationType} de ${formatCurrency(transactionData.montant)} FCFA pour ${selectedClient.displayName || selectedClient.nom + ' ' + selectedClient.prenom} ?\n\nCompte: ${selectedClient.numeroCompte}`,
-          [
-            { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Confirmer', onPress: () => resolve(true) }
-          ]
-        );
-      });
-
-      if (!confirmed) {
-        setLoading(false);
-        return;
-      }
-
-      // Exécuter la transaction
-      let result;
-      if (activeTab === 'epargne') {
-        result = await transactionService.enregistrerEpargne(transactionData);
-      } else {
-        result = await transactionService.effectuerRetrait(transactionData);
-      }
-
-      // Succès
-      triggerHaptic('success');
-      resetForm();
-      
-      Alert.alert(
-        'Succès ! 🎉',
-        `${operationType} de ${formatCurrency(transactionData.montant)} FCFA effectuée avec succès pour ${selectedClient.displayName || selectedClient.nom + ' ' + selectedClient.prenom}`,
-        [
-          { 
-            text: 'Voir Journal', 
-            onPress: () => navigation.navigate('Journal'),
-            style: 'default'
-          },
-          { 
-            text: 'Nouvelle transaction', 
-            onPress: () => {},
-            style: 'cancel'
-          }
-        ]
-      );
-
-    } catch (err) {
-      console.error('Erreur exécution transaction:', err);
-      setError(err.message || 'Erreur lors de l\'exécution de la transaction');
-      triggerHaptic('error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ========================================
-  // 📞 GESTIONNAIRES MODAL TÉLÉPHONE
-  // ========================================
-
-  const handleAddPhone = (client) => {
-    // Naviguer vers l'édition du client
-    navigation.navigate('EditClient', { clientId: client.id });
-  };
-
-  const handleContinueWithoutPhone = async () => {
-    if (pendingTransaction) {
-      await executeTransaction(pendingTransaction);
-      setPendingTransaction(null);
-    }
+  // Gestion modal téléphone
+  const handlePhoneModalContinue = () => {
     setShowPhoneModal(false);
+    handleSubmitOperation();
   };
 
-  // ========================================
-  // 🎨 COMPOSANTS DE RENDU
-  // ========================================
+  const handlePhoneModalEdit = () => {
+    setShowPhoneModal(false);
+    if (selectedClient) {
+      navigation.navigate('EditClient', { clientId: selectedClient.id });
+    }
+  };
 
-  const renderTabs = () => (
-    <View style={styles.tabContainer}>
-      <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'epargne' && styles.activeTab
-        ]}
-        onPress={() => handleTabChange('epargne')}
-      >
-        <Ionicons 
-          name="arrow-down-circle" 
-          size={20} 
-          color={activeTab === 'epargne' ? theme.colors.primary : theme.colors.gray} 
-        />
-        <Text
-          style={[
-            styles.tabText,
-            activeTab === 'epargne' && styles.activeTabText
-          ]}
-        >
-          Épargne
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity
-        style={[
-          styles.tab,
-          activeTab === 'retrait' && styles.activeTab
-        ]}
-        onPress={() => handleTabChange('retrait')}
-      >
-        <Ionicons 
-          name="arrow-up-circle" 
-          size={20} 
-          color={activeTab === 'retrait' ? theme.colors.primary : theme.colors.gray} 
-        />
-        <Text
-          style={[
-            styles.tabText,
-            activeTab === 'retrait' && styles.activeTabText
-          ]}
-        >
-          Retrait
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderValidationSummary = () => {
-    if (!validationResult || !selectedClient) return null;
-
+  // Modal de vérification téléphone
+  const renderPhoneModal = () => {
+    if (!validationData) return null;
+    
     return (
-      <View style={styles.validationContainer}>
-        <View style={styles.validationHeader}>
-          <Ionicons 
-            name={validationResult.canProceed ? "checkmark-circle" : "alert-circle"} 
-            size={20} 
-            color={validationResult.canProceed ? theme.colors.success : theme.colors.error} 
-          />
-          <Text style={styles.validationTitle}>
-            État de la validation
-          </Text>
+      <Modal
+        visible={showPhoneModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowPhoneModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="call-outline" size={24} color={theme.colors.warning} />
+              <Text style={styles.modalTitle}>Téléphone manquant</Text>
+            </View>
+            
+            <Text style={styles.modalText}>
+              Le client <Text style={styles.modalClientName}>{validationData.clientName}</Text> 
+              {' '}n'a pas de numéro de téléphone renseigné.
+            </Text>
+            
+            <Text style={styles.modalSubText}>
+              Voulez-vous continuer l'opération ou ajouter le numéro de téléphone ?
+            </Text>
+            
+            <View style={styles.modalActions}>
+              <Button
+                title="Ajouter téléphone"
+                onPress={handlePhoneModalEdit}
+                variant="outline"
+                style={styles.modalButton}
+              />
+              <Button
+                title="Continuer"
+                onPress={handlePhoneModalContinue}
+                style={styles.modalButton}
+              />
+            </View>
+          </View>
         </View>
-        
-        {validationResult.canProceed && (
-          <Text style={styles.validationSuccess}>
-            ✅ Transaction autorisée
-          </Text>
-        )}
-        
-        {!validationResult.hasValidPhone && (
-          <Text style={styles.validationWarning}>
-            ⚠️ Client sans numéro de téléphone
-          </Text>
-        )}
-        
-        {validationResult.soldeCollecteurMessage && (
-          <Text style={styles.validationError}>
-            ❌ {validationResult.soldeCollecteurMessage}
-          </Text>
-        )}
-      </View>
+      </Modal>
     );
   };
 
-  const renderForm = () => (
-    <Card style={styles.formCard}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View>
-          {/* Composant client optimisé */}
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Collecte</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        {/* Sélection type d'opération */}
+        <View style={styles.operationTypeContainer}>
+          <Text style={styles.sectionTitle}>Type d'opération</Text>
+          <View style={styles.operationButtons}>
+            <TouchableOpacity
+              style={[
+                styles.operationButton,
+                operationType === 'epargne' && styles.operationButtonActive
+              ]}
+              onPress={() => setOperationType('epargne')}
+            >
+              <Ionicons
+                name="wallet"
+                size={20}
+                color={operationType === 'epargne' ? theme.colors.white : theme.colors.text}
+              />
+              <Text style={[
+                styles.operationButtonText,
+                operationType === 'epargne' && styles.operationButtonTextActive
+              ]}>
+                Épargne
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[
+                styles.operationButton,
+                operationType === 'retrait' && styles.operationButtonActive
+              ]}
+              onPress={() => setOperationType('retrait')}
+            >
+              <Ionicons
+                name="card"
+                size={20}
+                color={operationType === 'retrait' ? theme.colors.white : theme.colors.text}
+              />
+              <Text style={[
+                styles.operationButtonText,
+                operationType === 'retrait' && styles.operationButtonTextActive
+              ]}>
+                Retrait
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Formulaire */}
+        <View style={styles.form}>
+          {/* Utilisation du composant ClientInput */}
           <ClientInput
             collecteurId={user.id}
             selectedClient={selectedClient}
             onClientSelect={handleClientSelect}
-            onError={handleClientInputError}
-            disabled={loading}
+            onError={handleClientError}
+            disabled={loading || validationLoading}
           />
 
-          {/* Résumé de validation */}
-          {renderValidationSummary()}
-          
           {/* Montant */}
-          <AmountInput
-            label={activeTab === 'epargne' ? "Montant à épargner" : "Montant à retirer"}
-            value={amount}
-            onChangeText={setAmount}
-            error={error}
-            required={true}
-            disabled={loading}
-            suffix="FCFA"
-          />
-          
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>
+              Montant <Text style={styles.required}>*</Text>
+            </Text>
+            <Input
+              placeholder="Montant à épargner/retirer"
+              value={montant}
+              onChangeText={setMontant}
+              keyboardType="numeric"
+              disabled={loading || validationLoading}
+              rightIcon={
+                <Text style={styles.currency}>FCFA</Text>
+              }
+            />
+          </View>
+
           {/* Description */}
-          <Input
-            label="Description (optionnel)"
-            placeholder="Ajouter une description..."
-            value={description}
-            onChangeText={setDescription}
-            multiline={true}
-            disabled={loading}
-          />
-          
-          {/* Bouton de soumission */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Description (optionnel)</Text>
+            <Input
+              placeholder="Description de l'opération"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              disabled={loading || validationLoading}
+            />
+          </View>
+
+          {/* Erreurs */}
+          {error && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {validationError && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="warning" size={20} color={theme.colors.warning} />
+              <Text style={styles.errorText}>{validationError}</Text>
+            </View>
+          )}
+
+          {/* Bouton validation */}
           <Button
-            title={loading ? "Traitement..." : 
-              activeTab === 'epargne' ? "Enregistrer l'épargne" : "Effectuer le retrait"}
-            onPress={validateAndProceedTransaction}
-            loading={loading}
-            disabled={loading || !selectedClient || !amount}
+            title={validationLoading ? 'Validation...' : `Valider ${operationType}`}
+            onPress={handleValidateOperation}
+            disabled={loading || validationLoading || !selectedClient || !montant}
+            loading={validationLoading}
             style={styles.submitButton}
-            icon={activeTab === 'epargne' ? "arrow-down-circle" : "arrow-up-circle"}
           />
         </View>
-      </TouchableWithoutFeedback>
-    </Card>
-  );
-  
-  // ========================================
-  // 🎨 RENDU PRINCIPAL
-  // ========================================
-  
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Header
-        title={activeTab === 'epargne' ? "Collecte d'épargne" : "Retrait d'épargne"}
-        rightComponent={
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Notifications')}
-            style={styles.notificationButton}
-          >
-            <Ionicons name="notifications-outline" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-        }
-      />
-      
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {renderTabs()}
-        {renderForm()}
+
+        {/* Informations supplémentaires */}
+        <View style={styles.infoContainer}>
+          <Text style={styles.infoTitle}>💡 Rappel</Text>
+          <Text style={styles.infoText}>
+            {operationType === 'epargne' 
+              ? 'Vérifiez bien le montant avant de valider l\'épargne.'
+              : 'Assurez-vous d\'avoir suffisamment d\'espèces avant de valider le retrait.'
+            }
+          </Text>
+        </View>
       </ScrollView>
 
-      {/* Modal vérification téléphone */}
-      <PhoneVerificationModal
-        visible={showPhoneModal}
-        client={selectedClient}
-        transactionType={activeTab}
-        onClose={() => {
-          setShowPhoneModal(false);
-          setPendingTransaction(null);
-        }}
-        onAddPhone={handleAddPhone}
-        onContinueWithoutPhone={handleContinueWithoutPhone}
-      />
-    </View>
+      {/* Modal téléphone */}
+      {renderPhoneModal()}
+
+      {/* Loading overlay */}
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>
+            {operationType === 'epargne' ? 'Enregistrement épargne...' : 'Traitement retrait...'}
+          </Text>
+        </View>
+      )}
+    </SafeAreaView>
   );
 };
 
-// ========================================
-// 🎨 STYLES (inchangés)
-// ========================================
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-  },
-  content: {
+  // 🔥 NOUVEAU : Style pour SafeAreaView
+  safeArea: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
   },
-  notificationButton: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: theme.colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  backButton: {
     padding: 8,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    backgroundColor: theme.colors.white,
-    borderRadius: 10,
-    ...theme.shadows.small,
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
   },
-  tab: {
+  placeholder: {
+    width: 40,
+  },
+  operationTypeContainer: {
+    padding: 16,
+    backgroundColor: theme.colors.white,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 16,
+  },
+  operationButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  operationButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 10,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.white,
   },
-  activeTab: {
-    backgroundColor: `${theme.colors.primary}10`,
+  operationButtonActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
-  tabText: {
+  operationButtonText: {
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '500',
-    color: theme.colors.gray,
+    color: theme.colors.text,
   },
-  activeTabText: {
-    color: theme.colors.primary,
-    fontWeight: 'bold',
+  operationButtonTextActive: {
+    color: theme.colors.white,
   },
-  formCard: {
-    padding: 20,
-  },
-  validationContainer: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.primary,
-  },
-  validationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  form: {
+    padding: 16,
+    backgroundColor: theme.colors.white,
     marginBottom: 8,
   },
-  validationTitle: {
-    fontSize: 14,
+  fieldContainer: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
+    marginBottom: 8,
+  },
+  required: {
+    color: theme.colors.error,
+  },
+  currency: {
+    fontSize: 16,
+    color: theme.colors.textLight,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${theme.colors.error}10`,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
     marginLeft: 8,
-  },
-  validationSuccess: {
-    fontSize: 14,
-    color: theme.colors.success,
-    marginBottom: 4,
-  },
-  validationWarning: {
-    fontSize: 14,
-    color: theme.colors.warning,
-    marginBottom: 4,
-  },
-  validationError: {
     fontSize: 14,
     color: theme.colors.error,
-    marginBottom: 4,
+    flex: 1,
   },
   submitButton: {
-    marginTop: 20,
+    marginTop: 16,
+  },
+  infoContainer: {
+    padding: 16,
+    backgroundColor: theme.colors.white,
+    marginBottom: 16,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    lineHeight: 20,
+  },
+  // Styles modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    ...theme.shadows.large,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginLeft: 12,
+  },
+  modalText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  modalClientName: {
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+  },
+  modalSubText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.white,
+    textAlign: 'center',
   },
 });
 
