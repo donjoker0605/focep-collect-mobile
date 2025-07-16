@@ -36,6 +36,8 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
     numeroCni: '',
     password: '',
     confirmPassword: '',
+    newPassword: '', // 🔥 NOUVEAU: Pour la modification
+    confirmNewPassword: '', // 🔥 NOUVEAU: Pour la modification
     montantMaxRetrait: '100000',
     active: true,
   });
@@ -49,6 +51,9 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
     montantMinimum: '',
     montantMaximum: '',
   });
+
+  // 🔥 NOUVEAU: État pour le changement de mot de passe en mode édition
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -66,6 +71,8 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
         active: existingCollecteur.active ?? true,
         password: '',
         confirmPassword: '',
+        newPassword: '', // 🔥 NOUVEAU
+        confirmNewPassword: '', // 🔥 NOUVEAU
       });
     }
   }, [isEditMode, existingCollecteur]);
@@ -96,8 +103,9 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
       }
     }
 
-    // Validation mot de passe (uniquement en création)
+    // 🔥 CORRECTION: Validation mot de passe selon le mode
     if (!isEditMode) {
+      // CRÉATION: Mot de passe obligatoire
       if (!formData.password) {
         newErrors.password = 'Le mot de passe est obligatoire';
       } else if (formData.password.length < 6) {
@@ -105,6 +113,18 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
       }
       if (formData.password !== formData.confirmPassword) {
         newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+      }
+    } else {
+      // MODIFICATION: Nouveau mot de passe optionnel mais si fourni, doit être valide
+      if (showPasswordChange) {
+        if (!formData.newPassword) {
+          newErrors.newPassword = 'Le nouveau mot de passe est obligatoire';
+        } else if (formData.newPassword.length < 6) {
+          newErrors.newPassword = 'Le mot de passe doit avoir au moins 6 caractères';
+        }
+        if (formData.newPassword !== formData.confirmNewPassword) {
+          newErrors.confirmNewPassword = 'Les mots de passe ne correspondent pas';
+        }
       }
     }
 
@@ -132,11 +152,14 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
       return;
     }
 
+    const actionText = isEditMode ? 'Enregistrer les modifications' : `Créer le collecteur ${formData.prenom} ${formData.nom}`;
+    const confirmText = showPasswordChange && isEditMode ? 
+      'Voulez-vous enregistrer les modifications (y compris le nouveau mot de passe) ?' :
+      isEditMode ? 'Voulez-vous enregistrer les modifications ?' : actionText + ' ?';
+
     Alert.alert(
       isEditMode ? 'Confirmation' : 'Créer un collecteur',
-      isEditMode 
-        ? 'Voulez-vous enregistrer les modifications ?'
-        : `Créer le collecteur ${formData.prenom} ${formData.nom} ?`,
+      confirmText,
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Confirmer', onPress: executeSubmit }
@@ -148,74 +171,151 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
     try {
       setLoading(true);
 
-      // Préparer les données
-      const submitData = {
-        nom: formData.nom.trim(),
-        prenom: formData.prenom.trim(),
-        adresseMail: formData.adresseMail.trim().toLowerCase(),
-        telephone: formData.telephone.trim(),
-        numeroCni: formData.numeroCni.trim(),
-        montantMaxRetrait: parseFloat(formData.montantMaxRetrait),
-        active: formData.active,
-        // NE PAS envoyer l'agenceId - elle sera assignée automatiquement côté backend
-      };
-
-      // Ajouter le mot de passe uniquement en création
-      if (!isEditMode) {
-        submitData.password = formData.password;
-      }
-
-      let response;
       if (isEditMode) {
-        response = await collecteurService.updateCollecteur(existingCollecteur.id, submitData);
-      } else {
-        response = await collecteurService.createCollecteur(submitData);
-      }
+        // 🔥 CORRECTION: Mode modification
+        const updateData = {
+          nom: formData.nom.trim(),
+          prenom: formData.prenom.trim(),
+          telephone: formData.telephone.trim(),
+          numeroCni: formData.numeroCni.trim(),
+          montantMaxRetrait: parseFloat(formData.montantMaxRetrait),
+          active: formData.active,
+        };
 
-      if (response.success) {
-        // Si paramètres de commission définis et en mode création
-        if (!isEditMode && defineCommission && response.data?.id) {
-          try {
-            await commissionService.updateCollecteurCommissionParams(response.data.id, {
-              tauxCommission: parseFloat(commissionParams.tauxCommission),
-              typeCalcul: commissionParams.typeCalcul,
-              periodicite: commissionParams.periodicite,
-              montantMinimum: commissionParams.montantMinimum ? parseFloat(commissionParams.montantMinimum) : null,
-              montantMaximum: commissionParams.montantMaximum ? parseFloat(commissionParams.montantMaximum) : null,
-            });
-          } catch (commissionError) {
-            console.error('Erreur lors de la définition des commissions:', commissionError);
-            // Ne pas bloquer la création du collecteur
-          }
+        // 🔥 NOUVEAU: Ajouter le nouveau mot de passe si fourni
+        if (showPasswordChange && formData.newPassword) {
+          updateData.newPassword = formData.newPassword;
         }
 
-        Alert.alert(
-          'Succès',
-          isEditMode 
-            ? 'Collecteur modifié avec succès'
-            : 'Collecteur créé avec succès',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.goBack();
-                // Rafraîchir la liste si nécessaire
-                if (route.params?.onRefresh) {
-                  route.params.onRefresh();
+        const response = await collecteurService.updateCollecteur(existingCollecteur.id, updateData);
+
+        if (response.success) {
+          Alert.alert(
+            'Succès',
+            showPasswordChange ? 
+              'Collecteur et mot de passe modifiés avec succès' : 
+              'Collecteur modifié avec succès',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  navigation.goBack();
+                  if (route.params?.onRefresh) {
+                    route.params.onRefresh();
+                  }
                 }
               }
-            }
-          ]
-        );
+            ]
+          );
+        } else {
+          Alert.alert('Erreur', response.error || 'Une erreur est survenue');
+        }
+
       } else {
-        Alert.alert('Erreur', response.error || 'Une erreur est survenue');
+        // 🔥 CORRECTION: Mode création - S'assurer que le mot de passe est envoyé
+        const submitData = {
+          nom: formData.nom.trim(),
+          prenom: formData.prenom.trim(),
+          adresseMail: formData.adresseMail.trim().toLowerCase(),
+          telephone: formData.telephone.trim(),
+          numeroCni: formData.numeroCni.trim(),
+          password: formData.password, // 🔥 CRITIQUE: Mot de passe obligatoire
+          montantMaxRetrait: parseFloat(formData.montantMaxRetrait),
+          active: formData.active,
+          // NE PAS envoyer l'agenceId - elle sera assignée automatiquement côté backend
+        };
+
+        console.log('🔑 Envoi mot de passe pour création:', !!submitData.password);
+
+        const response = await collecteurService.createCollecteur(submitData);
+
+        if (response.success) {
+          // Si paramètres de commission définis
+          if (defineCommission && response.data?.id) {
+            try {
+              await commissionService.updateCollecteurCommissionParams(response.data.id, {
+                tauxCommission: parseFloat(commissionParams.tauxCommission),
+                typeCalcul: commissionParams.typeCalcul,
+                periodicite: commissionParams.periodicite,
+                montantMinimum: commissionParams.montantMinimum ? parseFloat(commissionParams.montantMinimum) : null,
+                montantMaximum: commissionParams.montantMaximum ? parseFloat(commissionParams.montantMaximum) : null,
+              });
+            } catch (commissionError) {
+              console.error('Erreur lors de la définition des commissions:', commissionError);
+              // Ne pas bloquer la création du collecteur
+            }
+          }
+
+          Alert.alert(
+            'Succès',
+            'Collecteur créé avec succès',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  navigation.goBack();
+                  // Rafraîchir la liste si nécessaire
+                  if (route.params?.onRefresh) {
+                    route.params.onRefresh();
+                  }
+                }
+              }
+            ]
+          );
+        } else {
+          Alert.alert('Erreur', response.error || 'Une erreur est survenue');
+        }
       }
+
     } catch (error) {
       console.error('Erreur lors de la soumission:', error);
       Alert.alert('Erreur', error.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 🔥 NOUVELLE FONCTION: Réinitialisation rapide du mot de passe
+  const handleQuickPasswordReset = () => {
+    Alert.prompt(
+      'Réinitialiser le mot de passe',
+      'Entrez le nouveau mot de passe pour ce collecteur:',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Réinitialiser',
+          onPress: async (newPassword) => {
+            if (!newPassword || newPassword.length < 6) {
+              Alert.alert('Erreur', 'Le mot de passe doit avoir au moins 6 caractères');
+              return;
+            }
+
+            try {
+              setLoading(true);
+              // Utiliser l'endpoint spécialisé pour la réinitialisation
+              const response = await collecteurService.resetPassword(existingCollecteur.id, {
+                newPassword: newPassword
+              });
+
+              if (response.success) {
+                Alert.alert(
+                  'Succès',
+                  `Mot de passe réinitialisé avec succès.\n\nNouveau mot de passe: ${newPassword}\n\nCommuniquez ce mot de passe au collecteur.`
+                );
+              } else {
+                Alert.alert('Erreur', response.error || 'Erreur lors de la réinitialisation');
+              }
+            } catch (error) {
+              console.error('Erreur réinitialisation:', error);
+              Alert.alert('Erreur', error.message || 'Erreur lors de la réinitialisation');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ],
+      'secure-text'
+    );
   };
 
   const handleInputChange = (field, value) => {
@@ -330,6 +430,58 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
               />
             </>
           )}
+
+          {/* 🔥 NOUVEAU: Section mot de passe en mode édition */}
+          {isEditMode && (
+            <>
+              <View style={styles.passwordSection}>
+                <View style={styles.passwordHeader}>
+                  <Text style={styles.passwordTitle}>Gestion du mot de passe</Text>
+                  <TouchableOpacity
+                    style={styles.quickResetButton}
+                    onPress={handleQuickPasswordReset}
+                  >
+                    <Ionicons name="key" size={16} color={theme.colors.white} />
+                    <Text style={styles.quickResetText}>Réinitialiser</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.switchContainer}>
+                  <Text style={styles.switchLabel}>Changer le mot de passe</Text>
+                  <Switch
+                    value={showPasswordChange}
+                    onValueChange={setShowPasswordChange}
+                    trackColor={{ false: theme.colors.lightGray, true: theme.colors.primary }}
+                    thumbColor={showPasswordChange ? theme.colors.white : theme.colors.gray}
+                  />
+                </View>
+
+                {showPasswordChange && (
+                  <>
+                    <Input
+                      label="Nouveau mot de passe"
+                      value={formData.newPassword}
+                      onChangeText={(value) => handleInputChange('newPassword', value)}
+                      error={errors.newPassword}
+                      placeholder="Minimum 6 caractères"
+                      secureTextEntry
+                      required
+                    />
+                    
+                    <Input
+                      label="Confirmer le nouveau mot de passe"
+                      value={formData.confirmNewPassword}
+                      onChangeText={(value) => handleInputChange('confirmNewPassword', value)}
+                      error={errors.confirmNewPassword}
+                      placeholder="Retapez le nouveau mot de passe"
+                      secureTextEntry
+                      required
+                    />
+                  </>
+                )}
+              </View>
+            </>
+          )}
         </Card>
 
         {/* Paramètres du compte */}
@@ -345,7 +497,7 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
                 {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
               </Text>
               <Text style={styles.infoNote}>
-                Assignée automatiquement
+                {isEditMode ? 'Ne peut pas être modifiée' : 'Assignée automatiquement'}
               </Text>
             </View>
           </View>
@@ -454,7 +606,11 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
 
         {/* Bouton de soumission */}
         <Button
-          title={isEditMode ? "Enregistrer les modifications" : "Créer le collecteur"}
+          title={
+            isEditMode 
+              ? (showPasswordChange ? "Enregistrer avec nouveau mot de passe" : "Enregistrer les modifications")
+              : "Créer le collecteur"
+          }
           onPress={handleSubmit}
           loading={loading}
           style={styles.submitButton}
@@ -526,6 +682,38 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 16,
     color: theme.colors.text,
+  },
+  // 🔥 NOUVEAUX STYLES POUR LA GESTION DU MOT DE PASSE
+  passwordSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+  },
+  passwordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  passwordTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  quickResetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.warning,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  quickResetText: {
+    color: theme.colors.white,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   commissionHeader: {
     flexDirection: 'row',

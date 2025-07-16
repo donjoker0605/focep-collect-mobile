@@ -1,4 +1,4 @@
-// src/services/collecteurService.js
+// src/services/collecteurService.js - VERSION CORRIGÉE ET COMPLÈTE
 import BaseApiService from './base/BaseApiService';
 
 class CollecteurService extends BaseApiService {
@@ -43,8 +43,19 @@ class CollecteurService extends BaseApiService {
   async createCollecteur(collecteurData) {
     try {
       console.log('📱 API: POST /collecteurs');
+      console.log('🔑 Données envoyées:', {
+        ...collecteurData,
+        password: collecteurData.password ? '[FOURNI]' : '[MANQUANT]'
+      });
+
+      // 🔥 VALIDATION CRITIQUE: S'assurer que le mot de passe est présent
+      if (!collecteurData.password || collecteurData.password.trim() === '') {
+        throw new Error('Le mot de passe est obligatoire pour créer un collecteur');
+      }
+
       // Ne pas envoyer l'agenceId depuis le frontend - elle sera assignée automatiquement côté backend
       const { agenceId, ...dataToSend } = collecteurData;
+      
       const response = await this.axios.post('/collecteurs', dataToSend);
       return this.formatResponse(response, 'Collecteur créé avec succès');
     } catch (error) {
@@ -55,12 +66,43 @@ class CollecteurService extends BaseApiService {
   async updateCollecteur(collecteurId, collecteurData) {
     try {
       console.log('📱 API: PUT /collecteurs/', collecteurId);
+      console.log('🔑 Données mise à jour:', {
+        ...collecteurData,
+        newPassword: collecteurData.newPassword ? '[FOURNI]' : '[AUCUN]'
+      });
+
       // Ne pas permettre la modification de l'agenceId
       const { agenceId, ...dataToSend } = collecteurData;
+      
       const response = await this.axios.put(`/collecteurs/${collecteurId}`, dataToSend);
       return this.formatResponse(response, 'Collecteur mis à jour');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la mise à jour');
+    }
+  }
+
+  // 🔥 NOUVELLE MÉTHODE: Réinitialisation de mot de passe par l'admin
+  async resetPassword(collecteurId, passwordData) {
+    try {
+      console.log('🔑 API: POST /collecteurs/reset-password/', collecteurId);
+      
+      // Validation des données
+      if (!passwordData.newPassword || passwordData.newPassword.trim() === '') {
+        throw new Error('Le nouveau mot de passe est obligatoire');
+      }
+
+      if (passwordData.newPassword.length < 6) {
+        throw new Error('Le mot de passe doit avoir au moins 6 caractères');
+      }
+
+      const response = await this.axios.post(`/collecteurs/${collecteurId}/reset-password`, {
+        newPassword: passwordData.newPassword,
+        reason: passwordData.reason || 'Réinitialisation par admin'
+      });
+
+      return this.formatResponse(response, 'Mot de passe réinitialisé avec succès');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la réinitialisation du mot de passe');
     }
   }
 
@@ -73,18 +115,6 @@ class CollecteurService extends BaseApiService {
       return this.formatResponse(response, 'Statut modifié');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors du changement de statut');
-    }
-  }
-
-  async searchCollecteurs(searchQuery) {
-    try {
-      console.log('📱 API: GET /collecteurs/search');
-      const response = await this.axios.get('/collecteurs/search', {
-        params: { q: searchQuery }
-      });
-      return this.formatResponse(response, 'Recherche effectuée');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la recherche');
     }
   }
 
@@ -117,6 +147,175 @@ class CollecteurService extends BaseApiService {
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des collecteurs de l\'agence');
     }
+  }
+
+  // 🔥 NOUVELLES MÉTHODES UTILITAIRES
+
+  /**
+   * Génère un mot de passe temporaire sécurisé
+   */
+  generateSecurePassword(length = 8) {
+    const upperCase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowerCase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%&*';
+    
+    const allChars = upperCase + lowerCase + numbers + special;
+    
+    let password = '';
+    // Assurer au moins un caractère de chaque type
+    password += upperCase[Math.floor(Math.random() * upperCase.length)];
+    password += lowerCase[Math.floor(Math.random() * lowerCase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+    
+    // Compléter avec des caractères aléatoires
+    for (let i = 4; i < length; i++) {
+      password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    
+    // Mélanger les caractères
+    return password.split('').sort(() => Math.random() - 0.5).join('');
+  }
+
+  /**
+   * Valide un mot de passe selon les critères de sécurité
+   */
+  validatePassword(password) {
+    const errors = [];
+    
+    if (!password || password.length < 6) {
+      errors.push('Le mot de passe doit avoir au moins 6 caractères');
+    }
+    
+    if (password && password.length > 128) {
+      errors.push('Le mot de passe ne peut pas dépasser 128 caractères');
+    }
+    
+    if (password && !/[a-zA-Z]/.test(password)) {
+      errors.push('Le mot de passe doit contenir au moins une lettre');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  /**
+   * Propose un mot de passe sécurisé à l'utilisateur
+   */
+  suggestSecurePassword() {
+    const suggestions = [
+      this.generateSecurePassword(8),
+      this.generateSecurePassword(10),
+      this.generateSecurePassword(12)
+    ];
+    
+    return suggestions;
+  }
+
+  // 🔥 MÉTHODES DE DIAGNOSTIC ET TEST
+
+  /**
+   * Test de création d'un collecteur avec toutes les validations
+   */
+  async testCollecteurCreation(testData = null) {
+    const defaultTestData = {
+      nom: 'Test',
+      prenom: 'Collecteur',
+      adresseMail: `test.collecteur.${Date.now()}@collectfocep.com`,
+      telephone: '600000000',
+      numeroCni: '1234567890123',
+      password: this.generateSecurePassword(),
+      montantMaxRetrait: 100000,
+      active: true
+    };
+
+    const dataToTest = testData || defaultTestData;
+    
+    console.log('🧪 Test création collecteur avec données:', {
+      ...dataToTest,
+      password: '[GÉNÉRÉ AUTOMATIQUEMENT]'
+    });
+
+    try {
+      const result = await this.createCollecteur(dataToTest);
+      console.log('✅ Test création réussi:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Test création échoué:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Test de réinitialisation de mot de passe
+   */
+  async testPasswordReset(collecteurId) {
+    const newPassword = this.generateSecurePassword();
+    
+    console.log('🧪 Test réinitialisation mot de passe pour collecteur:', collecteurId);
+    
+    try {
+      const result = await this.resetPassword(collecteurId, {
+        newPassword,
+        reason: 'Test automatique'
+      });
+      
+      console.log('✅ Test réinitialisation réussi. Nouveau mot de passe:', newPassword);
+      return { ...result, newPassword };
+    } catch (error) {
+      console.error('❌ Test réinitialisation échoué:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Diagnostic complet du service collecteur
+   */
+  async diagnoseService() {
+    console.log('🔍 Diagnostic du service collecteur...');
+    
+    const diagnostics = {
+      connectivity: false,
+      authentication: false,
+      permissions: false,
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      // Test de connectivité
+      const connectivityTest = await this.axios.get('/collecteurs', { 
+        params: { page: 0, size: 1 } 
+      });
+      diagnostics.connectivity = connectivityTest.status === 200;
+      console.log('✅ Connectivité API OK');
+
+      if (diagnostics.connectivity) {
+        // Test des permissions
+        try {
+          const permissionTest = await this.axios.get('/collecteurs/1');
+          diagnostics.permissions = true;
+          console.log('✅ Permissions OK');
+        } catch (permError) {
+          if (permError.response?.status === 403) {
+            diagnostics.permissions = false;
+            console.log('❌ Permissions insuffisantes');
+          } else if (permError.response?.status === 404) {
+            diagnostics.permissions = true; // 404 signifie que l'API fonctionne
+            console.log('✅ Permissions OK (collecteur inexistant)');
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Diagnostic échoué:', error);
+      diagnostics.error = error.message;
+    }
+
+    console.log('📊 Résultats diagnostic:', diagnostics);
+    return diagnostics;
   }
 }
 
