@@ -14,16 +14,33 @@ class TransactionService extends BaseApiService {
    */
   async validateEpargne(clientId, collecteurId, montant, description = '') {
     try {
-      console.log('📋 Validation épargne:', { clientId, collecteurId, montant });
+      console.log('📋 Validation épargne complète:', { clientId, collecteurId, montant });
       
-      const response = await this.axios.post('/mouvements/validate/epargne', {
+      const response = await this.axios.post('/transactions/validate/epargne', {
         clientId,
         collecteurId,
         montant: parseFloat(montant),
         description
       });
 
-      return this.formatResponse(response, 'Validation épargne');
+      const result = this.formatResponse(response, 'Validation épargne');
+      
+      // Enrichir avec validation client si disponible
+      if (result.success && result.data.clientId) {
+        try {
+          const clientValidation = await this.checkClientPhoneStatus(result.data.clientId);
+          if (clientValidation.success) {
+            result.data.hasValidPhone = clientValidation.data;
+            if (!clientValidation.data) {
+              result.data.phoneWarningMessage = 'Ce client n\'a pas de numéro de téléphone renseigné';
+            }
+          }
+        } catch (phoneError) {
+          console.warn('⚠️ Impossible de vérifier le téléphone:', phoneError.message);
+        }
+      }
+
+      return result;
 
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la validation de l\'épargne');
@@ -50,7 +67,7 @@ class TransactionService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la validation du retrait');
     }
   }
-
+  
   /**
    * Vérification statut téléphone client
    */
@@ -58,7 +75,7 @@ class TransactionService extends BaseApiService {
     try {
       console.log('📞 Vérification téléphone client:', clientId);
       
-      const response = await this.axios.get(`/mouvements/client/${clientId}/phone-status`);
+      const response = await this.axios.get(`/transactions/client/${clientId}/phone-status`);
       return this.formatResponse(response, 'Vérification téléphone');
 
     } catch (error) {
@@ -66,9 +83,8 @@ class TransactionService extends BaseApiService {
     }
   }
 
-
   /**
-   * Recherche clients avec debounce côté service
+   * 🔍 AMÉLIORÉ : Recherche intelligente avec cache optimisé
    */
   async searchClients(collecteurId, query, limit = 10) {
     try {
@@ -87,13 +103,14 @@ class TransactionService extends BaseApiService {
         }
       }
 
-      console.log('🔍 API: Recherche clients:', { collecteurId, query, limit });
+      console.log('🔍 API: Recherche clients intelligente:', { collecteurId, query, limit });
       
-      const response = await this.axios.get('/mouvements/client/search', {
-        params: { collecteurId, query: query.trim(), limit }
+      // Utiliser la recherche unifiée
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}/search-unified`, {
+        params: { query: query.trim(), limit }
       });
 
-      const result = this.formatResponse(response, 'Recherche effectuée');
+      const result = this.formatResponse(response, 'Recherche intelligente effectuée');
       
       // Mettre en cache
       this.searchCache.set(cacheKey, {
@@ -104,12 +121,32 @@ class TransactionService extends BaseApiService {
       return result;
 
     } catch (error) {
+      // Fallback vers ancienne méthode
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers recherche classique');
+        return this.searchClientsClassic(collecteurId, query, limit);
+      }
       throw this.handleError(error, 'Erreur lors de la recherche des clients');
     }
   }
+  
+  /**
+   *  Méthode de recherche classique (fallback)
+   */
+  async searchClientsClassic(collecteurId, query, limit = 10) {
+    try {
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}/search`, {
+        params: { query: query.trim(), limit }
+      });
+      return this.formatResponse(response, 'Recherche classique effectuée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la recherche classique');
+    }
+  }
+  
 
   /**
-   * 🔍 NOUVEAU : Recherche client par numéro de compte
+   * Recherche client par numéro de compte
    */
   async searchByAccountNumber(collecteurId, accountNumber) {
     try {
@@ -119,8 +156,8 @@ class TransactionService extends BaseApiService {
 
       console.log('🔍 API: Recherche par compte:', { collecteurId, accountNumber });
       
-      const response = await this.axios.get('/mouvements/client/search-by-account', {
-        params: { collecteurId, accountNumber: accountNumber.trim() }
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}/search-by-account`, {
+        params: { accountNumber: accountNumber.trim() }
       });
 
       return this.formatResponse(response, 'Recherche par compte effectuée');
@@ -133,36 +170,27 @@ class TransactionService extends BaseApiService {
   /**
    * Enregistrer une épargne avec validation complète
    */
-  async enregistrerEpargne(data) {
+  async enregistrerEpargne(transactionData) {
     try {
-      console.log('💰 Enregistrement épargne avec validation:', data);
+      console.log('💰 Enregistrement épargne:', transactionData);
 
-      // 1. ✅ VALIDATION PRÉALABLE (optionnelle pour compatibilité)
-      if (data.preValidate !== false) {
-        const validation = await this.validateEpargne(
-          data.clientId,
-          data.collecteurId,
-          data.montant,
-          data.description
-        );
+      // 1. Validation préalable
+      const validation = await this.validateEpargne(
+        transactionData.clientId,
+        transactionData.collecteurId,
+        transactionData.montant,
+        transactionData.description
+      );
 
-        if (!validation.data.canProceed) {
-          throw new Error(validation.data.errorMessage || 'Validation échouée');
-        }
-
-        // Log warning pour téléphone si nécessaire
-        if (!validation.data.hasValidPhone) {
-          console.warn('⚠️ Client sans téléphone:', validation.data.phoneWarningMessage);
-        }
+      if (!validation.data.canProceed) {
+        throw new Error(validation.data.errorMessage || 'Validation échouée');
       }
 
-      // 2. Procéder à l'épargne
-      console.log('💰 API: POST /mouvements/epargne', data);
-      const response = await this.axios.post('/mouvements/epargne', data);
+      // 2. Si validation OK, procéder à l'épargne
+      const response = await this.axios.post('/transactions/epargne', transactionData);
       return this.formatResponse(response, 'Épargne enregistrée avec succès');
 
     } catch (error) {
-      console.error('❌ Erreur enregistrement épargne:', error);
       throw this.handleError(error, 'Erreur lors de l\'enregistrement de l\'épargne');
     }
   }
@@ -170,36 +198,27 @@ class TransactionService extends BaseApiService {
   /**
    * Effectuer un retrait avec validation complète
    */
-  async effectuerRetrait(data) {
+  async effectuerRetrait(transactionData) {
     try {
-      console.log('🏧 Effectuer retrait avec validation:', data);
+      console.log('💰 Effectuer retrait:', transactionData);
 
-      // 1. ✅ VALIDATION PRÉALABLE (optionnelle pour compatibilité)
-      if (data.preValidate !== false) {
-        const validation = await this.validateRetrait(
-          data.clientId,
-          data.collecteurId,
-          data.montant,
-          data.description
-        );
+      // 1. Validation préalable
+      const validation = await this.validateRetrait(
+        transactionData.clientId,
+        transactionData.collecteurId,
+        transactionData.montant,
+        transactionData.description
+      );
 
-        if (!validation.data.canProceed) {
-          throw new Error(validation.data.errorMessage || 'Validation échouée');
-        }
-
-        // Log warning pour téléphone si nécessaire
-        if (!validation.data.hasValidPhone) {
-          console.warn('⚠️ Client sans téléphone:', validation.data.phoneWarningMessage);
-        }
+      if (!validation.data.canProceed) {
+        throw new Error(validation.data.errorMessage || 'Validation échouée');
       }
 
-      // 2. Procéder au retrait
-      console.log('🏧 API: POST /mouvements/retrait', data);
-      const response = await this.axios.post('/mouvements/retrait', data);
+      // 2. Si validation OK, procéder au retrait
+      const response = await this.axios.post('/transactions/retrait', transactionData);
       return this.formatResponse(response, 'Retrait effectué avec succès');
 
     } catch (error) {
-      console.error('❌ Erreur effectuation retrait:', error);
       throw this.handleError(error, 'Erreur lors du retrait');
     }
   }
@@ -297,6 +316,105 @@ class TransactionService extends BaseApiService {
     } catch (error) {
       console.error('❌ Erreur récupération opérations du jour:', error);
       throw this.handleError(error, 'Erreur lors de la récupération des opérations du jour');
+    }
+  }
+  
+  /**
+   * Validation complète client avec données complémentaires
+   */
+  async validateClientData(collecteurId, accountNumber, clientName = null) {
+    try {
+      console.log('📋 Validation données client:', { collecteurId, accountNumber });
+      
+      const response = await this.axios.post('/clients/validate-client-data', {
+        collecteurId,
+        accountNumber: accountNumber.trim(),
+        clientName
+      });
+
+      return this.formatResponse(response, 'Validation client effectuée');
+
+    } catch (error) {
+      // Fallback vers validation manuelle si endpoint pas disponible
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers validation manuelle');
+        return this.fallbackValidateClient(collecteurId, accountNumber);
+      }
+      throw this.handleError(error, 'Erreur lors de la validation du client');
+    }
+  }
+
+  /**
+   * Recherche client par numéro de compte exact
+   */
+  async findClientByAccount(collecteurId, accountNumber) {
+    try {
+      console.log('🔍 Recherche client par compte:', { collecteurId, accountNumber });
+      
+      const response = await this.axios.get(
+        `/clients/collecteur/${collecteurId}/by-account/${encodeURIComponent(accountNumber.trim())}`
+      );
+      
+      return this.formatResponse(response, 'Client trouvé par compte');
+
+    } catch (error) {
+      // Fallback vers recherche manuelle
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers recherche manuelle par compte');
+        return this.fallbackFindByAccount(collecteurId, accountNumber);
+      }
+      throw this.handleError(error, 'Erreur lors de la recherche par compte');
+    }
+  }
+  
+  /**
+   * Validation manuelle client (fallback)
+   */
+  async fallbackValidateClient(collecteurId, accountNumber) {
+    try {
+      const clientResponse = await this.fallbackFindByAccount(collecteurId, accountNumber);
+      
+      if (clientResponse.data) {
+        const client = clientResponse.data;
+        return this.formatResponse({
+          data: {
+            clientFound: true,
+            clientId: client.id,
+            clientName: client.displayName,
+            accountNumber: client.numeroCompte,
+            hasValidPhone: client.hasPhone,
+            phoneWarning: client.hasPhone ? null : 'Pas de téléphone renseigné'
+          }
+        }, 'Validation manuelle effectuée');
+      } else {
+        return this.formatResponse({
+          data: {
+            clientFound: false,
+            errorMessage: 'Aucun client trouvé avec ce numéro de compte'
+          }
+        }, 'Client non trouvé');
+      }
+    } catch (error) {
+      throw this.handleError(error, 'Erreur validation manuelle');
+    }
+  }
+
+  /**
+   * Recherche manuelle par compte (fallback)
+   */
+  async fallbackFindByAccount(collecteurId, accountNumber) {
+    try {
+      // Utiliser l'ancien endpoint de recherche générale
+      const searchResponse = await this.searchClients(collecteurId, accountNumber, 20);
+      
+      if (searchResponse.success && searchResponse.data) {
+        const client = searchResponse.data.find(c => c.numeroCompte === accountNumber.trim());
+        return this.formatResponse({ data: client || null }, 'Recherche manuelle par compte');
+      }
+      
+      return this.formatResponse({ data: null }, 'Client non trouvé');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur recherche manuelle par compte');
     }
   }
 

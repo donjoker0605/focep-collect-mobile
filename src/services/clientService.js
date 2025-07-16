@@ -530,6 +530,249 @@ class ClientService extends BaseApiService {
   }
   
   /**
+   * 🔍 Recherche unifiée (nom + numéro de compte) avec priorité intelligente
+   */
+  async searchUnified(collecteurId, query, limit = 10) {
+    try {
+      console.log('🔍 API: Recherche unifiée:', { collecteurId, query, limit });
+      
+      if (!query || query.trim().length < 2) {
+        return this.formatResponse({ data: [] }, 'Requête trop courte');
+      }
+      
+      const params = { query: query.trim(), limit };
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}/search-unified`, { params });
+      return this.formatResponse(response, 'Recherche unifiée effectuée');
+      
+    } catch (error) {
+      // Fallback vers recherche normale si endpoint pas encore déployé
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers recherche optimisée');
+        return this.searchClientsOptimized(collecteurId, query, limit);
+      }
+      throw this.handleError(error, 'Erreur lors de la recherche unifiée');
+    }
+  }
+
+  /**
+   * 🔍 Recherche client par numéro de compte exact
+   */
+  async findByAccountNumber(collecteurId, accountNumber) {
+    try {
+      console.log('🔍 API: Recherche par compte exact:', { collecteurId, accountNumber });
+      
+      if (!accountNumber || accountNumber.trim().length < 3) {
+        return this.formatResponse({ data: null }, 'Numéro trop court');
+      }
+      
+      const response = await this.axios.get(
+        `/clients/collecteur/${collecteurId}/by-account/${encodeURIComponent(accountNumber.trim())}`
+      );
+      return this.formatResponse(response, 'Client trouvé par numéro de compte');
+      
+    } catch (error) {
+      // Fallback vers recherche manuelle
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers recherche manuelle par compte');
+        return this.fallbackFindByAccount(collecteurId, accountNumber);
+      }
+      throw this.handleError(error, 'Erreur lors de la recherche par compte');
+    }
+  }
+
+  /**
+   * 🔍 Suggestions numéros de compte pour autocomplete
+   */
+  async suggestAccountNumbers(collecteurId, partial, limit = 5) {
+    try {
+      console.log('🔍 API: Suggestions comptes:', { collecteurId, partial, limit });
+      
+      if (!partial || partial.trim().length < 2) {
+        return this.formatResponse({ data: [] }, 'Requête trop courte');
+      }
+      
+      const params = { partial: partial.trim(), limit };
+      const response = await this.axios.get(
+        `/clients/collecteur/${collecteurId}/accounts/suggest`, 
+        { params }
+      );
+      return this.formatResponse(response, 'Suggestions générées');
+      
+    } catch (error) {
+      // Fallback vers extraction depuis tous les clients
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers suggestions manuelles');
+        return this.fallbackSuggestAccounts(collecteurId, partial, limit);
+      }
+      throw this.handleError(error, 'Erreur lors des suggestions');
+    }
+  }
+
+  /**
+   * 📋 Validation complète données client (compte + téléphone)
+   */
+  async validateClientData(collecteurId, accountNumber, clientName = null) {
+    try {
+      console.log('📋 API: Validation données client:', { collecteurId, accountNumber });
+      
+      const requestData = {
+        collecteurId,
+        accountNumber: accountNumber.trim(),
+        clientName
+      };
+      
+      const response = await this.axios.post('/clients/validate-client-data', requestData);
+      return this.formatResponse(response, 'Validation effectuée');
+      
+    } catch (error) {
+      // Fallback vers validation manuelle
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers validation manuelle');
+        return this.fallbackValidateClient(collecteurId, accountNumber);
+      }
+      throw this.handleError(error, 'Erreur lors de la validation');
+    }
+  }
+
+  // ========================================
+  // MÉTHODES FALLBACK (compatibilité)
+  // ========================================
+
+  /**
+   * Fallback : recherche manuelle par numéro de compte
+   */
+  async fallbackFindByAccount(collecteurId, accountNumber) {
+    try {
+      const allClients = await this.getClientsByCollecteur(collecteurId, { size: 1000 });
+      
+      if (allClients.success && allClients.data) {
+        const clients = Array.isArray(allClients.data) ? allClients.data : [];
+        const client = clients.find(c => c.numeroCompte === accountNumber.trim());
+        
+        if (client) {
+          const formatted = this.formatClientForSearch(client);
+          return this.formatResponse({ data: formatted }, 'Client trouvé (fallback)');
+        }
+      }
+      
+      return this.formatResponse({ data: null }, 'Client non trouvé');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur fallback recherche par compte');
+    }
+  }
+
+  /**
+   * Fallback : suggestions manuelles de numéros de compte
+   */
+  async fallbackSuggestAccounts(collecteurId, partial, limit) {
+    try {
+      const allClients = await this.getClientsByCollecteur(collecteurId, { size: 1000 });
+      
+      if (allClients.success && allClients.data) {
+        const clients = Array.isArray(allClients.data) ? allClients.data : [];
+        const suggestions = clients
+          .filter(c => c.numeroCompte && c.numeroCompte.includes(partial))
+          .map(c => c.numeroCompte)
+          .slice(0, limit);
+        
+        return this.formatResponse({ data: suggestions }, 'Suggestions générées (fallback)');
+      }
+      
+      return this.formatResponse({ data: [] }, 'Aucune suggestion');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur fallback suggestions');
+    }
+  }
+
+  /**
+   * Fallback : validation manuelle des données client
+   */
+  async fallbackValidateClient(collecteurId, accountNumber) {
+    try {
+      const clientResponse = await this.fallbackFindByAccount(collecteurId, accountNumber);
+      
+      if (clientResponse.data) {
+        const client = clientResponse.data;
+        return this.formatResponse({
+          data: {
+            clientFound: true,
+            clientId: client.id,
+            clientName: client.displayName,
+            accountNumber: client.numeroCompte,
+            hasValidPhone: client.hasPhone,
+            phoneWarning: client.hasPhone ? null : 'Pas de téléphone renseigné',
+            displayName: client.displayName,
+            numeroCni: client.numeroCni
+          }
+        }, 'Validation manuelle effectuée');
+      } else {
+        return this.formatResponse({
+          data: {
+            clientFound: false,
+            errorMessage: 'Aucun client trouvé avec ce numéro de compte'
+          }
+        }, 'Client non trouvé');
+      }
+    } catch (error) {
+      throw this.handleError(error, 'Erreur validation manuelle');
+    }
+  }
+
+  // ========================================
+  // 🔧 UTILITAIRES AMÉLIORÉS
+  // ========================================
+
+  /**
+   * Détection automatique du type de recherche (nom vs numéro)
+   */
+  detectSearchType(query) {
+    if (!query) return 'unknown';
+    
+    const trimmed = query.trim();
+    
+    // Si contient que des chiffres et tirets/points, probablement un numéro de compte
+    if (/^[0-9\-\.]+$/.test(trimmed)) {
+      return 'account';
+    }
+    
+    // Si commence par des lettres, probablement un nom
+    if (/^[a-zA-ZÀ-ÿ]/.test(trimmed)) {
+      return 'name';
+    }
+    
+    // Mixte ou inconnu
+    return 'mixed';
+  }
+
+  /**
+   * Recherche intelligente avec détection automatique
+   */
+  async smartSearch(collecteurId, query, limit = 10) {
+    const searchType = this.detectSearchType(query);
+    
+    console.log('🧠 Recherche intelligente:', { query, searchType });
+    
+    switch (searchType) {
+      case 'account':
+        // Recherche prioritaire par numéro de compte
+        const accountResult = await this.findByAccountNumber(collecteurId, query);
+        if (accountResult.data) {
+          return this.formatResponse({ data: [accountResult.data] }, 'Trouvé par numéro');
+        }
+        // Fallback vers recherche unifiée
+        return this.searchUnified(collecteurId, query, limit);
+        
+      case 'name':
+        // Recherche prioritaire par nom
+        return this.searchUnified(collecteurId, query, limit);
+        
+      default:
+        // Recherche unifiée pour les cas mixtes
+        return this.searchUnified(collecteurId, query, limit);
+    }
+  }
+  
+  /**
    * MÉTHODE MANQUANTE - Validation locale des données client
    * @param {Object} clientData - Données du client à valider
    */

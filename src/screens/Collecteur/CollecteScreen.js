@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// screens/Collecteur/CollecteScreen.js - VERSION FINALE PRODUCTION
+
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -15,26 +17,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
-// ✅ IMPORTS CORRIGÉS - Plus de duplication
-import { 
-  transactionService,
-  clientService 
-} from '../../services'; // Import depuis l'index
+// Services optimisés
+import transactionService from '../../services/transactionService';
 
 // Components
 import { 
   Header, 
   Card, 
   Button, 
-  EmptyState, 
   AmountInput,
-  SelectInput,
   Input
 } from '../../components';
 
+// Nouveau composant optimisé
+import ClientInput from '../../components/ClientInput/ClientInput';
+import PhoneVerificationModal from '../../components/PhoneVerificationModal';
+
 // Hooks
 import { useAuth } from '../../hooks/useAuth';
-import { useOfflineSync } from '../../hooks/useOfflineSync';
 
 // Theme et utils
 import theme from '../../theme';
@@ -60,189 +60,29 @@ const CollecteScreen = ({ navigation, route }) => {
   // Récupérer les paramètres de route
   const { selectedTab = 'epargne', preSelectedClient } = route.params || {};
   
-  // États
+  // ========================================
+  // 🔄 ÉTATS PRINCIPAUX
+  // ========================================
+  
   const [activeTab, setActiveTab] = useState(selectedTab);
-  const [loading, setLoading] = useState(false);
-  const [clientsLoading, setClientsLoading] = useState(true);
-  const [clients, setClients] = useState([]);
   const [selectedClient, setSelectedClient] = useState(preSelectedClient || null);
-  const [clientInfo, setClientInfo] = useState(null);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [balanceChecking, setBalanceChecking] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // ✅ NOUVEAUX ÉTATS pour les champs complémentaires
-  const [clientName, setClientName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [filteredClients, setFilteredClients] = useState([]);
-  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
-  const [clientFieldError, setClientFieldError] = useState(null);
-  const [accountFieldError, setAccountFieldError] = useState(null);
+  // ========================================
+  // 📞 ÉTATS VÉRIFICATION TÉLÉPHONE
+  // ========================================
   
-  // Charger la liste des clients
-  const loadClients = useCallback(async (showRefreshing = false) => {
-    try {
-      if (showRefreshing) setRefreshing(true);
-      else setClientsLoading(true);
-      
-      const response = await clientService.getClientsByCollecteur(user.id);
-      console.log('API full response:', response);
-      
-      if (!response || !response.data) {
-        throw new Error('Réponse API invalide');
-      }
-      
-      // Formatage des données selon la structure réçue
-      const clientsArray = Array.isArray(response.data) 
-        ? response.data 
-        : Object.values(response.data);
-      
-      const formattedClients = clientsArray.map(client => ({
-        value: client.id || client._id,
-        label: `${client.nom || ''} ${client.prenom || ''}`.trim(),
-        data: client
-      }));
-      
-      setClients(formattedClients);
-      setFilteredClients(formattedClients);
-      
-    } catch (error) {
-      console.error('Erreur détaillée:', error.response || error);
-      Alert.alert(
-        'Erreur',
-        error.message || 'Impossible de charger les clients'
-      );
-      setClients([]);
-      setFilteredClients([]);
-    } finally {
-      setClientsLoading(false);
-      setRefreshing(false);
-    }
-  }, [user.id]);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+  const [validationResult, setValidationResult] = useState(null);
 
-  // ✅ NOUVELLE FONCTION - Recherche semi-automatique des clients
-  const handleClientNameChange = (text) => {
-    setClientName(text);
-    setClientFieldError(null);
-    
-    if (text.length > 0) {
-      // Filtrer les clients selon le nom/prénom
-      const filtered = clients.filter(client => 
-        client.label.toLowerCase().includes(text.toLowerCase())
-      );
-      setFilteredClients(filtered);
-      setShowClientSuggestions(true);
-      
-      // Si le texte correspond exactement à un client, le sélectionner automatiquement
-      const exactMatch = clients.find(client => 
-        client.label.toLowerCase() === text.toLowerCase()
-      );
-      
-      if (exactMatch) {
-        setSelectedClient(exactMatch.value);
-        setClientInfo(exactMatch.data);
-        setAccountNumber(exactMatch.data.numerCompte || '');
-        setShowClientSuggestions(false);
-      } else {
-        // Réinitialiser si aucune correspondance exacte
-        setSelectedClient(null);
-        setClientInfo(null);
-        if (!accountNumber) { // Ne pas effacer si l'utilisateur tape manuellement
-          setAccountNumber('');
-        }
-      }
-    } else {
-      setFilteredClients(clients);
-      setShowClientSuggestions(false);
-      setSelectedClient(null);
-      setClientInfo(null);
-      setAccountNumber('');
-    }
-  };
+  // ========================================
+  // 📝 GESTIONNAIRES D'ÉVÉNEMENTS
+  // ========================================
 
-  // ✅ NOUVELLE FONCTION - Gestion du numéro de compte
-  const handleAccountNumberChange = (text) => {
-    setAccountNumber(text);
-    setAccountFieldError(null);
-    
-    if (text.length > 0) {
-      // Chercher le client correspondant au numéro de compte
-      const matchingClient = clients.find(client => 
-        client.data.numerCompte === text
-      );
-      
-      if (matchingClient) {
-        setSelectedClient(matchingClient.value);
-        setClientInfo(matchingClient.data);
-        setClientName(matchingClient.label);
-        setShowClientSuggestions(false);
-      } else {
-        // Réinitialiser si aucune correspondance
-        if (!clientName) { // Ne pas effacer si l'utilisateur tape le nom
-          setSelectedClient(null);
-          setClientInfo(null);
-          setClientName('');
-        }
-      }
-    } else {
-      if (!clientName) { // Ne réinitialiser que si le nom n'est pas renseigné
-        setSelectedClient(null);
-        setClientInfo(null);
-        setClientName('');
-      }
-    }
-  };
-
-  // ✅ NOUVELLE FONCTION - Sélection depuis les suggestions
-  const handleClientSuggestionSelect = (client) => {
-    setClientName(client.label);
-    setSelectedClient(client.value);
-    setClientInfo(client.data);
-    setAccountNumber(client.data.numerCompte || '');
-    setShowClientSuggestions(false);
-    setClientFieldError(null);
-    setAccountFieldError(null);
-  };
-
-  // ✅ FONCTION MODIFIÉE - Validation des champs complémentaires
-  const validateClientFields = () => {
-    let isValid = true;
-    
-    if (!clientName.trim()) {
-      setClientFieldError('Veuillez saisir le nom du client');
-      isValid = false;
-    }
-    
-    if (!accountNumber.trim()) {
-      setAccountFieldError('Veuillez saisir le numéro de compte');
-      isValid = false;
-    }
-    
-    if (!selectedClient) {
-      setClientFieldError('Client non trouvé. Vérifiez le nom ou le numéro de compte');
-      isValid = false;
-    }
-    
-    return isValid;
-  };
-
-  // Réinitialiser le formulaire
-  const resetForm = () => {
-    setAmount('');
-    setDescription('');
-    setError(null);
-    // ✅ AJOUT - Réinitialiser les nouveaux champs
-    setClientName('');
-    setAccountNumber('');
-    setSelectedClient(null);
-    setClientInfo(null);
-    setShowClientSuggestions(false);
-    setClientFieldError(null);
-    setAccountFieldError(null);
-  };
-
-  // Changement d'onglet
   const handleTabChange = (tab) => {
     if (tab !== activeTab) {
       setActiveTab(tab);
@@ -251,137 +91,180 @@ const CollecteScreen = ({ navigation, route }) => {
     }
   };
 
-  // ✅ FONCTION MODIFIÉE - Sélection d'un client (gardée pour compatibilité avec le dropdown)
-  const handleClientChange = (clientId) => {
-    const selectedClientInfo = clients.find(client => client.value === clientId);
-    if (selectedClientInfo) {
-      setSelectedClient(clientId);
-      setClientInfo(selectedClientInfo.data);
-      setClientName(selectedClientInfo.label);
-      setAccountNumber(selectedClientInfo.data.numerCompte || '');
-      setClientFieldError(null);
-      setAccountFieldError(null);
-    }
+  const resetForm = () => {
+    setAmount('');
+    setDescription('');
+    setError(null);
+    setValidationResult(null);
+    setShowPhoneModal(false);
+    setPendingTransaction(null);
+    // Note: selectedClient est géré par ClientInput
   };
 
-  // Vérifier le solde pour retrait
-  const checkBalance = async () => {
-    if (!selectedClient || !amount || parseFloat(amount) <= 0) return false;
-    
-    try {
-      setBalanceChecking(true);
-      setError(null);
-      
-      // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
-      const response = await transactionService.verifyBalance({
-        clientId: selectedClient,
-        montant: parseFloat(amount)
-      });
-      
-      if (!response.data.sufficient) {
-        setError(`Solde insuffisant. Solde disponible: ${formatCurrency(response.data.soldeDisponible)} FCFA`);
-        return false;
-      }
-      
-      return true;
-    } catch (err) {
-      console.error('Erreur lors de la vérification du solde:', err);
-      setError(err.error || 'Erreur lors de la vérification du solde');
-      return false;
-    } finally {
-      setBalanceChecking(false);
-    }
+  const handleClientSelect = (client) => {
+    setSelectedClient(client);
+    setError(null);
+    console.log('✅ Client sélectionné:', client);
   };
 
-  // ✅ FONCTION MODIFIÉE - Soumettre le formulaire avec validation des nouveaux champs
-  const handleSubmit = async () => {
+  const handleClientInputError = (error) => {
+    setError(error);
+    setSelectedClient(null);
+  };
+
+  // ========================================
+  // 🔐 VALIDATION COMPLÈTE AVANT TRANSACTION
+  // ========================================
+
+  const validateAndProceedTransaction = async () => {
     try {
-      // Validation des champs complémentaires
-      if (!validateClientFields()) {
+      if (!selectedClient) {
+        setError('Veuillez sélectionner un client');
         return;
       }
-      
+
       if (!amount || parseFloat(amount) <= 0) {
         setError('Veuillez saisir un montant valide');
         return;
       }
-      
-      if (activeTab === 'retrait') {
-        const balanceOk = await checkBalance();
-        if (!balanceOk) return;
-      }
-      
-      const operationType = activeTab === 'epargne' ? 'épargne' : 'retrait';
-      
-      Alert.alert(
-        'Confirmation',
-        `Êtes-vous sûr de vouloir effectuer cette opération de ${operationType} de ${formatCurrency(parseFloat(amount))} FCFA pour ${clientName} (${accountNumber}) ?`,
-        [
-          {
-            text: 'Annuler',
-            style: 'cancel'
-          },
-          {
-            text: 'Confirmer',
-            onPress: () => processTransaction()
-          }
-        ]
-      );
-    } catch (err) {
-      console.error('Erreur lors de la soumission du formulaire:', err);
-      setError(err.message || 'Erreur lors de la soumission du formulaire');
-    }
-  };
 
-  // Traiter la transaction
-  const processTransaction = async () => {
-    try {
       setLoading(true);
       setError(null);
-      
+
       const transactionData = {
-        clientId: selectedClient,
+        clientId: selectedClient.id,
         collecteurId: user.id,
         montant: parseFloat(amount),
+        description: description.trim()
       };
-      
-      let result;
+
+      // ✅ VALIDATION BACK-END COMPLÈTE
+      let validation;
       if (activeTab === 'epargne') {
-        // ✅ UTILISATION DU SERVICE SPÉCIALISÉ
-        result = await transactionService.enregistrerEpargne(transactionData);
+        validation = await transactionService.validateEpargne(
+          selectedClient.id, user.id, parseFloat(amount), description
+        );
       } else {
-        result = await transactionService.effectuerRetrait(transactionData);
+        validation = await transactionService.validateRetrait(
+          selectedClient.id, user.id, parseFloat(amount), description
+        );
       }
-      
-      resetForm();
-      
-      Alert.alert(
-        'Succès',
-        result.message || `${activeTab === 'epargne' ? 'Épargne' : 'Retrait'} effectué avec succès`,
-        [
-          { text: 'OK', onPress: () => navigation.navigate('Journal') }
-        ]
-      );
-      
+
+      setValidationResult(validation.data);
+
+      if (!validation.data.canProceed) {
+        setError(validation.data.errorMessage);
+        triggerHaptic('error');
+        return;
+      }
+
+      // ✅ VÉRIFICATION TÉLÉPHONE
+      if (!validation.data.hasValidPhone) {
+        // Montrer modal de vérification téléphone
+        setPendingTransaction(transactionData);
+        setShowPhoneModal(true);
+        return;
+      }
+
+      // ✅ PROCÉDER DIRECTEMENT SI TOUT EST OK
+      await executeTransaction(transactionData);
+
     } catch (err) {
-      console.error('Erreur transaction:', err);
-      setError(err.error || err.message);
+      console.error('Erreur validation transaction:', err);
+      setError(err.message || 'Erreur lors de la validation');
+      triggerHaptic('error');
     } finally {
       setLoading(false);
     }
   };
 
-  const [refreshing, setRefreshing] = useState(false);
-  
-  // Charger les clients au démarrage
-  useEffect(() => {
-    const fetchClients = async () => {
-      await loadClients();
-    };
-    fetchClients();
-  }, [loadClients]);  
+  // ========================================
+  // 💰 EXÉCUTION TRANSACTION
+  // ========================================
 
-  // Rendu des onglets
+  const executeTransaction = async (transactionData) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const operationType = activeTab === 'epargne' ? 'épargne' : 'retrait';
+
+      // Confirmation utilisateur
+      const confirmed = await new Promise(resolve => {
+        Alert.alert(
+          'Confirmation',
+          `Êtes-vous sûr de vouloir effectuer cette ${operationType} de ${formatCurrency(transactionData.montant)} FCFA pour ${selectedClient.displayName} ?\n\nCompte: ${selectedClient.numeroCompte}`,
+          [
+            { text: 'Annuler', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Confirmer', onPress: () => resolve(true) }
+          ]
+        );
+      });
+
+      if (!confirmed) {
+        setLoading(false);
+        return;
+      }
+
+      // Exécuter la transaction
+      let result;
+      if (activeTab === 'epargne') {
+        result = await transactionService.enregistrerEpargne(transactionData);
+      } else {
+        result = await transactionService.effectuerRetrait(transactionData);
+      }
+
+      // Succès
+      triggerHaptic('success');
+      resetForm();
+      
+      Alert.alert(
+        'Succès ! 🎉',
+        `${operationType} de ${formatCurrency(transactionData.montant)} FCFA effectuée avec succès pour ${selectedClient.displayName}`,
+        [
+          { 
+            text: 'Voir Journal', 
+            onPress: () => navigation.navigate('Journal'),
+            style: 'default'
+          },
+          { 
+            text: 'Nouvelle transaction', 
+            onPress: () => {},
+            style: 'cancel'
+          }
+        ]
+      );
+
+    } catch (err) {
+      console.error('Erreur exécution transaction:', err);
+      setError(err.message || 'Erreur lors de l\'exécution de la transaction');
+      triggerHaptic('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ========================================
+  // 📞 GESTIONNAIRES MODAL TÉLÉPHONE
+  // ========================================
+
+  const handleAddPhone = (client) => {
+    // Naviguer vers l'édition du client
+    navigation.navigate('EditClient', { clientId: client.id });
+  };
+
+  const handleContinueWithoutPhone = async () => {
+    if (pendingTransaction) {
+      await executeTransaction(pendingTransaction);
+      setPendingTransaction(null);
+    }
+    setShowPhoneModal(false);
+  };
+
+  // ========================================
+  // 🎨 COMPOSANTS DE RENDU
+  // ========================================
+
   const renderTabs = () => (
     <View style={styles.tabContainer}>
       <TouchableOpacity
@@ -430,105 +313,60 @@ const CollecteScreen = ({ navigation, route }) => {
     </View>
   );
 
-  // ✅ NOUVEAU COMPOSANT - Rendu des suggestions de clients
-  const renderClientSuggestions = () => {
-    if (!showClientSuggestions || filteredClients.length === 0) return null;
-    
+  const renderValidationSummary = () => {
+    if (!validationResult || !selectedClient) return null;
+
     return (
-      <View style={styles.suggestionsContainer}>
-        {filteredClients.slice(0, 5).map((client) => (
-          <TouchableOpacity
-            key={client.value}
-            style={styles.suggestionItem}
-            onPress={() => handleClientSuggestionSelect(client)}
-          >
-            <Text style={styles.suggestionText}>{client.label}</Text>
-            <Text style={styles.suggestionAccount}>{client.data.numerCompte}</Text>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.validationContainer}>
+        <View style={styles.validationHeader}>
+          <Ionicons 
+            name={validationResult.canProceed ? "checkmark-circle" : "alert-circle"} 
+            size={20} 
+            color={validationResult.canProceed ? theme.colors.success : theme.colors.error} 
+          />
+          <Text style={styles.validationTitle}>
+            État de la validation
+          </Text>
+        </View>
+        
+        {validationResult.canProceed && (
+          <Text style={styles.validationSuccess}>
+            ✅ Transaction autorisée
+          </Text>
+        )}
+        
+        {!validationResult.hasValidPhone && (
+          <Text style={styles.validationWarning}>
+            ⚠️ Client sans numéro de téléphone
+          </Text>
+        )}
+        
+        {validationResult.soldeCollecteurMessage && (
+          <Text style={styles.validationError}>
+            ❌ {validationResult.soldeCollecteurMessage}
+          </Text>
+        )}
       </View>
     );
   };
 
-  // ✅ NOUVEAU COMPOSANT - Dropdown des clients intégré
-  const renderClientDropdown = () => {
-    if (!showClientSuggestions) return null;
-    
-    return (
-      <View style={styles.dropdownContainer}>
-        <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
-          {clients.map((client) => (
-            <TouchableOpacity
-              key={client.value}
-              style={styles.dropdownItem}
-              onPress={() => handleClientSuggestionSelect(client)}
-            >
-              <Text style={styles.dropdownText}>{client.label}</Text>
-              <Text style={styles.dropdownAccount}>{client.data.numerCompte}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    );
-  };
-  
-  // ✅ FONCTION MODIFIÉE - Rendu du formulaire avec les nouveaux champs
-  const renderCollectForm = () => (
+  const renderForm = () => (
     <Card style={styles.formCard}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View>
-          {/* ✅ NOUVEAU CHAMP - Nom du client avec dropdown intégré */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>
-              Nom du client <Text style={styles.required}>*</Text>
-            </Text>
-            <View style={styles.inputWithDropdown}>
-              <Input
-                placeholder="Entrer le nom du client"
-                value={clientName}
-                onChangeText={handleClientNameChange}
-                error={clientFieldError}
-                disabled={loading}
-                onFocus={() => {
-                  if (clientName.length > 0) {
-                    setShowClientSuggestions(true);
-                  }
-                }}
-                style={styles.clientInput}
-              />
-              <TouchableOpacity
-                style={styles.dropdownButton}
-                onPress={() => {
-                  setShowClientSuggestions(!showClientSuggestions);
-                  setFilteredClients(clients);
-                }}
-                disabled={loading}
-              >
-                <Ionicons 
-                  name={showClientSuggestions ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color={theme.colors.gray} 
-                />
-              </TouchableOpacity>
-            </View>
-            {clientName.length > 0 && renderClientSuggestions()}
-            {clientName.length === 0 && renderClientDropdown()}
-          </View>
+          {/* Composant client optimisé */}
+          <ClientInput
+            collecteurId={user.id}
+            selectedClient={selectedClient}
+            onClientSelect={handleClientSelect}
+            onError={handleClientInputError}
+            disabled={loading}
+          />
 
-          {/* ✅ NOUVEAU CHAMP - Numéro de compte */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>
-              Numéro de compte <Text style={styles.required}>*</Text>
-            </Text>
-            <Input
-              placeholder="Entrer le numéro de compte"
-              value={accountNumber}
-              onChangeText={handleAccountNumberChange}
-              error={accountFieldError}
-              disabled={loading}
-            />
-          </View>
+          {/* Résumé de validation */}
+          {renderValidationSummary()}
           
+          {/* Montant */}
           <AmountInput
             label={activeTab === 'epargne' ? "Montant à épargner" : "Montant à retirer"}
             value={amount}
@@ -539,6 +377,7 @@ const CollecteScreen = ({ navigation, route }) => {
             suffix="FCFA"
           />
           
+          {/* Description */}
           <Input
             label="Description (optionnel)"
             placeholder="Ajouter une description..."
@@ -548,19 +387,25 @@ const CollecteScreen = ({ navigation, route }) => {
             disabled={loading}
           />
           
+          {/* Bouton de soumission */}
           <Button
-            title={activeTab === 'epargne' ? "Enregistrer l'épargne" : "Effectuer le retrait"}
-            onPress={handleSubmit}
-            loading={loading || balanceChecking}
-            disabled={loading || balanceChecking || !selectedClient || !amount}
+            title={loading ? "Traitement..." : 
+              activeTab === 'epargne' ? "Enregistrer l'épargne" : "Effectuer le retrait"}
+            onPress={validateAndProceedTransaction}
+            loading={loading}
+            disabled={loading || !selectedClient || !amount}
             style={styles.submitButton}
+            icon={activeTab === 'epargne' ? "arrow-down-circle" : "arrow-up-circle"}
           />
         </View>
       </TouchableWithoutFeedback>
     </Card>
   );
   
-  // Rendu de l'écran
+  // ========================================
+  // 🎨 RENDU PRINCIPAL
+  // ========================================
+  
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <Header
@@ -581,29 +426,28 @@ const CollecteScreen = ({ navigation, route }) => {
         keyboardShouldPersistTaps="handled"
       >
         {renderTabs()}
-        
-        {clientsLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement des clients...</Text>
-          </View>
-        ) : clients.length === 0 ? (
-          <EmptyState
-            type="no-results"
-            title="Aucun client disponible"
-            message="Vous n'avez aucun client rattaché à votre compte. Contactez votre administrateur pour plus d'informations."
-            icon="people"
-            actionButton={true}
-            actionButtonTitle="Rafraîchir"
-            onActionButtonPress={loadClients}
-          />
-        ) : (
-          renderCollectForm()
-        )}
+        {renderForm()}
       </ScrollView>
+
+      {/* Modal vérification téléphone */}
+      <PhoneVerificationModal
+        visible={showPhoneModal}
+        client={selectedClient}
+        transactionType={activeTab}
+        onClose={() => {
+          setShowPhoneModal(false);
+          setPendingTransaction(null);
+        }}
+        onAddPhone={handleAddPhone}
+        onContinueWithoutPhone={handleContinueWithoutPhone}
+      />
     </View>
   );
 };
+
+// ========================================
+// 🎨 STYLES
+// ========================================
 
 const styles = StyleSheet.create({
   container: {
@@ -654,140 +498,42 @@ const styles = StyleSheet.create({
   formCard: {
     padding: 20,
   },
-  // ✅ NOUVEAUX STYLES pour les champs complémentaires
-  fieldContainer: {
+  validationContainer: {
     marginBottom: 16,
-    position: 'relative',
+    padding: 12,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.primary,
   },
-  fieldLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.colors.text,
+  validationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  required: {
-    color: theme.colors.error,
-  },
-  // ✅ STYLES pour le champ avec dropdown intégré
-  inputWithDropdown: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  clientInput: {
-    flex: 1,
-    marginRight: 0,
-  },
-  dropdownButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    padding: 8,
-    zIndex: 1,
-  },
-  // ✅ STYLES pour les suggestions (recherche)
-  suggestionsContainer: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: theme.colors.white,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    maxHeight: 200,
-    zIndex: 1000,
-    ...theme.shadows.small,
-  },
-  suggestionItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  suggestionText: {
-    fontSize: 16,
-    color: theme.colors.text,
-    flex: 1,
-  },
-  suggestionAccount: {
+  validationTitle: {
     fontSize: 14,
-    color: theme.colors.textLight,
-    marginLeft: 8,
-  },
-  // ✅ STYLES pour le dropdown complet
-  dropdownContainer: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: theme.colors.white,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    maxHeight: 250,
-    zIndex: 1000,
-    ...theme.shadows.medium,
-  },
-  dropdownScroll: {
-    maxHeight: 250,
-  },
-  dropdownItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dropdownText: {
-    fontSize: 16,
-    color: theme.colors.text,
-    flex: 1,
     fontWeight: '500',
-  },
-  dropdownAccount: {
-    fontSize: 14,
-    color: theme.colors.textLight,
+    color: theme.colors.text,
     marginLeft: 8,
   },
-  clientInfoContainer: {
-    marginBottom: 16,
-    padding: 12,
-    backgroundColor: `${theme.colors.success}10`,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: `${theme.colors.success}30`,
-  },
-  clientInfoRow: {
-    flexDirection: 'row',
+  validationSuccess: {
+    fontSize: 14,
+    color: theme.colors.success,
     marginBottom: 4,
   },
-  clientInfoLabel: {
+  validationWarning: {
     fontSize: 14,
-    color: theme.colors.textLight,
-    marginRight: 8,
-    minWidth: 100,
+    color: theme.colors.warning,
+    marginBottom: 4,
   },
-  clientInfoValue: {
+  validationError: {
     fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-    flex: 1,
+    color: theme.colors.error,
+    marginBottom: 4,
   },
   submitButton: {
     marginTop: 20,
-  },
-  loadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: theme.colors.textLight,
   },
 });
 

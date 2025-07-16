@@ -52,6 +52,8 @@ export { default as ReportGenerator } from './ReportGenerator/ReportGenerator';
 // Wrapper d'application
 export { default as AppWrapper } from './AppWrapper';
 
+export { default as ClientInput } from './ClientInput';
+
 // Note: Les composants Commission sont commentés temporairement pour éviter les cycles de dépendances
 // Une fois le problème de cycle résolu, vous pourrez les réactiver
 
