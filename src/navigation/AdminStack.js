@@ -1,4 +1,4 @@
-// src/navigation/AdminStack.js - VERSION CORRIGÉE
+// src/navigation/AdminStack.js - NAVIGATION ADMIN CORRIGÉE
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { TouchableOpacity, Alert } from 'react-native';
@@ -35,14 +35,11 @@ import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
 import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
 import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 
-// 🔥 AJOUT : Hook pour la déconnexion
-import { useAuth } from '../hooks/useAuth';
-
 const Stack = createStackNavigator();
 
 const AdminStack = () => {
   
-  // 🔥 FONCTION DE DÉCONNEXION
+  // FONCTION DE DÉCONNEXION
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -57,7 +54,6 @@ const AdminStack = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Utiliser authService pour déconnexion propre
               const { authService } = require('../services');
               await authService.logout();
             } catch (error) {
@@ -137,7 +133,6 @@ const AdminStack = () => {
             <TouchableOpacity
               style={{ marginRight: 16, padding: 8 }}
               onPress={() => {
-                // Trigger refresh par navigation params
                 navigation.setParams({ refresh: Date.now() });
               }}
             >
@@ -157,65 +152,67 @@ const AdminStack = () => {
       />
 
       {/* ============================= */}
-      {/* GESTION DES COLLECTEURS */}
+      {/* ÉCRANS AVEC HEADER PERSONNALISÉ - MASQUER HEADER NATIF */}
       {/* ============================= */}
 
       <Stack.Screen
         name="CollecteurManagementScreen"
         component={CollecteurManagementScreen}
         options={{
-          title: 'Gestion Collecteurs',
+          headerShown: false, // MASQUER HEADER NATIF
         }}
       />
 
       <Stack.Screen
         name="CollecteurDetailScreen"
         component={CollecteurDetailScreen}
-        options={({ route }) => ({
-          title: route.params?.collecteur?.nom || 'Détails Collecteur',
-        })}
+        options={{
+          headerShown: false, // MASQUER HEADER NATIF
+        }}
       />
 
       <Stack.Screen
         name="CollecteurCreationScreen"
         component={CollecteurCreationScreen}
-        options={({ route }) => ({
-          title: route.params?.mode === 'edit' 
-            ? 'Modifier Collecteur' 
-            : 'Nouveau Collecteur',
-        })}
+        options={{
+          headerShown: false, // MASQUER HEADER NATIF
+        }}
       />
 
       <Stack.Screen
         name="CollecteurClientsScreen"
         component={CollecteurClientsScreen}
-        options={({ route }) => ({
-          title: `Clients - ${route.params?.collecteurNom || 'Collecteur'}`,
-        })}
+        options={{
+          headerShown: false, // MASQUER HEADER NATIF
+        }}
       />
-
-      {/* ============================= */}
-      {/* GESTION DES CLIENTS */}
-      {/* ============================= */}
 
       <Stack.Screen
         name="ClientManagementScreen"
         component={ClientManagementScreen}
         options={{
-          title: 'Gestion Clients',
+          headerShown: false, // MASQUER HEADER NATIF
         }}
       />
 
       <Stack.Screen
         name="ClientDetailScreen"
         component={ClientDetailScreen}
-        options={({ route }) => ({
-          title: route.params?.client?.nom || 'Détails Client',
-        })}
+        options={{
+          headerShown: false, // MASQUER HEADER NATIF
+        }}
+      />
+
+      <Stack.Screen
+        name="JournalClotureScreen"
+        component={JournalClotureScreen}
+        options={{
+          headerShown: false, // MASQUER HEADER NATIF
+        }}
       />
 
       {/* ============================= */}
-      {/* RAPPORTS ET COMMISSIONS */}
+      {/* ÉCRANS AVEC HEADER NATIF */}
       {/* ============================= */}
 
       <Stack.Screen
@@ -250,10 +247,6 @@ const AdminStack = () => {
         })}
       />
 
-      {/* ============================= */}
-      {/* TRANSACTIONS ET TRANSFERTS */}
-      {/* ============================= */}
-
       <Stack.Screen
         name="TransactionDetailScreen"
         component={TransactionDetailScreen}
@@ -269,73 +262,8 @@ const AdminStack = () => {
           title: 'Transfert de Comptes',
         }}
       />
-
-      <Stack.Screen
-        name="JournalClotureScreen"
-        component={JournalClotureScreen}
-        options={{
-          title: 'Clôture Journal',
-        }}
-      />
     </Stack.Navigator>
   );
-};
-
-/**
- * 🎯 Configuration des options de navigation par défaut
- */
-export const getAdminScreenOptions = (title, options = {}) => ({
-  title,
-  headerStyle: {
-    backgroundColor: '#fff',
-    elevation: 2,
-    shadowOpacity: 0.1,
-  },
-  headerTintColor: '#212529',
-  headerTitleStyle: {
-    fontWeight: '600',
-    fontSize: 18,
-  },
-  headerBackTitleVisible: false,
-  cardStyle: {
-    backgroundColor: '#f8f9fa',
-  },
-  ...options,
-});
-
-/**
- * 🚀 Fonction helper pour naviguer vers la supervision
- */
-export const navigateToSupervision = (navigation, collecteurId = null) => {
-  if (collecteurId) {
-    navigation.navigate('AdminJournalActivite', {
-      collecteurId,
-    });
-  } else {
-    navigation.navigate('AdminCollecteurSupervision');
-  }
-};
-
-/**
- * 📱 Hook personnalisé pour les actions de supervision
- */
-export const useSupervisionActions = (navigation) => {
-  const goToSupervision = () => {
-    navigation.navigate('AdminCollecteurSupervision');
-  };
-
-  const goToCollecteurJournal = (collecteurId, collecteurNom, agenceNom) => {
-    navigation.navigate('AdminJournalActivite', {
-      collecteurId,
-      collecteurNom,
-      agenceNom,
-    });
-  };
-
-  return {
-    goToSupervision,
-    goToCollecteurJournal,
-  };
 };
 
 export default AdminStack;

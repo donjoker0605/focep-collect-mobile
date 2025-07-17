@@ -1,4 +1,4 @@
-// src/screens/Admin/JournalClotureScreen.js
+// src/screens/Admin/JournalClotureScreen.js - VERSION COMPLÈTE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,6 +10,8 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -23,13 +25,16 @@ import theme from '../../theme';
 
 // Hooks et services
 import { useAdminCollecteurs } from '../../hooks/useAdminCollecteurs';
-import { journalService } from '../../services';
 
 const JournalClotureScreen = ({ navigation }) => {
   // États
   const [selectedCollecteur, setSelectedCollecteur] = useState(null);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [journalData, setJournalData] = useState(null);
+  const [montantVerse, setMontantVerse] = useState('');
+  const [commentaire, setCommentaire] = useState('');
+  
+  // États pour les données
+  const [previewData, setPreviewData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cloturing, setCloturing] = useState(false);
   const [error, setError] = useState(null);
@@ -64,87 +69,165 @@ const JournalClotureScreen = ({ navigation }) => {
     };
   });
 
-  // Charger les données du journal
-  const loadJournalData = async (collecteurId, date) => {
+  // 📋 Charger l'aperçu de clôture
+  const loadCloturePreview = async (collecteurId, date) => {
     if (!collecteurId || !date) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await journalService.getJournalDuJour(collecteurId, date);
+      const response = await fetch(
+        `/api/admin/versements/preview?collecteurId=${collecteurId}&date=${date}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${await getAuthToken()}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const result = await response.json();
       
-      if (response.success) {
-        setJournalData(response.data);
+      if (result.success) {
+        setPreviewData(result.data);
+        // Pré-remplir le montant versé avec le solde du compte service
+        setMontantVerse(result.data.soldeCompteService?.toString() || '0');
       } else {
-        setError(response.error || 'Erreur lors du chargement du journal');
+        setError(result.error || 'Erreur lors du chargement de l\'aperçu');
       }
     } catch (err) {
-      console.error('Erreur chargement journal:', err);
-      setError(err.message || 'Erreur lors du chargement du journal');
+      console.error('Erreur chargement aperçu:', err);
+      setError(err.message || 'Erreur lors du chargement de l\'aperçu');
     } finally {
       setLoading(false);
     }
   };
 
+  // Helper pour récupérer le token
+  const getAuthToken = async () => {
+    // Votre logique pour récupérer le token
+    // Par exemple depuis AsyncStorage ou votre service d'auth
+    return 'your-auth-token';
+  };
+
   // Gérer le changement de collecteur
   const handleCollecteurChange = (collecteurId) => {
     setSelectedCollecteur(collecteurId);
-    setJournalData(null);
+    setPreviewData(null);
+    setMontantVerse('');
+    setCommentaire('');
     if (collecteurId && selectedDate) {
-      loadJournalData(collecteurId, selectedDate);
+      loadCloturePreview(collecteurId, selectedDate);
     }
   };
 
   // Gérer le changement de date
   const handleDateChange = (date) => {
     setSelectedDate(date);
-    setJournalData(null);
+    setPreviewData(null);
+    setMontantVerse('');
+    setCommentaire('');
     if (selectedCollecteur && date) {
-      loadJournalData(selectedCollecteur, date);
+      loadCloturePreview(selectedCollecteur, date);
     }
   };
 
-  // Clôturer le journal
-  const handleClotureJournal = () => {
-    if (!selectedCollecteur || !selectedDate || !journalData) return;
+  // 💰 Effectuer le versement et la clôture
+  const handleVersementEtCloture = () => {
+    if (!selectedCollecteur || !selectedDate || !previewData || !montantVerse) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+
+    const montantVerseNum = parseFloat(montantVerse);
+    const montantCollecte = previewData.soldeCompteService || 0;
+    
+    if (isNaN(montantVerseNum) || montantVerseNum < 0) {
+      Alert.alert('Erreur', 'Le montant versé doit être un nombre positif.');
+      return;
+    }
+
+    let alertMessage = `Confirmez-vous le versement de ${formatCurrency(montantVerseNum)} ?\n\n`;
+    alertMessage += `Montant collecté : ${formatCurrency(montantCollecte)}\n`;
+    
+    const difference = montantVerseNum - montantCollecte;
+    if (difference > 0) {
+      alertMessage += `Excédent : +${formatCurrency(difference)} (sera crédité au compte attente)`;
+    } else if (difference < 0) {
+      alertMessage += `Manquant : ${formatCurrency(Math.abs(difference))} (sera débité du compte manquant)`;
+    } else {
+      alertMessage += `Montant équilibré ✓`;
+    }
 
     Alert.alert(
-      'Confirmation',
-      `Êtes-vous sûr de vouloir clôturer le journal du ${format(new Date(selectedDate), 'dd/MM/yyyy')} ?`,
+      'Confirmation de versement',
+      alertMessage,
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Clôturer', onPress: executeClotureJournal }
+        { text: 'Confirmer', onPress: executeVersementEtCloture }
       ]
     );
   };
 
-  // Exécuter la clôture
-  const executeClotureJournal = async () => {
+  // Exécuter le versement
+  const executeVersementEtCloture = async () => {
     try {
       setCloturing(true);
       setError(null);
 
-      const response = await journalService.cloturerJournalDuJour(
-        selectedCollecteur, 
-        selectedDate
-      );
+      const request = {
+        collecteurId: selectedCollecteur,
+        date: selectedDate,
+        montantVerse: parseFloat(montantVerse),
+        commentaire: commentaire.trim() || null
+      };
 
-      if (response.success) {
-        // Recharger les données
-        await loadJournalData(selectedCollecteur, selectedDate);
+      const response = await fetch('/api/admin/versements/cloture', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${await getAuthToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Succès - afficher le résultat
+        let successMessage = 'Versement effectué et journal clôturé avec succès !';
         
+        if (result.data.manquant && result.data.manquant > 0) {
+          successMessage += `\n\n⚠️ Manquant détecté : ${formatCurrency(result.data.manquant)}`;
+        } else if (result.data.excedent && result.data.excedent > 0) {
+          successMessage += `\n\n💰 Excédent détecté : ${formatCurrency(result.data.excedent)}`;
+        }
+
         Alert.alert(
           'Succès',
-          'Le journal a été clôturé avec succès.',
-          [{ text: 'OK' }]
+          successMessage,
+          [
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // Réinitialiser le formulaire
+                setSelectedCollecteur(null);
+                setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+                setPreviewData(null);
+                setMontantVerse('');
+                setCommentaire('');
+              }
+            }
+          ]
         );
       } else {
-        setError(response.error || 'Erreur lors de la clôture du journal');
+        setError(result.error || 'Erreur lors du versement');
       }
     } catch (err) {
-      console.error('Erreur clôture journal:', err);
-      setError(err.message || 'Erreur lors de la clôture du journal');
+      console.error('Erreur versement:', err);
+      setError(err.message || 'Erreur lors du versement');
     } finally {
       setCloturing(false);
     }
@@ -156,6 +239,20 @@ const JournalClotureScreen = ({ navigation }) => {
     return `${new Intl.NumberFormat('fr-FR').format(amount)} FCFA`;
   };
 
+  // Calculer la différence en temps réel
+  const calculateDifference = () => {
+    if (!previewData || !montantVerse) return null;
+    
+    const montantVerseNum = parseFloat(montantVerse);
+    const montantCollecte = previewData.soldeCompteService || 0;
+    
+    if (isNaN(montantVerseNum)) return null;
+    
+    return montantVerseNum - montantCollecte;
+  };
+
+  const difference = calculateDifference();
+
   // Rendu d'une opération
   const renderOperation = ({ item }) => (
     <View style={styles.operationItem}>
@@ -163,7 +260,7 @@ const JournalClotureScreen = ({ navigation }) => {
         <Text style={styles.operationClient}>
           {item.clientNom} {item.clientPrenom}
         </Text>
-        <Text style={styles.operationType}>{item.typeMouvement}</Text>
+        <Text style={styles.operationType}>{item.type}</Text>
         <Text style={styles.operationDate}>
           {format(new Date(item.dateOperation), 'HH:mm')}
         </Text>
@@ -171,9 +268,9 @@ const JournalClotureScreen = ({ navigation }) => {
       <View style={styles.operationAmount}>
         <Text style={[
           styles.operationValue,
-          { color: item.sens === 'epargne' ? theme.colors.success : theme.colors.error }
+          { color: item.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
         ]}>
-          {item.sens === 'retrait' ? '-' : '+'}{formatCurrency(item.montant)}
+          {item.type === 'RETRAIT' ? '-' : '+'}{formatCurrency(item.montant)}
         </Text>
       </View>
     </View>
@@ -182,11 +279,11 @@ const JournalClotureScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <Header
-        title="Clôture des journées"
+        title="Clôture & Versement"
         onBackPress={() => navigation.goBack()}
       />
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Formulaire de sélection */}
         <Card style={styles.selectionCard}>
           <Text style={styles.cardTitle}>Sélection</Text>
@@ -218,84 +315,166 @@ const JournalClotureScreen = ({ navigation }) => {
           )}
         </Card>
 
-        {/* Données du journal */}
+        {/* Aperçu des données */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement du journal...</Text>
+            <Text style={styles.loadingText}>Chargement de l'aperçu...</Text>
           </View>
-        ) : journalData ? (
-          <View style={styles.journalContainer}>
-            {/* Résumé du journal */}
+        ) : previewData ? (
+          <>
+            {/* Résumé comptable */}
             <Card style={styles.summaryCard}>
-              <Text style={styles.cardTitle}>
-                Résumé du {format(new Date(selectedDate), 'dd/MM/yyyy')}
-              </Text>
+              <Text style={styles.cardTitle}>Résumé Comptable</Text>
               
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Statut:</Text>
+                <Text style={styles.summaryLabel}>Statut Journal:</Text>
                 <View style={[
                   styles.statusBadge,
-                  journalData.estCloture ? styles.closedBadge : styles.openBadge
+                  previewData.dejaClôture ? styles.closedBadge : styles.openBadge
                 ]}>
                   <Text style={styles.statusText}>
-                    {journalData.estCloture ? 'Clôturé' : 'Ouvert'}
+                    {previewData.dejaClôture ? 'Déjà Clôturé' : 'Ouvert'}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Nombre d'opérations:</Text>
-                <Text style={styles.summaryValue}>{journalData.nombreOperations}</Text>
+                <Text style={styles.summaryLabel}>Solde Compte Service:</Text>
+                <Text style={[styles.summaryValue, styles.primaryAmount]}>
+                  {formatCurrency(previewData.soldeCompteService)}
+                </Text>
               </View>
 
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Référence:</Text>
-                <Text style={styles.summaryValue}>{journalData.reference}</Text>
+                <Text style={styles.summaryLabel}>Total Épargne:</Text>
+                <Text style={[styles.summaryValue, { color: theme.colors.success }]}>
+                  {formatCurrency(previewData.totalEpargne)}
+                </Text>
               </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total Retraits:</Text>
+                <Text style={[styles.summaryValue, { color: theme.colors.error }]}>
+                  {formatCurrency(previewData.totalRetraits)}
+                </Text>
+              </View>
+
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Nombre d'opérations:</Text>
+                <Text style={styles.summaryValue}>{previewData.nombreOperations}</Text>
+              </View>
+
+              {previewData.soldeCompteManquant > 0 && (
+                <View style={[styles.summaryRow, styles.warningRow]}>
+                  <Text style={styles.summaryLabel}>Manquant actuel:</Text>
+                  <Text style={[styles.summaryValue, { color: theme.colors.error }]}>
+                    {formatCurrency(previewData.soldeCompteManquant)}
+                  </Text>
+                </View>
+              )}
             </Card>
 
-            {/* Liste des opérations */}
-            <Card style={styles.operationsCard}>
-              <Text style={styles.cardTitle}>
-                Opérations ({journalData.operations?.length || 0})
-              </Text>
+            {/* Formulaire de versement */}
+            {!previewData.dejaClôture && (
+              <Card style={styles.versementCard}>
+                <Text style={styles.cardTitle}>Versement en Espèces</Text>
+                
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>
+                    Montant versé en espèces <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="0"
+                    value={montantVerse}
+                    onChangeText={setMontantVerse}
+                    keyboardType="numeric"
+                    editable={!cloturing}
+                  />
+                  <Text style={styles.inputHint}>
+                    Montant à collecter : {formatCurrency(previewData.soldeCompteService)}
+                  </Text>
+                </View>
 
-              {journalData.operations && journalData.operations.length > 0 ? (
+                {/* Affichage de la différence */}
+                {difference !== null && (
+                  <View style={[
+                    styles.differenceContainer,
+                    difference > 0 ? styles.excedentContainer : 
+                    difference < 0 ? styles.manquantContainer : 
+                    styles.equilibreContainer
+                  ]}>
+                    <Ionicons 
+                      name={difference > 0 ? "trending-up" : difference < 0 ? "trending-down" : "checkmark-circle"} 
+                      size={20} 
+                      color={difference > 0 ? theme.colors.success : difference < 0 ? theme.colors.error : theme.colors.primary}
+                    />
+                    <Text style={[
+                      styles.differenceText,
+                      { color: difference > 0 ? theme.colors.success : difference < 0 ? theme.colors.error : theme.colors.primary }
+                    ]}>
+                      {difference > 0 ? `Excédent: +${formatCurrency(Math.abs(difference))}` :
+                       difference < 0 ? `Manquant: -${formatCurrency(Math.abs(difference))}` :
+                       'Montant équilibré ✓'}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Commentaire (optionnel)</Text>
+                  <TextInput
+                    style={[styles.textInput, styles.textArea]}
+                    placeholder="Observations éventuelles..."
+                    value={commentaire}
+                    onChangeText={setCommentaire}
+                    multiline
+                    numberOfLines={3}
+                    editable={!cloturing}
+                  />
+                </View>
+              </Card>
+            )}
+
+            {/* Liste des opérations */}
+            {previewData.operations && previewData.operations.length > 0 && (
+              <Card style={styles.operationsCard}>
+                <Text style={styles.cardTitle}>
+                  Opérations du jour ({previewData.operations.length})
+                </Text>
+
                 <FlatList
-                  data={journalData.operations}
+                  data={previewData.operations}
                   renderItem={renderOperation}
                   keyExtractor={item => item.id.toString()}
                   style={styles.operationsList}
                   showsVerticalScrollIndicator={false}
+                  nestedScrollEnabled={true}
                 />
-              ) : (
-                <Text style={styles.noOperationsText}>
-                  Aucune opération enregistrée pour cette journée
-                </Text>
-              )}
-            </Card>
+              </Card>
+            )}
 
             {/* Bouton de clôture */}
-            {!journalData.estCloture && (
+            {!previewData.dejaClôture && (
               <Button
-                title="Clôturer cette journée"
-                onPress={handleClotureJournal}
+                title="Effectuer le versement et clôturer"
+                onPress={handleVersementEtCloture}
                 loading={cloturing}
-                disabled={cloturing || !journalData.operations?.length}
+                disabled={cloturing || !montantVerse || parseFloat(montantVerse) < 0}
                 style={styles.clotureButton}
+                icon="checkmark-circle"
               />
             )}
-          </View>
+          </>
         ) : selectedCollecteur && selectedDate ? (
           <Card style={styles.emptyCard}>
             <Ionicons name="document-outline" size={64} color={theme.colors.gray} />
             <Text style={styles.emptyText}>
-              Aucun journal trouvé pour cette date
+              Aucune donnée trouvée pour cette date
             </Text>
           </Card>
         ) : null}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -303,13 +482,10 @@ const JournalClotureScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.background,
   },
   content: {
     flex: 1,
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
     padding: 16,
   },
   selectionCard: {
@@ -336,17 +512,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+    padding: 32,
     alignItems: 'center',
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: theme.colors.textLight,
-  },
-  journalContainer: {
-    flex: 1,
   },
   summaryCard: {
     padding: 16,
@@ -358,14 +530,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  warningRow: {
+    backgroundColor: `${theme.colors.error}10`,
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
   summaryLabel: {
     fontSize: 16,
     color: theme.colors.text,
+    flex: 1,
   },
   summaryValue: {
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
+  },
+  primaryAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -383,13 +567,66 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: theme.colors.text,
   },
+  versementCard: {
+    padding: 16,
+    marginBottom: 16,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  required: {
+    color: theme.colors.error,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: theme.colors.white,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  inputHint: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 4,
+  },
+  differenceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  excedentContainer: {
+    backgroundColor: `${theme.colors.success}15`,
+  },
+  manquantContainer: {
+    backgroundColor: `${theme.colors.error}15`,
+  },
+  equilibreContainer: {
+    backgroundColor: `${theme.colors.primary}15`,
+  },
+  differenceText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
   operationsCard: {
-    flex: 1,
     padding: 16,
     marginBottom: 16,
   },
   operationsList: {
-    flex: 1,
+    maxHeight: 300,
   },
   operationItem: {
     flexDirection: 'row',
@@ -424,17 +661,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  noOperationsText: {
-    textAlign: 'center',
-    color: theme.colors.textLight,
-    fontSize: 16,
-    paddingVertical: 32,
-  },
   emptyCard: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 32,
+    alignItems: 'center',
   },
   emptyText: {
     fontSize: 16,
@@ -443,7 +672,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   clotureButton: {
-    marginTop: 16,
+    marginBottom: 32,
   },
 });
 
