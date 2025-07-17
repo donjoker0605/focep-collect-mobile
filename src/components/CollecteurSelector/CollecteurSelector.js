@@ -1,5 +1,5 @@
-// src/components/CollecteurSelector/CollecteurSelector.js
-import React, { useState } from 'react';
+// src/components/CollecteurSelector/CollecteurSelector.js - VERSION CORRIGÉE
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,19 +8,13 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import theme from '../../theme';
 
 /**
- * Composant CollecteurSelector pour sélectionner un collecteur dans une liste
- * 
- * @param {Array} collecteurs - Liste des collecteurs disponibles
- * @param {Object} selectedCollecteur - Collecteur actuellement sélectionné
- * @param {Function} onSelectCollecteur - Fonction appelée lors de la sélection
- * @param {string} placeholder - Texte de placeholder
- * @param {boolean} disabled - Si le composant est désactivé
- * @param {Object} style - Styles supplémentaires
+ * Composant CollecteurSelector basé sur les patterns existants du projet
  */
 const CollecteurSelector = ({
   collecteurs = [],
@@ -30,14 +24,13 @@ const CollecteurSelector = ({
   disabled = false,
   style,
 }) => {
-  const [modalVisible, setModalVisible] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
-  const handleSelectCollecteur = (collecteur) => {
-    onSelectCollecteur(collecteur);
-    setModalVisible(false);
-  };
+  // ✅ Pattern identique à OptimizedClientList
+  const keyExtractor = useCallback((item) => item?.id?.toString() || Math.random().toString(), []);
 
-  const renderCollecteurItem = ({ item }) => (
+  // ✅ Pattern identique aux autres composants du projet
+  const renderCollecteurItem = useCallback(({ item }) => (
     <TouchableOpacity
       style={styles.collecteurItem}
       onPress={() => handleSelectCollecteur(item)}
@@ -46,20 +39,40 @@ const CollecteurSelector = ({
         <Text style={styles.collecteurName}>
           {item.prenom} {item.nom}
         </Text>
-        {item.code && (
-          <Text style={styles.collecteurCode}>Code: {item.code}</Text>
-        )}
-        {item.telephone && (
-          <Text style={styles.collecteurPhone}>📞 {item.telephone}</Text>
-        )}
+        <Text style={styles.collecteurDetails}>
+          📧 {item.adresseMail}
+        </Text>
+        <Text style={styles.collecteurDetails}>
+          📞 {item.telephone}
+        </Text>
+        <View style={styles.collecteurMeta}>
+          <Text style={styles.collecteurId}>ID: {item.id}</Text>
+          <View style={[
+            styles.statusBadge,
+            item.active ? styles.activeBadge : styles.inactiveBadge
+          ]}>
+            <Text style={[
+              styles.statusText,
+              { color: item.active ? theme.colors.success : theme.colors.error }
+            ]}>
+              {item.active ? 'ACTIF' : 'INACTIF'}
+            </Text>
+          </View>
+        </View>
       </View>
       <Ionicons 
         name="chevron-forward" 
-        size={20} 
+        size={16} 
         color={theme.colors.textLight} 
       />
     </TouchableOpacity>
-  );
+  ), []);
+
+  const handleSelectCollecteur = useCallback((collecteur) => {
+    console.log('✅ Collecteur sélectionné:', collecteur);
+    onSelectCollecteur(collecteur);
+    setShowModal(false);
+  }, [onSelectCollecteur]);
 
   const getDisplayText = () => {
     if (selectedCollecteur) {
@@ -68,15 +81,28 @@ const CollecteurSelector = ({
     return placeholder;
   };
 
+  // ✅ Pattern identique à SelectInput du projet
+  const openModal = () => {
+    if (!disabled) {
+      console.log('🔄 Ouverture modal collecteurs, nb:', collecteurs.length);
+      setShowModal(true);
+    }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+  };
+
   return (
     <>
+      {/* Sélecteur principal */}
       <TouchableOpacity
         style={[
           styles.selector,
           disabled && styles.selectorDisabled,
           style
         ]}
-        onPress={() => !disabled && setModalVisible(true)}
+        onPress={openModal}
         disabled={disabled}
       >
         <View style={styles.selectorContent}>
@@ -88,52 +114,52 @@ const CollecteurSelector = ({
           </Text>
           
           {selectedCollecteur && (
-            <View style={styles.selectedInfo}>
-              {selectedCollecteur.code && (
-                <Text style={styles.selectedCode}>
-                  Code: {selectedCollecteur.code}
-                </Text>
-              )}
-            </View>
+            <Text style={styles.selectedDetails}>
+              ID: {selectedCollecteur.id} • {selectedCollecteur.adresseMail}
+            </Text>
           )}
         </View>
         
-        <View style={styles.selectorIcon}>
-          {disabled ? (
-            <ActivityIndicator size="small" color={theme.colors.textLight} />
-          ) : (
-            <Ionicons 
-              name="chevron-down" 
-              size={20} 
-              color={theme.colors.textLight} 
-            />
-          )}
-        </View>
+        <Ionicons 
+          name="chevron-down" 
+          size={20} 
+          color={disabled ? theme.colors.textLight : theme.colors.primary} 
+        />
       </TouchableOpacity>
 
+      {/* Informations de debug */}
+      <Text style={styles.debugInfo}>
+        {collecteurs.length} collecteur(s) disponible(s)
+      </Text>
+
+      {/* Modal de sélection - Pattern identique à SelectInput */}
       <Modal
-        visible={modalVisible}
-        transparent={true}
+        visible={showModal}
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        transparent={true}
+        onRequestClose={closeModal}
       >
-        <View style={styles.modalOverlay}>
+        <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sélectionner un collecteur</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={24} color={theme.colors.text} />
+              <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+                <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
               </TouchableOpacity>
+              <Text style={styles.modalTitle}>Sélectionner un collecteur</Text>
+              <View style={styles.closeButtonPlaceholder} />
+            </View>
+
+            <View style={styles.countContainer}>
+              <Text style={styles.countText}>
+                {collecteurs.length} collecteur(s) trouvé(s)
+              </Text>
             </View>
 
             {collecteurs.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Ionicons 
                   name="people-outline" 
-                  size={48} 
+                  size={64} 
                   color={theme.colors.textLight} 
                 />
                 <Text style={styles.emptyText}>
@@ -144,13 +170,15 @@ const CollecteurSelector = ({
               <FlatList
                 data={collecteurs}
                 renderItem={renderCollecteurItem}
-                keyExtractor={(item) => item.id?.toString() || item.code}
+                keyExtractor={keyExtractor}
                 style={styles.collecteursList}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.listContainer}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
               />
             )}
           </View>
-        </View>
+        </SafeAreaView>
       </Modal>
     </>
   );
@@ -158,11 +186,15 @@ const CollecteurSelector = ({
 
 const styles = StyleSheet.create({
   selector: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 8,
     backgroundColor: theme.colors.white,
     minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   selectorDisabled: {
     backgroundColor: theme.colors.lightGray,
@@ -170,91 +202,133 @@ const styles = StyleSheet.create({
   },
   selectorContent: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    justifyContent: 'center',
   },
   selectorText: {
     fontSize: 16,
     color: theme.colors.text,
+    fontWeight: '500',
   },
   placeholderText: {
     color: theme.colors.textLight,
+    fontWeight: 'normal',
   },
-  selectedInfo: {
-    marginTop: 4,
-  },
-  selectedCode: {
-    fontSize: 14,
+  selectedDetails: {
+    fontSize: 12,
     color: theme.colors.textLight,
+    marginTop: 2,
   },
-  selectorIcon: {
-    position: 'absolute',
-    right: 12,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
+  debugInfo: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 4,
+    fontStyle: 'italic',
   },
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
   modalContent: {
+    flex: 1,
     backgroundColor: theme.colors.white,
+    marginTop: 50,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
+    borderBottomColor: theme.colors.border,
+  },
+  closeButton: {
+    padding: 8,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: theme.colors.text,
   },
-  closeButton: {
-    padding: 4,
+  closeButtonPlaceholder: {
+    width: 40,
+  },
+  countContainer: {
+    padding: 16,
+    backgroundColor: theme.colors.lightGray + '50',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  countText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    textAlign: 'center',
   },
   collecteursList: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  listContainer: {
+    padding: 16,
   },
   collecteurItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
   },
   collecteurInfo: {
     flex: 1,
   },
   collecteurName: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: theme.colors.text,
     marginBottom: 4,
   },
-  collecteurCode: {
+  collecteurDetails: {
     fontSize: 14,
     color: theme.colors.textLight,
     marginBottom: 2,
   },
-  collecteurPhone: {
-    fontSize: 14,
+  collecteurMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  collecteurId: {
+    fontSize: 12,
     color: theme.colors.textLight,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  activeBadge: {
+    backgroundColor: theme.colors.success + '20',
+    borderColor: theme.colors.success + '40',
+  },
+  inactiveBadge: {
+    backgroundColor: theme.colors.error + '20',
+    borderColor: theme.colors.error + '40',
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: 4,
   },
   emptyContainer: {
     alignItems: 'center',
     padding: 40,
+    flex: 1,
+    justifyContent: 'center',
   },
   emptyText: {
     fontSize: 16,
