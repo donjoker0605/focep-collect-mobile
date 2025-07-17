@@ -1,4 +1,4 @@
-// src/components/index.js - VERSION CORRIGÉE
+// src/components/index.js - VERSION MISE À JOUR
 // Export des composants existants pour faciliter l'importation
 
 // ========================================
@@ -27,16 +27,18 @@ export { default as Chart } from './Chart/Chart';
 // ========================================
 export { default as AmountInput } from './AmountInput/AmountInput';
 export { default as DatePicker } from './DatePicker/DatePicker';
+export { default as DateSelector } from './DateSelector/DateSelector';
 export { default as PinInput } from './PinInput/PinInput';
 export { default as SelectInput } from './SelectInput/SelectInput';
 export { default as SignatureInput } from './SignatureInput/SignatureInput';
 export { default as FilterBar } from './FilterBar/FilterBar';
 
 // ========================================
-// 👥 COMPOSANTS CLIENT
+// 👥 COMPOSANTS CLIENT ET COLLECTEUR
 // ========================================
 export { default as ClientInput } from './ClientInput/ClientInput';
 export { default as OptimizedClientList } from './ClientList/OptimizedClientList';
+export { default as CollecteurSelector } from './CollecteurSelector/CollecteurSelector';
 
 // ========================================
 // 📱 COMPOSANTS DE NOTIFICATION ET STATUS

@@ -219,7 +219,7 @@ const AdminStack = () => {
         name="ReportsScreen"
         component={ReportsScreen}
         options={{
-          title: 'Rapports',
+          headerShown: false,
         }}
       />
 
@@ -227,7 +227,7 @@ const AdminStack = () => {
         name="CommissionCalculationScreen"
         component={CommissionCalculationScreen}
         options={{
-          title: 'Calcul des Commissions',
+          headerShown: false,
         }}
       />
 
@@ -235,7 +235,7 @@ const AdminStack = () => {
         name="CommissionParametersScreen"
         component={CommissionParametersScreen}
         options={{
-          title: 'Paramètres Commissions',
+          headerShown: false,
         }}
       />
 
@@ -259,7 +259,7 @@ const AdminStack = () => {
         name="TransfertCompteScreen"
         component={TransfertCompteScreen}
         options={{
-          title: 'Transfert de Comptes',
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

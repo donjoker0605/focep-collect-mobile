@@ -1,4 +1,4 @@
-// src/screens/Admin/JournalClotureScreen.js - VERSION CORRIGÉE
+// src/screens/Admin/JournalClotureScreen.js - VERSION CORRIGÉE (accès aux données)
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -53,12 +53,26 @@ const JournalClotureScreen = ({ navigation }) => {
 
   const loadCollecteurs = async () => {
     try {
+      console.log('🔄 Chargement des collecteurs...');
       const response = await collecteurService.getCollecteurs();
+      
+      console.log('📦 Réponse complète:', response);
+      
       if (response.success) {
-        setCollecteurs(response.data);
+        // 🔥 FIX: Les collecteurs sont directement dans response.data
+        const collecteursData = response.data || [];
+        console.log('👥 Collecteurs récupérés:', collecteursData);
+        setCollecteurs(collecteursData);
+        
+        if (collecteursData.length === 0) {
+          setError('Aucun collecteur trouvé');
+        }
+      } else {
+        console.error('❌ Réponse API non réussie:', response);
+        setError('Erreur lors du chargement des collecteurs');
       }
     } catch (err) {
-      console.error('Erreur chargement collecteurs:', err);
+      console.error('❌ Erreur chargement collecteurs:', err);
       setError('Impossible de charger les collecteurs');
     }
   };
@@ -69,6 +83,11 @@ const JournalClotureScreen = ({ navigation }) => {
       setError(null);
       
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      console.log('🔄 Chargement aperçu pour:', {
+        collecteurId: selectedCollecteur.id,
+        date: dateStr
+      });
+      
       const response = await versementService.getCloturePreview(
         selectedCollecteur.id, 
         dateStr
@@ -83,7 +102,7 @@ const JournalClotureScreen = ({ navigation }) => {
         setPreview(null);
       }
     } catch (err) {
-      console.error('Erreur aperçu:', err);
+      console.error('❌ Erreur aperçu:', err);
       setError('Impossible de charger l\'aperçu de clôture');
       setPreview(null);
     } finally {
@@ -206,7 +225,7 @@ const JournalClotureScreen = ({ navigation }) => {
         Alert.alert('Erreur', response.error || 'Erreur lors de la clôture');
       }
     } catch (err) {
-      console.error('Erreur clôture:', err);
+      console.error('❌ Erreur clôture:', err);
       Alert.alert('Erreur', 'Impossible de clôturer le journal');
     } finally {
       setLoading(false);
@@ -227,6 +246,13 @@ const JournalClotureScreen = ({ navigation }) => {
         <Card style={styles.selectionCard}>
           <Text style={styles.cardTitle}>Sélection</Text>
           
+          {/* 🐛 DEBUG: Afficher le nombre de collecteurs chargés */}
+          {__DEV__ && (
+            <Text style={styles.debugText}>
+              Collecteurs chargés: {collecteurs.length}
+            </Text>
+          )}
+          
           <CollecteurSelector
             collecteurs={collecteurs}
             selectedCollecteur={selectedCollecteur}
@@ -241,6 +267,17 @@ const JournalClotureScreen = ({ navigation }) => {
           />
         </Card>
 
+        {/* Message d'erreur */}
+        {error && (
+          <Card style={styles.errorCard}>
+            <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={loadCollecteurs} style={styles.retryButton}>
+              <Text style={styles.retryText}>Réessayer</Text>
+            </TouchableOpacity>
+          </Card>
+        )}
+
         {/* Aperçu et données */}
         {selectedCollecteur && (
           <>
@@ -248,14 +285,6 @@ const JournalClotureScreen = ({ navigation }) => {
               <Card style={styles.loadingCard}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
                 <Text style={styles.loadingText}>Chargement de l'aperçu...</Text>
-              </Card>
-            ) : error ? (
-              <Card style={styles.errorCard}>
-                <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-                <TouchableOpacity onPress={loadPreview} style={styles.retryButton}>
-                  <Text style={styles.retryText}>Réessayer</Text>
-                </TouchableOpacity>
               </Card>
             ) : preview ? (
               <>
@@ -449,6 +478,13 @@ const styles = StyleSheet.create({
   },
   dateSelector: {
     marginTop: 16,
+  },
+  // 🐛 DEBUG: Style pour les infos de debug
+  debugText: {
+    fontSize: 12,
+    color: theme.colors.warning,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   loadingCard: {
     padding: 32,
