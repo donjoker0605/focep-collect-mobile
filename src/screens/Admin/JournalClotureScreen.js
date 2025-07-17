@@ -1,495 +1,444 @@
-// src/screens/Admin/JournalClotureScreen.js - VERSION COMPLÈTE
+// src/screens/Admin/JournalClotureScreen.js - VERSION CORRIGÉE
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  RefreshControl,
   Alert,
   ActivityIndicator,
-  ScrollView,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import Button from '../../components/Button/Button';
-import SelectInput from '../../components/SelectInput/SelectInput';
+import CollecteurSelector from '../../components/CollecteurSelector/CollecteurSelector';
+import DateSelector from '../../components/DateSelector/DateSelector';
 import theme from '../../theme';
-
-// Hooks et services
-import { useAdminCollecteurs } from '../../hooks/useAdminCollecteurs';
+import { versementService, collecteurService } from '../../services';
 
 const JournalClotureScreen = ({ navigation }) => {
-  // États
+  const insets = useSafeAreaInsets();
+  
+  // États de sélection
   const [selectedCollecteur, setSelectedCollecteur] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [collecteurs, setCollecteurs] = useState([]);
+  
+  // États des données
+  const [preview, setPreview] = useState(null);
   const [montantVerse, setMontantVerse] = useState('');
   const [commentaire, setCommentaire] = useState('');
   
-  // États pour les données
-  const [previewData, setPreviewData] = useState(null);
+  // États de l'interface
   const [loading, setLoading] = useState(false);
-  const [cloturing, setCloturing] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [error, setError] = useState(null);
 
-  // Hook pour les collecteurs
-  const { 
-    collecteurs, 
-    loading: collecteursLoading, 
-    fetchCollecteurs, 
-    refreshCollecteurs 
-  } = useAdminCollecteurs();
-
-  // Charger les collecteurs au démarrage
   useEffect(() => {
-    fetchCollecteurs();
+    loadCollecteurs();
   }, []);
 
-  // Options pour les collecteurs
-  const collecteurOptions = collecteurs.map(collecteur => ({
-    label: `${collecteur.prenom} ${collecteur.nom}`,
-    value: collecteur.id,
-    data: collecteur
-  }));
+  useEffect(() => {
+    if (selectedCollecteur && selectedDate) {
+      loadPreview();
+    }
+  }, [selectedCollecteur, selectedDate]);
 
-  // Options pour les dates (derniers 30 jours)
-  const dateOptions = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    return {
-      label: format(date, 'dd/MM/yyyy', { locale: fr }),
-      value: format(date, 'yyyy-MM-dd')
-    };
-  });
-
-  // 📋 Charger l'aperçu de clôture
-  const loadCloturePreview = async (collecteurId, date) => {
-    if (!collecteurId || !date) return;
-
+  const loadCollecteurs = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch(
-        `/api/admin/versements/preview?collecteurId=${collecteurId}&date=${date}`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${await getAuthToken()}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setPreviewData(result.data);
-        // Pré-remplir le montant versé avec le solde du compte service
-        setMontantVerse(result.data.soldeCompteService?.toString() || '0');
-      } else {
-        setError(result.error || 'Erreur lors du chargement de l\'aperçu');
+      const response = await collecteurService.getCollecteurs();
+      if (response.success) {
+        setCollecteurs(response.data);
       }
     } catch (err) {
-      console.error('Erreur chargement aperçu:', err);
-      setError(err.message || 'Erreur lors du chargement de l\'aperçu');
+      console.error('Erreur chargement collecteurs:', err);
+      setError('Impossible de charger les collecteurs');
+    }
+  };
+
+  const loadPreview = async () => {
+    try {
+      setLoadingPreview(true);
+      setError(null);
+      
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const response = await versementService.getCloturePreview(
+        selectedCollecteur.id, 
+        dateStr
+      );
+      
+      if (response.success) {
+        setPreview(response.data);
+        // Pré-remplir le montant avec le solde du compte service
+        setMontantVerse(response.data.soldeCompteService?.toString() || '');
+      } else {
+        setError(response.error || 'Erreur lors du chargement de l\'aperçu');
+        setPreview(null);
+      }
+    } catch (err) {
+      console.error('Erreur aperçu:', err);
+      setError('Impossible de charger l\'aperçu de clôture');
+      setPreview(null);
     } finally {
-      setLoading(false);
+      setLoadingPreview(false);
     }
   };
 
-  // Helper pour récupérer le token
-  const getAuthToken = async () => {
-    // Votre logique pour récupérer le token
-    // Par exemple depuis AsyncStorage ou votre service d'auth
-    return 'your-auth-token';
-  };
-
-  // Gérer le changement de collecteur
-  const handleCollecteurChange = (collecteurId) => {
-    setSelectedCollecteur(collecteurId);
-    setPreviewData(null);
-    setMontantVerse('');
-    setCommentaire('');
-    if (collecteurId && selectedDate) {
-      loadCloturePreview(collecteurId, selectedDate);
-    }
-  };
-
-  // Gérer le changement de date
-  const handleDateChange = (date) => {
-    setSelectedDate(date);
-    setPreviewData(null);
-    setMontantVerse('');
-    setCommentaire('');
-    if (selectedCollecteur && date) {
-      loadCloturePreview(selectedCollecteur, date);
-    }
-  };
-
-  // 💰 Effectuer le versement et la clôture
-  const handleVersementEtCloture = () => {
-    if (!selectedCollecteur || !selectedDate || !previewData || !montantVerse) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
-      return;
-    }
-
-    const montantVerseNum = parseFloat(montantVerse);
-    const montantCollecte = previewData.soldeCompteService || 0;
+  const calculerDifference = () => {
+    if (!preview || !montantVerse) return null;
     
-    if (isNaN(montantVerseNum) || montantVerseNum < 0) {
-      Alert.alert('Erreur', 'Le montant versé doit être un nombre positif.');
-      return;
-    }
-
-    let alertMessage = `Confirmez-vous le versement de ${formatCurrency(montantVerseNum)} ?\n\n`;
-    alertMessage += `Montant collecté : ${formatCurrency(montantCollecte)}\n`;
+    const montantCollecte = preview.soldeCompteService || 0;
+    const montantSaisi = parseFloat(montantVerse) || 0;
+    const difference = montantSaisi - montantCollecte;
     
-    const difference = montantVerseNum - montantCollecte;
-    if (difference > 0) {
-      alertMessage += `Excédent : +${formatCurrency(difference)} (sera crédité au compte attente)`;
-    } else if (difference < 0) {
-      alertMessage += `Manquant : ${formatCurrency(Math.abs(difference))} (sera débité du compte manquant)`;
+    return {
+      difference,
+      type: difference > 0 ? 'excedent' : difference < 0 ? 'manquant' : 'equilibre',
+      montant: Math.abs(difference)
+    };
+  };
+
+  const validateForm = () => {
+    if (!selectedCollecteur) {
+      Alert.alert('Erreur', 'Veuillez sélectionner un collecteur');
+      return false;
+    }
+    
+    if (!montantVerse || isNaN(parseFloat(montantVerse))) {
+      Alert.alert('Erreur', 'Veuillez saisir un montant valide');
+      return false;
+    }
+    
+    if (parseFloat(montantVerse) < 0) {
+      Alert.alert('Erreur', 'Le montant ne peut pas être négatif');
+      return false;
+    }
+    
+    if (!preview?.journalExiste) {
+      Alert.alert('Erreur', 'Aucun journal trouvé pour cette date');
+      return false;
+    }
+    
+    if (preview?.dejaClôture) {
+      Alert.alert('Erreur', 'Le journal est déjà clôturé');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handleCloture = async () => {
+    if (!validateForm()) return;
+    
+    const difference = calculerDifference();
+    let confirmMessage = `Confirmer la clôture du journal ?\n\n`;
+    confirmMessage += `Collecteur: ${selectedCollecteur.nom} ${selectedCollecteur.prenom}\n`;
+    confirmMessage += `Date: ${format(selectedDate, 'dd/MM/yyyy', { locale: fr })}\n`;
+    confirmMessage += `Montant collecté: ${preview.soldeCompteService} FCFA\n`;
+    confirmMessage += `Montant versé: ${montantVerse} FCFA\n`;
+    
+    if (difference && difference.type === 'manquant') {
+      confirmMessage += `\n⚠️ MANQUANT: ${difference.montant} FCFA\n`;
+      confirmMessage += `Ce montant sera ajouté au compte manquant du collecteur.`;
+    } else if (difference && difference.type === 'excedent') {
+      confirmMessage += `\n✅ EXCÉDENT: ${difference.montant} FCFA\n`;
+      confirmMessage += `Ce montant sera ajouté au compte attente du collecteur.`;
     } else {
-      alertMessage += `Montant équilibré ✓`;
+      confirmMessage += `\n✅ Montant équilibré`;
     }
-
+    
     Alert.alert(
-      'Confirmation de versement',
-      alertMessage,
+      'Clôture du journal',
+      confirmMessage,
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Confirmer', onPress: executeVersementEtCloture }
+        { 
+          text: 'Confirmer', 
+          style: 'destructive',
+          onPress: executeClotureJournal
+        }
       ]
     );
   };
 
-  // Exécuter le versement
-  const executeVersementEtCloture = async () => {
+  const executeClotureJournal = async () => {
     try {
-      setCloturing(true);
-      setError(null);
-
-      const request = {
-        collecteurId: selectedCollecteur,
-        date: selectedDate,
+      setLoading(true);
+      
+      const versementData = {
+        collecteurId: selectedCollecteur.id,
+        date: format(selectedDate, 'yyyy-MM-dd'),
         montantVerse: parseFloat(montantVerse),
         commentaire: commentaire.trim() || null
       };
-
-      const response = await fetch('/api/admin/versements/cloture', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${await getAuthToken()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request)
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Succès - afficher le résultat
-        let successMessage = 'Versement effectué et journal clôturé avec succès !';
-        
-        if (result.data.manquant && result.data.manquant > 0) {
-          successMessage += `\n\n⚠️ Manquant détecté : ${formatCurrency(result.data.manquant)}`;
-        } else if (result.data.excedent && result.data.excedent > 0) {
-          successMessage += `\n\n💰 Excédent détecté : ${formatCurrency(result.data.excedent)}`;
-        }
-
+      
+      const response = await versementService.effectuerVersementEtCloture(versementData);
+      
+      if (response.success) {
         Alert.alert(
           'Succès',
-          successMessage,
+          'Journal clôturé avec succès !',
           [
-            { 
-              text: 'OK', 
+            {
+              text: 'OK',
               onPress: () => {
-                // Réinitialiser le formulaire
+                // Reset du formulaire
                 setSelectedCollecteur(null);
-                setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
-                setPreviewData(null);
+                setSelectedDate(new Date());
                 setMontantVerse('');
                 setCommentaire('');
+                setPreview(null);
+                
+                // Retour ou navigation
+                navigation.goBack();
               }
             }
           ]
         );
       } else {
-        setError(result.error || 'Erreur lors du versement');
+        Alert.alert('Erreur', response.error || 'Erreur lors de la clôture');
       }
     } catch (err) {
-      console.error('Erreur versement:', err);
-      setError(err.message || 'Erreur lors du versement');
+      console.error('Erreur clôture:', err);
+      Alert.alert('Erreur', 'Impossible de clôturer le journal');
     } finally {
-      setCloturing(false);
+      setLoading(false);
     }
   };
 
-  // Formater la devise
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '0 FCFA';
-    return `${new Intl.NumberFormat('fr-FR').format(amount)} FCFA`;
-  };
-
-  // Calculer la différence en temps réel
-  const calculateDifference = () => {
-    if (!previewData || !montantVerse) return null;
-    
-    const montantVerseNum = parseFloat(montantVerse);
-    const montantCollecte = previewData.soldeCompteService || 0;
-    
-    if (isNaN(montantVerseNum)) return null;
-    
-    return montantVerseNum - montantCollecte;
-  };
-
-  const difference = calculateDifference();
-
-  // Rendu d'une opération
-  const renderOperation = ({ item }) => (
-    <View style={styles.operationItem}>
-      <View style={styles.operationInfo}>
-        <Text style={styles.operationClient}>
-          {item.clientNom} {item.clientPrenom}
-        </Text>
-        <Text style={styles.operationType}>{item.type}</Text>
-        <Text style={styles.operationDate}>
-          {format(new Date(item.dateOperation), 'HH:mm')}
-        </Text>
-      </View>
-      <View style={styles.operationAmount}>
-        <Text style={[
-          styles.operationValue,
-          { color: item.type === 'EPARGNE' ? theme.colors.success : theme.colors.error }
-        ]}>
-          {item.type === 'RETRAIT' ? '-' : '+'}{formatCurrency(item.montant)}
-        </Text>
-      </View>
-    </View>
-  );
+  const difference = calculerDifference();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <Header
-        title="Clôture & Versement"
+        title="Clôture de journal"
         onBackPress={() => navigation.goBack()}
       />
-
+      
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Formulaire de sélection */}
+        {/* Sélection collecteur et date */}
         <Card style={styles.selectionCard}>
           <Text style={styles.cardTitle}>Sélection</Text>
           
-          <SelectInput
-            label="Collecteur"
+          <CollecteurSelector
+            collecteurs={collecteurs}
+            selectedCollecteur={selectedCollecteur}
+            onSelectCollecteur={setSelectedCollecteur}
             placeholder="Sélectionner un collecteur"
-            value={selectedCollecteur}
-            options={collecteurOptions}
-            onChange={handleCollecteurChange}
-            disabled={collecteursLoading}
-            required
           />
-
-          <SelectInput
-            label="Date"
-            placeholder="Sélectionner une date"
-            value={selectedDate}
-            options={dateOptions}
-            onChange={handleDateChange}
-            required
+          
+          <DateSelector
+            date={selectedDate}
+            onDateChange={setSelectedDate}
+            style={styles.dateSelector}
           />
-
-          {error && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
         </Card>
 
-        {/* Aperçu des données */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement de l'aperçu...</Text>
-          </View>
-        ) : previewData ? (
+        {/* Aperçu et données */}
+        {selectedCollecteur && (
           <>
-            {/* Résumé comptable */}
-            <Card style={styles.summaryCard}>
-              <Text style={styles.cardTitle}>Résumé Comptable</Text>
-              
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Statut Journal:</Text>
-                <View style={[
-                  styles.statusBadge,
-                  previewData.dejaClôture ? styles.closedBadge : styles.openBadge
-                ]}>
-                  <Text style={styles.statusText}>
-                    {previewData.dejaClôture ? 'Déjà Clôturé' : 'Ouvert'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Solde Compte Service:</Text>
-                <Text style={[styles.summaryValue, styles.primaryAmount]}>
-                  {formatCurrency(previewData.soldeCompteService)}
-                </Text>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Épargne:</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.success }]}>
-                  {formatCurrency(previewData.totalEpargne)}
-                </Text>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Retraits:</Text>
-                <Text style={[styles.summaryValue, { color: theme.colors.error }]}>
-                  {formatCurrency(previewData.totalRetraits)}
-                </Text>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Nombre d'opérations:</Text>
-                <Text style={styles.summaryValue}>{previewData.nombreOperations}</Text>
-              </View>
-
-              {previewData.soldeCompteManquant > 0 && (
-                <View style={[styles.summaryRow, styles.warningRow]}>
-                  <Text style={styles.summaryLabel}>Manquant actuel:</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.error }]}>
-                    {formatCurrency(previewData.soldeCompteManquant)}
-                  </Text>
-                </View>
-              )}
-            </Card>
-
-            {/* Formulaire de versement */}
-            {!previewData.dejaClôture && (
-              <Card style={styles.versementCard}>
-                <Text style={styles.cardTitle}>Versement en Espèces</Text>
-                
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>
-                    Montant versé en espèces <Text style={styles.required}>*</Text>
-                  </Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="0"
-                    value={montantVerse}
-                    onChangeText={setMontantVerse}
-                    keyboardType="numeric"
-                    editable={!cloturing}
-                  />
-                  <Text style={styles.inputHint}>
-                    Montant à collecter : {formatCurrency(previewData.soldeCompteService)}
-                  </Text>
-                </View>
-
-                {/* Affichage de la différence */}
-                {difference !== null && (
-                  <View style={[
-                    styles.differenceContainer,
-                    difference > 0 ? styles.excedentContainer : 
-                    difference < 0 ? styles.manquantContainer : 
-                    styles.equilibreContainer
-                  ]}>
-                    <Ionicons 
-                      name={difference > 0 ? "trending-up" : difference < 0 ? "trending-down" : "checkmark-circle"} 
-                      size={20} 
-                      color={difference > 0 ? theme.colors.success : difference < 0 ? theme.colors.error : theme.colors.primary}
-                    />
-                    <Text style={[
-                      styles.differenceText,
-                      { color: difference > 0 ? theme.colors.success : difference < 0 ? theme.colors.error : theme.colors.primary }
-                    ]}>
-                      {difference > 0 ? `Excédent: +${formatCurrency(Math.abs(difference))}` :
-                       difference < 0 ? `Manquant: -${formatCurrency(Math.abs(difference))}` :
-                       'Montant équilibré ✓'}
+            {loadingPreview ? (
+              <Card style={styles.loadingCard}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={styles.loadingText}>Chargement de l'aperçu...</Text>
+              </Card>
+            ) : error ? (
+              <Card style={styles.errorCard}>
+                <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity onPress={loadPreview} style={styles.retryButton}>
+                  <Text style={styles.retryText}>Réessayer</Text>
+                </TouchableOpacity>
+              </Card>
+            ) : preview ? (
+              <>
+                {/* Résumé du journal */}
+                <Card style={styles.summaryCard}>
+                  <Text style={styles.cardTitle}>Résumé du journal</Text>
+                  
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Journal:</Text>
+                    <Text style={styles.summaryValue}>{preview.referenceJournal}</Text>
+                  </View>
+                  
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Nombre d'opérations:</Text>
+                    <Text style={styles.summaryValue}>{preview.nombreOperations}</Text>
+                  </View>
+                  
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Solde compte service:</Text>
+                    <Text style={[styles.summaryValue, styles.primaryAmount]}>
+                      {new Intl.NumberFormat('fr-FR').format(preview.soldeCompteService)} FCFA
                     </Text>
                   </View>
+                  
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Statut:</Text>
+                    <View style={[
+                      styles.statusBadge,
+                      preview.dejaClôture ? styles.closedBadge : styles.openBadge
+                    ]}>
+                      <Text style={styles.statusText}>
+                        {preview.dejaClôture ? 'CLÔTURÉ' : 'OUVERT'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {preview.dejaClôture && (
+                    <View style={[styles.summaryRow, styles.warningRow]}>
+                      <Ionicons name="warning" size={20} color={theme.colors.error} />
+                      <Text style={[styles.summaryLabel, { color: theme.colors.error }]}>
+                        Ce journal est déjà clôturé
+                      </Text>
+                    </View>
+                  )}
+                </Card>
+
+                {/* Formulaire de versement */}
+                {!preview.dejaClôture && (
+                  <Card style={styles.versementCard}>
+                    <Text style={styles.cardTitle}>Versement</Text>
+                    
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>
+                        Montant versé en espèces <Text style={styles.required}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={montantVerse}
+                        onChangeText={setMontantVerse}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        returnKeyType="done"
+                      />
+                      <Text style={styles.inputHint}>
+                        Montant que le collecteur a réellement apporté en espèces
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.inputLabel}>Commentaire (optionnel)</Text>
+                      <TextInput
+                        style={[styles.textInput, styles.textArea]}
+                        value={commentaire}
+                        onChangeText={setCommentaire}
+                        placeholder="Ajouter un commentaire..."
+                        multiline
+                        numberOfLines={3}
+                        textAlignVertical="top"
+                      />
+                    </View>
+                    
+                    {/* Affichage de la différence */}
+                    {difference && montantVerse && (
+                      <View style={[
+                        styles.differenceContainer,
+                        difference.type === 'excedent' && styles.excedentContainer,
+                        difference.type === 'manquant' && styles.manquantContainer,
+                        difference.type === 'equilibre' && styles.equilibreContainer
+                      ]}>
+                        <Ionicons 
+                          name={
+                            difference.type === 'excedent' ? 'trending-up' :
+                            difference.type === 'manquant' ? 'trending-down' : 'checkmark-circle'
+                          }
+                          size={24}
+                          color={
+                            difference.type === 'excedent' ? theme.colors.success :
+                            difference.type === 'manquant' ? theme.colors.error : theme.colors.primary
+                          }
+                        />
+                        <Text style={[
+                          styles.differenceText,
+                          {
+                            color: difference.type === 'excedent' ? theme.colors.success :
+                                   difference.type === 'manquant' ? theme.colors.error : theme.colors.primary
+                          }
+                        ]}>
+                          {difference.type === 'excedent' && `Excédent: +${difference.montant} FCFA`}
+                          {difference.type === 'manquant' && `Manquant: -${difference.montant} FCFA`}
+                          {difference.type === 'equilibre' && 'Montant équilibré'}
+                        </Text>
+                      </View>
+                    )}
+                  </Card>
                 )}
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>Commentaire (optionnel)</Text>
-                  <TextInput
-                    style={[styles.textInput, styles.textArea]}
-                    placeholder="Observations éventuelles..."
-                    value={commentaire}
-                    onChangeText={setCommentaire}
-                    multiline
-                    numberOfLines={3}
-                    editable={!cloturing}
-                  />
-                </View>
-              </Card>
-            )}
-
-            {/* Liste des opérations */}
-            {previewData.operations && previewData.operations.length > 0 && (
-              <Card style={styles.operationsCard}>
-                <Text style={styles.cardTitle}>
-                  Opérations du jour ({previewData.operations.length})
-                </Text>
-
-                <FlatList
-                  data={previewData.operations}
-                  renderItem={renderOperation}
-                  keyExtractor={item => item.id.toString()}
-                  style={styles.operationsList}
-                  showsVerticalScrollIndicator={false}
-                  nestedScrollEnabled={true}
-                />
-              </Card>
-            )}
-
-            {/* Bouton de clôture */}
-            {!previewData.dejaClôture && (
-              <Button
-                title="Effectuer le versement et clôturer"
-                onPress={handleVersementEtCloture}
-                loading={cloturing}
-                disabled={cloturing || !montantVerse || parseFloat(montantVerse) < 0}
-                style={styles.clotureButton}
-                icon="checkmark-circle"
-              />
-            )}
+                {/* Liste des opérations */}
+                {preview.operations && preview.operations.length > 0 && (
+                  <Card style={styles.operationsCard}>
+                    <Text style={styles.cardTitle}>Opérations du jour ({preview.operations.length})</Text>
+                    
+                    <ScrollView style={styles.operationsList} nestedScrollEnabled>
+                      {preview.operations.map((operation, index) => (
+                        <View key={operation.id || index} style={styles.operationItem}>
+                          <View style={styles.operationInfo}>
+                            <Text style={styles.operationClient}>
+                              {operation.clientPrenom} {operation.clientNom}
+                            </Text>
+                            <Text style={styles.operationType}>{operation.type}</Text>
+                            <Text style={styles.operationDate}>
+                              {format(new Date(operation.dateOperation), 'HH:mm', { locale: fr })}
+                            </Text>
+                          </View>
+                          <View style={styles.operationAmount}>
+                            <Text style={[
+                              styles.operationValue,
+                              {
+                                color: operation.type === 'EPARGNE' ? 
+                                  theme.colors.success : theme.colors.error
+                              }
+                            ]}>
+                              {operation.type === 'EPARGNE' ? '+' : '-'}
+                              {new Intl.NumberFormat('fr-FR').format(operation.montant)} FCFA
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </Card>
+                )}
+              </>
+            ) : null}
           </>
-        ) : selectedCollecteur && selectedDate ? (
-          <Card style={styles.emptyCard}>
-            <Ionicons name="document-outline" size={64} color={theme.colors.gray} />
-            <Text style={styles.emptyText}>
-              Aucune donnée trouvée pour cette date
-            </Text>
-          </Card>
-        ) : null}
+        )}
+
+        {/* Bouton de clôture */}
+        {preview && !preview.dejaClôture && montantVerse && (
+          <Button
+            title={loading ? "Clôture en cours..." : "Clôturer le journal"}
+            onPress={handleCloture}
+            disabled={loading || !validateForm()}
+            loading={loading}
+            style={styles.clotureButton}
+          />
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.primary,
   },
   content: {
     flex: 1,
-    padding: 16,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 20,
   },
   selectionCard: {
-    padding: 16,
     marginBottom: 16,
   },
   cardTitle: {
@@ -498,30 +447,42 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     marginBottom: 16,
   },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${theme.colors.error}15`,
-    padding: 12,
-    borderRadius: 8,
+  dateSelector: {
     marginTop: 16,
   },
-  errorText: {
-    marginLeft: 8,
-    color: theme.colors.error,
-    flex: 1,
-  },
-  loadingContainer: {
+  loadingCard: {
     padding: 32,
     alignItems: 'center',
+    marginBottom: 16,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: theme.colors.textLight,
   },
+  errorCard: {
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: theme.colors.error,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: theme.colors.white,
+    fontWeight: '500',
+  },
   summaryCard: {
-    padding: 16,
     marginBottom: 16,
   },
   summaryRow: {
@@ -568,7 +529,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   versementCard: {
-    padding: 16,
     marginBottom: 16,
   },
   inputContainer: {
@@ -622,7 +582,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   operationsCard: {
-    padding: 16,
     marginBottom: 16,
   },
   operationsList: {
@@ -660,16 +619,6 @@ const styles = StyleSheet.create({
   operationValue: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  emptyCard: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: theme.colors.textLight,
-    textAlign: 'center',
-    marginTop: 16,
   },
   clotureButton: {
     marginBottom: 32,
