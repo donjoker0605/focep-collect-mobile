@@ -1,4 +1,4 @@
-// src/screens/Admin/JournalClotureScreen.js - VERSION CORRIGÉE (accès aux données)
+// src/screens/Admin/JournalClotureScreen.js - CORRECTION AVERTISSEMENT
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -59,7 +59,6 @@ const JournalClotureScreen = ({ navigation }) => {
       console.log('📦 Réponse complète:', response);
       
       if (response.success) {
-        // 🔥 FIX: Les collecteurs sont directement dans response.data
         const collecteursData = response.data || [];
         console.log('👥 Collecteurs récupérés:', collecteursData);
         setCollecteurs(collecteursData);
@@ -95,8 +94,9 @@ const JournalClotureScreen = ({ navigation }) => {
       
       if (response.success) {
         setPreview(response.data);
-        // Pré-remplir le montant avec le solde du compte service
-        setMontantVerse(response.data.soldeCompteService?.toString() || '');
+        // 🔥 CORRECTION: Pré-remplir avec la valeur absolue du solde
+        const montantDu = Math.abs(response.data.soldeCompteService || 0);
+        setMontantVerse(montantDu.toString());
       } else {
         setError(response.error || 'Erreur lors du chargement de l\'aperçu');
         setPreview(null);
@@ -110,21 +110,34 @@ const JournalClotureScreen = ({ navigation }) => {
     }
   };
 
-  const calculerDifference = () => {
+  // ✅ FONCTION CORRIGÉE : Calcul de la différence avec valeur absolue
+  const calculerDifferenceCorrigee = () => {
     if (!preview || !montantVerse) return null;
     
-    const montantCollecte = preview.soldeCompteService || 0;
+    // 🔥 CORRECTION CRITIQUE : Utiliser la valeur absolue du solde du compte service
+    const montantDu = Math.abs(preview.soldeCompteService || 0);
     const montantSaisi = parseFloat(montantVerse) || 0;
-    const difference = montantSaisi - montantCollecte;
+    const difference = montantSaisi - montantDu;
+    
+    console.log('🔧 CALCUL CORRIGÉ:', {
+      soldeCompteService: preview.soldeCompteService,
+      montantDu,
+      montantSaisi,
+      difference,
+      type: difference > 0 ? 'excedent' : difference < 0 ? 'manquant' : 'equilibre'
+    });
     
     return {
       difference,
       type: difference > 0 ? 'excedent' : difference < 0 ? 'manquant' : 'equilibre',
-      montant: Math.abs(difference)
+      montant: Math.abs(difference),
+      montantDu: montantDu,
+      montantSaisi: montantSaisi
     };
   };
 
-  const validateForm = () => {
+  // ✅ FONCTION CORRIGÉE : Validation du formulaire
+  const validateFormCorrige = () => {
     if (!selectedCollecteur) {
       Alert.alert('Erreur', 'Veuillez sélectionner un collecteur');
       return false;
@@ -146,31 +159,36 @@ const JournalClotureScreen = ({ navigation }) => {
     }
     
     if (preview?.dejaClôture) {
-      Alert.alert('Erreur', 'Le journal est déjà clôturé');
+      Alert.alert('Information', 'Ce journal est déjà clôturé');
       return false;
     }
     
     return true;
   };
 
-  const handleCloture = async () => {
-    if (!validateForm()) return;
+  // ✅ FONCTION CORRIGÉE : Gestion de la clôture avec calcul corrigé
+  const handleClotureCorrigee = async () => {
+    if (!validateFormCorrige()) return;
     
-    const difference = calculerDifference();
+    const differenceCorrigee = calculerDifferenceCorrigee();
+    
+    // 🔥 CORRECTION : Utiliser la valeur absolue du solde
+    const montantDu = Math.abs(preview.soldeCompteService || 0);
+    
     let confirmMessage = `Confirmer la clôture du journal ?\n\n`;
     confirmMessage += `Collecteur: ${selectedCollecteur.nom} ${selectedCollecteur.prenom}\n`;
     confirmMessage += `Date: ${format(selectedDate, 'dd/MM/yyyy', { locale: fr })}\n`;
-    confirmMessage += `Montant collecté: ${preview.soldeCompteService} FCFA\n`;
+    confirmMessage += `Montant dû: ${montantDu.toLocaleString('fr-FR')} FCFA\n`;
     confirmMessage += `Montant versé: ${montantVerse} FCFA\n`;
     
-    if (difference && difference.type === 'manquant') {
-      confirmMessage += `\n⚠️ MANQUANT: ${difference.montant} FCFA\n`;
-      confirmMessage += `Ce montant sera ajouté au compte manquant du collecteur.`;
-    } else if (difference && difference.type === 'excedent') {
-      confirmMessage += `\n✅ EXCÉDENT: ${difference.montant} FCFA\n`;
-      confirmMessage += `Ce montant sera ajouté au compte attente du collecteur.`;
+    if (differenceCorrigee && differenceCorrigee.type === 'manquant') {
+      confirmMessage += `\n⚠️ MANQUANT: ${differenceCorrigee.montant.toLocaleString('fr-FR')} FCFA\n`;
+      confirmMessage += `Ce montant sera ajouté comme dette au compte manquant du collecteur.`;
+    } else if (differenceCorrigee && differenceCorrigee.type === 'excedent') {
+      confirmMessage += `\n✅ EXCÉDENT: ${differenceCorrigee.montant.toLocaleString('fr-FR')} FCFA\n`;
+      confirmMessage += `Ce montant sera crédité au compte manquant du collecteur.`;
     } else {
-      confirmMessage += `\n✅ Montant équilibré`;
+      confirmMessage += `\n✅ Montant équilibré - Versement normal`;
     }
     
     Alert.alert(
@@ -181,13 +199,14 @@ const JournalClotureScreen = ({ navigation }) => {
         { 
           text: 'Confirmer', 
           style: 'destructive',
-          onPress: executeClotureJournal
+          onPress: executeClotureJournalCorrige
         }
       ]
     );
   };
 
-  const executeClotureJournal = async () => {
+  // ✅ FONCTION CORRIGÉE : Exécution de la clôture
+  const executeClotureJournalCorrige = async () => {
     try {
       setLoading(true);
       
@@ -197,6 +216,8 @@ const JournalClotureScreen = ({ navigation }) => {
         montantVerse: parseFloat(montantVerse),
         commentaire: commentaire.trim() || null
       };
+      
+      console.log('🔄 Exécution clôture avec logique corrigée:', versementData);
       
       const response = await versementService.effectuerVersementEtCloture(versementData);
       
@@ -225,14 +246,58 @@ const JournalClotureScreen = ({ navigation }) => {
         Alert.alert('Erreur', response.error || 'Erreur lors de la clôture');
       }
     } catch (err) {
-      console.error('❌ Erreur clôture:', err);
+      console.error('❌ Erreur clôture avec logique corrigée:', err);
       Alert.alert('Erreur', 'Impossible de clôturer le journal');
     } finally {
       setLoading(false);
     }
   };
 
-  const difference = calculerDifference();
+  // ✅ COMPOSANT CORRIGÉ : Affichage de la différence
+  const DifferenceDisplay = () => {
+    const differenceCorrigee = calculerDifferenceCorrigee();
+    
+    if (!differenceCorrigee || !montantVerse) return null;
+    
+    return (
+      <View style={[
+        styles.differenceContainer,
+        differenceCorrigee.type === 'excedent' && styles.excedentContainer,
+        differenceCorrigee.type === 'manquant' && styles.manquantContainer,
+        differenceCorrigee.type === 'equilibre' && styles.equilibreContainer
+      ]}>
+        <Ionicons 
+          name={
+            differenceCorrigee.type === 'excedent' ? 'trending-up' :
+            differenceCorrigee.type === 'manquant' ? 'trending-down' : 'checkmark-circle'
+          }
+          size={24}
+          color={
+            differenceCorrigee.type === 'excedent' ? theme.colors.success :
+            differenceCorrigee.type === 'manquant' ? theme.colors.error : theme.colors.primary
+          }
+        />
+        <View style={styles.differenceTextContainer}>
+          <Text style={[
+            styles.differenceText,
+            {
+              color: differenceCorrigee.type === 'excedent' ? theme.colors.success :
+                     differenceCorrigee.type === 'manquant' ? theme.colors.error : theme.colors.primary
+            }
+          ]}>
+            {differenceCorrigee.type === 'excedent' && 
+              `Excédent: +${differenceCorrigee.montant.toLocaleString('fr-FR')} FCFA`}
+            {differenceCorrigee.type === 'manquant' && 
+              `Manquant: -${differenceCorrigee.montant.toLocaleString('fr-FR')} FCFA`}
+            {differenceCorrigee.type === 'equilibre' && 'Montant équilibré'}
+          </Text>
+          <Text style={styles.differenceDetail}>
+            {`Montant dû: ${differenceCorrigee.montantDu.toLocaleString('fr-FR')} FCFA`}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
@@ -246,10 +311,10 @@ const JournalClotureScreen = ({ navigation }) => {
         <Card style={styles.selectionCard}>
           <Text style={styles.cardTitle}>Sélection</Text>
           
-          {/* 🐛 DEBUG: Afficher le nombre de collecteurs chargés */}
+          {/* 🔥 CORRECTION AVERTISSEMENT : Encapsuler tous les textes dans <Text> */}
           {__DEV__ && (
             <Text style={styles.debugText}>
-              Collecteurs chargés: {collecteurs.length}
+              {`Collecteurs chargés: ${collecteurs.length}`}
             </Text>
           )}
           
@@ -294,18 +359,30 @@ const JournalClotureScreen = ({ navigation }) => {
                   
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Journal:</Text>
-                    <Text style={styles.summaryValue}>{preview.referenceJournal}</Text>
+                    <Text style={styles.summaryValue}>
+                      {preview.referenceJournal || 'N/A'}
+                    </Text>
                   </View>
                   
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Nombre d'opérations:</Text>
-                    <Text style={styles.summaryValue}>{preview.nombreOperations}</Text>
+                    <Text style={styles.summaryValue}>
+                      {`${preview.nombreOperations || 0}`}
+                    </Text>
                   </View>
                   
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Solde compte service:</Text>
                     <Text style={[styles.summaryValue, styles.primaryAmount]}>
-                      {new Intl.NumberFormat('fr-FR').format(preview.soldeCompteService)} FCFA
+                      {`${new Intl.NumberFormat('fr-FR').format(preview.soldeCompteService || 0)} FCFA`}
+                    </Text>
+                  </View>
+
+                  {/* 🔥 AJOUT: Affichage du montant dû calculé */}
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Montant dû (calculé):</Text>
+                    <Text style={[styles.summaryValue, styles.duAmount]}>
+                      {`${new Intl.NumberFormat('fr-FR').format(Math.abs(preview.soldeCompteService || 0))} FCFA`}
                     </Text>
                   </View>
                   
@@ -323,15 +400,33 @@ const JournalClotureScreen = ({ navigation }) => {
                   
                   {preview.dejaClôture && (
                     <View style={[styles.summaryRow, styles.warningRow]}>
-                      <Ionicons name="warning" size={20} color={theme.colors.error} />
-                      <Text style={[styles.summaryLabel, { color: theme.colors.error }]}>
-                        Ce journal est déjà clôturé
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+                      <Text style={[styles.summaryLabel, { color: theme.colors.success }]}>
+                        Ce journal a été clôturé avec succès
                       </Text>
                     </View>
                   )}
                 </Card>
 
-                {/* Formulaire de versement */}
+                {/* 🔥 NOUVELLE SECTION : Information pour journal clôturé */}
+                {preview.dejaClôture && (
+                  <Card style={styles.infoCard}>
+                    <View style={styles.infoHeader}>
+                      <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
+                      <Text style={styles.infoTitle}>Journal clôturé</Text>
+                    </View>
+                    <Text style={styles.infoText}>
+                      Ce journal a été clôturé avec succès. Les informations affichées sont en mode lecture seule.
+                    </Text>
+                    {preview.soldeCompteManquant !== 0 && (
+                      <Text style={styles.infoSubText}>
+                        {`Solde compte manquant: ${new Intl.NumberFormat('fr-FR').format(preview.soldeCompteManquant)} FCFA`}
+                      </Text>
+                    )}
+                  </Card>
+                )}
+
+                {/* Formulaire de versement - Masqué si journal clôturé */}
                 {!preview.dejaClôture && (
                   <Card style={styles.versementCard}>
                     <Text style={styles.cardTitle}>Versement</Text>
@@ -366,56 +461,32 @@ const JournalClotureScreen = ({ navigation }) => {
                       />
                     </View>
                     
-                    {/* Affichage de la différence */}
-                    {difference && montantVerse && (
-                      <View style={[
-                        styles.differenceContainer,
-                        difference.type === 'excedent' && styles.excedentContainer,
-                        difference.type === 'manquant' && styles.manquantContainer,
-                        difference.type === 'equilibre' && styles.equilibreContainer
-                      ]}>
-                        <Ionicons 
-                          name={
-                            difference.type === 'excedent' ? 'trending-up' :
-                            difference.type === 'manquant' ? 'trending-down' : 'checkmark-circle'
-                          }
-                          size={24}
-                          color={
-                            difference.type === 'excedent' ? theme.colors.success :
-                            difference.type === 'manquant' ? theme.colors.error : theme.colors.primary
-                          }
-                        />
-                        <Text style={[
-                          styles.differenceText,
-                          {
-                            color: difference.type === 'excedent' ? theme.colors.success :
-                                   difference.type === 'manquant' ? theme.colors.error : theme.colors.primary
-                          }
-                        ]}>
-                          {difference.type === 'excedent' && `Excédent: +${difference.montant} FCFA`}
-                          {difference.type === 'manquant' && `Manquant: -${difference.montant} FCFA`}
-                          {difference.type === 'equilibre' && 'Montant équilibré'}
-                        </Text>
-                      </View>
-                    )}
+                    {/* ✅ UTILISATION DU COMPOSANT CORRIGÉ */}
+                    <DifferenceDisplay />
                   </Card>
                 )}
 
                 {/* Liste des opérations */}
                 {preview.operations && preview.operations.length > 0 && (
                   <Card style={styles.operationsCard}>
-                    <Text style={styles.cardTitle}>Opérations du jour ({preview.operations.length})</Text>
+                    <Text style={styles.cardTitle}>
+                      {`Opérations du jour (${preview.operations.length})`}
+                    </Text>
                     
                     <ScrollView style={styles.operationsList} nestedScrollEnabled>
                       {preview.operations.map((operation, index) => (
                         <View key={operation.id || index} style={styles.operationItem}>
                           <View style={styles.operationInfo}>
                             <Text style={styles.operationClient}>
-                              {operation.clientPrenom} {operation.clientNom}
+                              {`${operation.clientPrenom || ''} ${operation.clientNom || ''}`}
                             </Text>
-                            <Text style={styles.operationType}>{operation.type}</Text>
+                            <Text style={styles.operationType}>
+                              {operation.type || 'N/A'}
+                            </Text>
                             <Text style={styles.operationDate}>
-                              {format(new Date(operation.dateOperation), 'HH:mm', { locale: fr })}
+                              {operation.dateOperation ? 
+                                format(new Date(operation.dateOperation), 'HH:mm', { locale: fr }) : 
+                                'N/A'}
                             </Text>
                           </View>
                           <View style={styles.operationAmount}>
@@ -426,8 +497,7 @@ const JournalClotureScreen = ({ navigation }) => {
                                   theme.colors.success : theme.colors.error
                               }
                             ]}>
-                              {operation.type === 'EPARGNE' ? '+' : '-'}
-                              {new Intl.NumberFormat('fr-FR').format(operation.montant)} FCFA
+                              {`${operation.type === 'EPARGNE' ? '+' : '-'}${new Intl.NumberFormat('fr-FR').format(operation.montant || 0)} FCFA`}
                             </Text>
                           </View>
                         </View>
@@ -440,12 +510,12 @@ const JournalClotureScreen = ({ navigation }) => {
           </>
         )}
 
-        {/* Bouton de clôture */}
+        {/* Bouton de clôture - Affiché seulement si pas clôturé */}
         {preview && !preview.dejaClôture && montantVerse && (
           <Button
             title={loading ? "Clôture en cours..." : "Clôturer le journal"}
-            onPress={handleCloture}
-            disabled={loading || !validateForm()}
+            onPress={handleClotureCorrigee}
+            disabled={loading || !validateFormCorrige()}
             loading={loading}
             style={styles.clotureButton}
           />
@@ -528,10 +598,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   warningRow: {
-    backgroundColor: `${theme.colors.error}10`,
+    backgroundColor: `${theme.colors.success}10`,
     padding: 8,
     borderRadius: 6,
     marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   summaryLabel: {
     fontSize: 16,
@@ -548,21 +620,55 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: theme.colors.primary,
   },
+  duAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.success,
+  },
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
   closedBadge: {
-    backgroundColor: theme.colors.error + '20',
+    backgroundColor: theme.colors.success + '20',
   },
   openBadge: {
-    backgroundColor: theme.colors.success + '20',
+    backgroundColor: theme.colors.warning + '20',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '500',
     color: theme.colors.text,
+  },
+  // 🔥 NOUVEAUX STYLES : Pour la section d'information
+  infoCard: {
+    marginBottom: 16,
+    backgroundColor: theme.colors.success + '10',
+    borderColor: theme.colors.success + '30',
+    borderWidth: 1,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.success,
+    marginLeft: 8,
+  },
+  infoText: {
+    fontSize: 16,
+    color: theme.colors.text,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  infoSubText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
   },
   versementCard: {
     marginBottom: 16,
@@ -603,6 +709,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
   },
+  differenceTextContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
   excedentContainer: {
     backgroundColor: `${theme.colors.success}15`,
   },
@@ -613,9 +723,13 @@ const styles = StyleSheet.create({
     backgroundColor: `${theme.colors.primary}15`,
   },
   differenceText: {
-    marginLeft: 8,
     fontSize: 16,
     fontWeight: '500',
+    marginBottom: 4,
+  },
+  differenceDetail: {
+    fontSize: 14,
+    color: theme.colors.textLight,
   },
   operationsCard: {
     marginBottom: 16,
