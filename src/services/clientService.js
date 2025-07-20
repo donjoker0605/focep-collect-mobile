@@ -12,15 +12,37 @@ class ClientService extends BaseApiService {
   async getAllClients({ page = 0, size = 20, search = '' } = {}) {
     try {
       console.log('📱 API: GET /clients');
+      
+      // 🔥 OBTENIR L'ID COLLECTEUR AUTOMATIQUEMENT
+      const collecteurId = await authService.getCurrentUserId();
+      if (!collecteurId) {
+        throw new Error('Impossible d\'identifier le collecteur. Veuillez vous reconnecter.');
+      }
+      
       const params = { page, size };
       if (search?.trim()) params.search = search.trim();
       
-      const response = await this.axios.get('/clients', { params });
+      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      const headers = await authService.getApiHeaders();
+      
+      // 🔥 UTILISER L'ENDPOINT SÉCURISÉ PAR COLLECTEUR
+      const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { 
+        params, 
+        headers 
+      });
+      
       return this.formatResponse(response, 'Clients récupérés');
+      
     } catch (error) {
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      
       throw this.handleError(error, 'Erreur lors de la récupération des clients');
     }
   }
+
 
   /**
    * Récupérer un client par son ID
@@ -41,20 +63,42 @@ class ClientService extends BaseApiService {
   async createClient(clientData) {
     try {
       console.log('📱 API: POST /clients');
-      console.log('📤 Données envoyées:', clientData);
+      console.log('📤 Données client reçues:', clientData);
+      
+      // 🔥 ENRICHISSEMENT AUTOMATIQUE DES DONNÉES
+      const enrichedData = await authService.enrichClientData(clientData);
       
       // Validation locale avant envoi
-      const validation = this.validateClientDataLocally(clientData);
+      const validation = this.validateClientDataLocally(enrichedData);
       if (!validation.isValid) {
         throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
       }
       
-      const response = await this.axios.post('/clients', clientData);
+      console.log('📤 Données enrichies à envoyer:', enrichedData);
+      
+      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      const headers = await authService.getApiHeaders();
+      
+      const response = await this.axios.post('/clients', enrichedData, { headers });
       return this.formatResponse(response, 'Client créé avec succès');
+      
     } catch (error) {
+      // 🔥 GESTION AMÉLIORÉE DES ERREURS
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (authError.accessDenied) {
+        throw new Error('Accès non autorisé pour créer un client.');
+      }
+      if (authError.dataError) {
+        throw new Error('Données utilisateur incomplètes. Veuillez vous reconnecter.');
+      }
+      
       throw this.handleError(error, 'Erreur lors de la création du client');
     }
   }
+
 
   /**
    * Mettre à jour un client
@@ -62,18 +106,106 @@ class ClientService extends BaseApiService {
   async updateClient(clientId, clientData) {
     try {
       console.log('📱 API: PUT /clients/', clientId);
-      console.log('📤 Données envoyées:', clientData);
+      console.log('📤 Données de mise à jour:', clientData);
+      
+      // 🔥 VÉRIFICATION DES PERMISSIONS
+      const canManage = await authService.canManageClient(clientId);
+      if (!canManage) {
+        throw new Error('Vous n\'êtes pas autorisé à modifier ce client');
+      }
       
       // Validation locale avant envoi
-      const validation = this.validateClientDataLocally(clientData);
+      const validation = this.validateClientUpdateDataLocally(clientData);
       if (!validation.isValid) {
         throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
       }
       
-      const response = await this.axios.put(`/clients/${clientId}`, clientData);
+      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      const headers = await authService.getApiHeaders();
+      
+      const response = await this.axios.put(`/clients/${clientId}`, clientData, { headers });
       return this.formatResponse(response, 'Client mis à jour avec succès');
+      
     } catch (error) {
+      // 🔥 GESTION AMÉLIORÉE DES ERREURS
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (authError.accessDenied) {
+        throw new Error('Accès non autorisé pour modifier ce client.');
+      }
+      
       throw this.handleError(error, 'Erreur lors de la mise à jour du client');
+    }
+  }
+  
+  /**
+   * 🔥 NOUVELLE MÉTHODE: Validation spécifique pour les mises à jour
+   */
+  validateClientUpdateDataLocally(clientData) {
+    try {
+      console.log('✅ Validation locale données de mise à jour:', clientData);
+      
+      const errors = [];
+      
+      // Validation téléphone (si fourni)
+      if (clientData.telephone && clientData.telephone.trim()) {
+        const phoneRegex = /^(\+237|237)?[ ]?[679]\d{8}$/;
+        if (!phoneRegex.test(clientData.telephone.trim())) {
+          errors.push('Le numéro de téléphone n\'est pas valide (format camerounais requis)');
+        }
+      }
+      
+      // Validation CNI (si fourni)
+      if (clientData.numeroCni && clientData.numeroCni.trim().length < 8) {
+        errors.push('Le numéro CNI doit contenir au moins 8 caractères');
+      }
+      
+      // Validation ville (si fournie)
+      if (clientData.ville && clientData.ville.trim().length < 2) {
+        errors.push('La ville doit contenir au moins 2 caractères');
+      }
+      
+      // Validation quartier (si fourni)
+      if (clientData.quartier && clientData.quartier.trim().length < 2) {
+        errors.push('Le quartier doit contenir au moins 2 caractères');
+      }
+      
+      // Validation coordonnées GPS (si fournies)
+      if (clientData.latitude !== null && clientData.latitude !== undefined) {
+        if (typeof clientData.latitude !== 'number' || clientData.latitude < -90 || clientData.latitude > 90) {
+          errors.push('La latitude doit être un nombre entre -90 et 90');
+        }
+      }
+      
+      if (clientData.longitude !== null && clientData.longitude !== undefined) {
+        if (typeof clientData.longitude !== 'number' || clientData.longitude < -180 || clientData.longitude > 180) {
+          errors.push('La longitude doit être un nombre entre -180 et 180');
+        }
+      }
+      
+      // 🔥 DÉTECTION COORDONNÉES ÉMULATEUR
+      if (clientData.latitude && clientData.longitude) {
+        if (Math.abs(clientData.latitude - 37.4219983) < 0.001 && 
+            Math.abs(clientData.longitude - (-122.084)) < 0.001) {
+          errors.push('Coordonnées d\'émulateur détectées. Utilisez des coordonnées réelles.');
+        }
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors: errors,
+        message: errors.length === 0 ? 'Données de mise à jour valides' : 'Erreurs de validation détectées'
+      };
+      
+    } catch (error) {
+      console.error('❌ Erreur validation locale mise à jour:', error);
+      return {
+        isValid: false,
+        errors: ['Erreur lors de la validation'],
+        message: error.message
+      };
     }
   }
 
@@ -798,7 +930,7 @@ class ClientService extends BaseApiService {
       }
       
       // Validation téléphone (format camerounais)
-      const phoneRegex = /^(\+237|237)?[ ]?[6-9][0-9]{8}$/;
+      const phoneRegex = /^(\+237|237)?[ ]?[679]\d{8}$/;
       if (!clientData.telephone || !phoneRegex.test(clientData.telephone.trim())) {
         errors.push('Le numéro de téléphone n\'est pas valide (format camerounais requis)');
       }
@@ -808,12 +940,12 @@ class ClientService extends BaseApiService {
         errors.push('La ville est requise');
       }
       
-      // Validation quartier (requis seulement pour création)
-      if (!clientData.id && (!clientData.quartier || clientData.quartier.trim().length < 2)) {
+      // Validation quartier
+      if (!clientData.quartier || clientData.quartier.trim().length < 2) {
         errors.push('Le quartier est requis');
       }
       
-      // Validation coordonnées GPS (optionnelles mais doivent être valides si présentes)
+      // 🔥 VALIDATION AMÉLIORÉE DES COORDONNÉES
       if (clientData.latitude !== null && clientData.latitude !== undefined) {
         if (typeof clientData.latitude !== 'number' || clientData.latitude < -90 || clientData.latitude > 90) {
           errors.push('La latitude doit être un nombre entre -90 et 90');
@@ -826,11 +958,42 @@ class ClientService extends BaseApiService {
         }
       }
       
+      // 🔥 DÉTECTION COORDONNÉES ÉMULATEUR
+      if (clientData.latitude && clientData.longitude) {
+        if (Math.abs(clientData.latitude - 37.4219983) < 0.001 && 
+            Math.abs(clientData.longitude - (-122.084)) < 0.001) {
+          console.warn('🚨 Coordonnées émulateur détectées');
+          // En mode développement, avertir mais ne pas bloquer
+          if (__DEV__) {
+            console.warn('⚠️ Mode développement: coordonnées émulateur acceptées');
+          } else {
+            errors.push('Coordonnées d\'émulateur détectées. Utilisez un appareil physique.');
+          }
+        }
+        
+        // Vérification Cameroun
+        if (clientData.latitude < 1.0 || clientData.latitude > 13.5 || 
+            clientData.longitude < 8.0 || clientData.longitude > 16.5) {
+          console.warn('⚠️ Coordonnées en dehors du Cameroun');
+          // Avertir mais ne pas bloquer
+        }
+      }
+      
+      // 🔥 VÉRIFICATION DES IDS (doivent être fournis par authService)
+      if (!clientData.collecteurId) {
+        errors.push('ID collecteur manquant (problème d\'authentification)');
+      }
+      
+      if (!clientData.agenceId) {
+        errors.push('ID agence manquant (problème d\'authentification)');
+      }
+      
       return {
         isValid: errors.length === 0,
         errors: errors,
         message: errors.length === 0 ? 'Données valides' : 'Erreurs de validation détectées'
       };
+      
     } catch (error) {
       console.error('❌ Erreur validation locale:', error);
       return {
@@ -840,6 +1003,110 @@ class ClientService extends BaseApiService {
       };
     }
   }
+  
+  /**
+   * Debug pour diagnostiquer les problèmes
+   */
+  async debugAuthAndPermissions() {
+    try {
+      console.log('🔍 DEBUG Client Service:');
+      
+      // Informations utilisateur
+      const user = await authService.getCurrentUser();
+      console.log('  - Utilisateur actuel:', user);
+      
+      // Test des permissions
+      const canManageClient = await authService.canManageClient(1); // Test avec ID 1
+      console.log('  - Peut gérer client 1:', canManageClient);
+      
+      // Test des headers
+      const headers = await authService.getApiHeaders();
+      console.log('  - Headers API:', headers);
+      
+      // Test validation token
+      const isValidToken = await authService.validateToken();
+      console.log('  - Token valide:', isValidToken);
+      
+      return {
+        user,
+        canManageClient,
+        hasValidToken: isValidToken,
+        headers: !!headers.Authorization
+      };
+      
+    } catch (error) {
+      console.error('❌ Erreur debug:', error);
+      return { error: error.message };
+    }
+  }
+  
+	  /**
+	   * Test de connexion avec diagnostic
+	   */
+	  async testConnectionWithDiagnostic() {
+		try {
+		  console.log('🧪 Test connexion avec diagnostic...');
+		  
+		  // 1. Vérifier l'authentification
+		  const isAuth = await authService.isAuthenticated();
+		  if (!isAuth.token) {
+			return { success: false, error: 'Non authentifié', stage: 'auth' };
+		  }
+		  
+		  // 2. Vérifier les informations utilisateur
+		  const user = await authService.getCurrentUser();
+		  if (!user || !user.id || !user.agenceId) {
+			return { success: false, error: 'Informations utilisateur incomplètes', stage: 'user_info', user };
+		  }
+		  
+		  // 3. Test simple avec endpoint debug
+		  try {
+			const headers = await authService.getApiHeaders();
+			const response = await this.axios.get('/clients/debug/auth-info', { headers });
+			
+			return { 
+			  success: true, 
+			  message: 'Connexion et authentification OK',
+			  debugInfo: response.data 
+			};
+			
+		  } catch (apiError) {
+			return { 
+			  success: false, 
+			  error: 'Erreur API', 
+			  stage: 'api_call', 
+			  details: apiError.response?.data || apiError.message 
+			};
+		  }
+		  
+		} catch (error) {
+		  return { success: false, error: error.message, stage: 'unknown' };
+		}
+	  }
+	}
+
+	async initializeWithAuth() {
+	  try {
+		console.log('🔧 Initialisation ClientService avec authentification...');
+		
+		// S'assurer que authService est initialisé
+		await authService.initialize();
+		
+		// Vérifier que l'utilisateur est connecté
+		const user = await authService.getCurrentUser();
+		if (!user) {
+		  throw new Error('Utilisateur non connecté');
+		}
+		
+		console.log('✅ ClientService initialisé pour:', await authService.getUserDisplayInfo());
+		return true;
+		
+	  } catch (error) {
+		console.error('❌ Erreur initialisation ClientService:', error);
+		return false;
+	  }
+	}
+
   
   
 }

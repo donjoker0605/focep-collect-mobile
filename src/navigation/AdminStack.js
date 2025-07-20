@@ -1,8 +1,9 @@
-// src/navigation/AdminStack.js - NAVIGATION ADMIN CORRIGÉE
+// src/navigation/AdminStack.js - CORRECTION DE LA DÉCONNEXION
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth'; // ✅ AJOUT CRITIQUE
 
 // ============================= 
 // IMPORTS DES ÉCRANS
@@ -38,8 +39,10 @@ import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 const Stack = createStackNavigator();
 
 const AdminStack = () => {
+  // ✅ CORRECTION CRITIQUE: Utiliser le hook useAuth
+  const { logout } = useAuth();
   
-  // FONCTION DE DÉCONNEXION
+  // ✅ FONCTION DE DÉCONNEXION CORRIGÉE
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -54,10 +57,17 @@ const AdminStack = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { authService } = require('../services');
-              await authService.logout();
+              console.log('🔄 Déconnexion en cours...');
+              
+              // ✅ CORRECTION CRITIQUE: Utiliser logout du contexte
+              // Cela va automatiquement mettre à jour isAuthenticated = false
+              // et AppNavigator va rediriger vers AuthStack
+              await logout();
+              
+              console.log('✅ Déconnexion réussie - Redirection automatique vers login');
             } catch (error) {
-              console.error('Erreur lors de la déconnexion:', error);
+              console.error('❌ Erreur lors de la déconnexion:', error);
+              Alert.alert('Erreur', 'Impossible de se déconnecter');
             }
           },
         },
@@ -210,10 +220,6 @@ const AdminStack = () => {
           headerShown: false, // MASQUER HEADER NATIF
         }}
       />
-
-      {/* ============================= */}
-      {/* ÉCRANS AVEC HEADER NATIF */}
-      {/* ============================= */}
 
       <Stack.Screen
         name="ReportsScreen"
