@@ -43,7 +43,6 @@ class ClientService extends BaseApiService {
     }
   }
 
-
   /**
    * Récupérer un client par son ID
    */
@@ -98,7 +97,6 @@ class ClientService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la création du client');
     }
   }
-
 
   /**
    * Mettre à jour un client
@@ -269,7 +267,6 @@ class ClientService extends BaseApiService {
       throw this.handleError(error, 'Erreur lors de la récupération des détails du client');
     }
   }
-
 
   /**
    * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
@@ -1040,75 +1037,74 @@ class ClientService extends BaseApiService {
     }
   }
   
-	  /**
-	   * Test de connexion avec diagnostic
-	   */
-	  async testConnectionWithDiagnostic() {
-		try {
-		  console.log('🧪 Test connexion avec diagnostic...');
-		  
-		  // 1. Vérifier l'authentification
-		  const isAuth = await authService.isAuthenticated();
-		  if (!isAuth.token) {
-			return { success: false, error: 'Non authentifié', stage: 'auth' };
-		  }
-		  
-		  // 2. Vérifier les informations utilisateur
-		  const user = await authService.getCurrentUser();
-		  if (!user || !user.id || !user.agenceId) {
-			return { success: false, error: 'Informations utilisateur incomplètes', stage: 'user_info', user };
-		  }
-		  
-		  // 3. Test simple avec endpoint debug
-		  try {
-			const headers = await authService.getApiHeaders();
-			const response = await this.axios.get('/clients/debug/auth-info', { headers });
-			
-			return { 
-			  success: true, 
-			  message: 'Connexion et authentification OK',
-			  debugInfo: response.data 
-			};
-			
-		  } catch (apiError) {
-			return { 
-			  success: false, 
-			  error: 'Erreur API', 
-			  stage: 'api_call', 
-			  details: apiError.response?.data || apiError.message 
-			};
-		  }
-		  
-		} catch (error) {
-		  return { success: false, error: error.message, stage: 'unknown' };
-		}
-	  }
-	}
+  /**
+   * Test de connexion avec diagnostic
+   */
+  async testConnectionWithDiagnostic() {
+    try {
+      console.log('🧪 Test connexion avec diagnostic...');
+      
+      // 1. Vérifier l'authentification
+      const isAuth = await authService.isAuthenticated();
+      if (!isAuth.token) {
+        return { success: false, error: 'Non authentifié', stage: 'auth' };
+      }
+      
+      // 2. Vérifier les informations utilisateur
+      const user = await authService.getCurrentUser();
+      if (!user || !user.id || !user.agenceId) {
+        return { success: false, error: 'Informations utilisateur incomplètes', stage: 'user_info', user };
+      }
+      
+      // 3. Test simple avec endpoint debug
+      try {
+        const headers = await authService.getApiHeaders();
+        const response = await this.axios.get('/clients/debug/auth-info', { headers });
+        
+        return { 
+          success: true, 
+          message: 'Connexion et authentification OK',
+          debugInfo: response.data 
+        };
+        
+      } catch (apiError) {
+        return { 
+          success: false, 
+          error: 'Erreur API', 
+          stage: 'api_call', 
+          details: apiError.response?.data || apiError.message 
+        };
+      }
+      
+    } catch (error) {
+      return { success: false, error: error.message, stage: 'unknown' };
+    }
+  }
 
-	async initializeWithAuth() {
-	  try {
-		console.log('🔧 Initialisation ClientService avec authentification...');
-		
-		// S'assurer que authService est initialisé
-		await authService.initialize();
-		
-		// Vérifier que l'utilisateur est connecté
-		const user = await authService.getCurrentUser();
-		if (!user) {
-		  throw new Error('Utilisateur non connecté');
-		}
-		
-		console.log('✅ ClientService initialisé pour:', await authService.getUserDisplayInfo());
-		return true;
-		
-	  } catch (error) {
-		console.error('❌ Erreur initialisation ClientService:', error);
-		return false;
-	  }
-	}
-
-  
-  
+  /**
+   * Initialisation du service avec authentification
+   */
+  async initializeWithAuth() {
+    try {
+      console.log('🔧 Initialisation ClientService avec authentification...');
+      
+      // S'assurer que authService est initialisé
+      await authService.initialize();
+      
+      // Vérifier que l'utilisateur est connecté
+      const user = await authService.getCurrentUser();
+      if (!user) {
+        throw new Error('Utilisateur non connecté');
+      }
+      
+      console.log('✅ ClientService initialisé pour:', await authService.getUserDisplayInfo());
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Erreur initialisation ClientService:', error);
+      return false;
+    }
+  }
 }
 
 export default new ClientService();
