@@ -1,5 +1,4 @@
-// ClientAddEditScreen.js - VERSION CORRIGÉE AVEC LOGIQUE GPS INTELLIGENTE
-
+// ClientAddEditScreen.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,6 +10,7 @@ import {
   Platform,
   Alert,
   SafeAreaView,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useForm, Controller } from 'react-hook-form';
@@ -32,10 +32,7 @@ import authService from '../../services/authService';
 // Navigation
 import { useCollecteurNavigation } from '../../navigation/CollecteurStack';
 
-// ============================================
 // SCHÉMAS DE VALIDATION
-// ============================================
-
 const clientSchema = yup.object().shape({
   nom: yup
     .string()
@@ -74,9 +71,15 @@ const GPS_STATES = {
   MANUAL_COMPLETED: 'manual_completed'
 };
 
-// ============================================
+// Types de commission
+const COMMISSION_TYPES = [
+  { label: 'Hériter de l\'agence', value: 'INHERIT' },
+  { label: 'Montant fixe', value: 'FIXED' },
+  { label: 'Pourcentage', value: 'PERCENTAGE' },
+  { label: 'Par paliers', value: 'TIER' },
+];
+
 // COMPOSANT PRINCIPAL
-// ============================================
 const ClientAddEditScreen = ({ navigation, route }) => {
   const { mode, client } = route.params || { mode: 'add' };
   const isEditMode = mode === 'edit';
@@ -89,6 +92,14 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   const [gpsError, setGpsError] = useState(null);
   const [gpsAttempts, setGpsAttempts] = useState(0);
   const [userInfo, setUserInfo] = useState(null);
+
+  // États pour commission et activation
+  const [isClientActive, setIsClientActive] = useState(true);
+  const [commissionConfig, setCommissionConfig] = useState({
+    type: 'INHERIT',
+    valeur: 0,
+    paliersCommission: []
+  });
 
   // Configuration du formulaire
   const { control, handleSubmit, setValue, formState: { errors } } = useForm({
@@ -112,16 +123,14 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         }
   });
 
-  // ============================================
   // EFFETS D'INITIALISATION
-  // ============================================
-  
   useEffect(() => {
     loadUserInfo();
     if (isEditMode && client) {
       loadExistingLocation();
+      setIsClientActive(client.valide || true);
+      loadExistingCommission();
     } else {
-      // 🔥 Pour un nouveau client, démarrer automatiquement la capture GPS
       startAutomaticGPSCapture();
     }
   }, []);
@@ -149,26 +158,29 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // ============================================
-  // 🔥 LOGIQUE GPS INTELLIGENTE ET OBLIGATOIRE
-  // ============================================
+  const loadExistingCommission = () => {
+    if (client?.commissionParameter) {
+      setCommissionConfig({
+        type: client.commissionParameter.type,
+        valeur: client.commissionParameter.valeur || 0,
+        paliersCommission: client.commissionParameter.paliersCommission || []
+      });
+    }
+  };
 
+  // LOGIQUE GPS INTELLIGENTE
   const startAutomaticGPSCapture = async () => {
     console.log('🚀 Démarrage automatique de la capture GPS');
     setGpsState(GPS_STATES.REQUESTING_PERMISSION);
     setGpsError(null);
 
     try {
-      // 1. Vérifier et demander les permissions
       const hasPermission = await geolocationService.requestPermissions();
       if (!hasPermission) {
         handleGPSPermissionDenied();
         return;
       }
-
-      // 2. Tenter la capture GPS
       await attemptGPSCapture();
-      
     } catch (error) {
       handleGPSError(error);
     }
@@ -183,35 +195,29 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       
       const position = await geolocationService.getRealPosition();
 
-      // 🔥 DÉTECTION ET GESTION DES COORDONNÉES SIMULÉES
       if (position.mocked) {
         handleMockedLocation(position);
         return;
       }
 
-      // 🔥 DÉTECTION COORDONNÉES ÉMULATEUR
       if (isEmulatorCoordinates(position.latitude, position.longitude)) {
         handleEmulatorCoordinates(position);
         return;
       }
 
-      // 🔥 VALIDATION CAMEROUN
       if (!isInCameroonBounds(position.latitude, position.longitude)) {
         handleOutOfBoundsCoordinates(position);
         return;
       }
 
-      // ✅ COORDONNÉES VALIDES
       await processValidGPSLocation(position);
 
     } catch (error) {
       console.error(`❌ Erreur GPS tentative #${gpsAttempts + 1}:`, error);
       
       if (gpsAttempts < 2) {
-        // Réessayer automatiquement
         setTimeout(() => attemptGPSCapture(), 2000);
       } else {
-        // Après 3 tentatives, proposer la saisie manuelle
         offerManualInput(error);
       }
     }
@@ -323,7 +329,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
   const processValidGPSLocation = async (position) => {
     try {
-      // Tentative de géocodage inverse pour obtenir l'adresse
       let address = '';
       try {
         const addressInfo = await geolocationService.reverseGeocode(
@@ -392,17 +397,67 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
     Alert.alert('✅ Coordonnées enregistrées', 'Localisation manuelle enregistrée', [{ text: 'OK' }]);
   };
+  
+  // MÉTHODES COMMISSION
+  const updateCommissionType = (type) => {
+    setCommissionConfig(prev => ({
+      ...prev,
+      type,
+      valeur: type === 'INHERIT' ? 0 : prev.valeur,
+      paliersCommission: type === 'TIER' ? (prev.paliersCommission.length > 0 ? prev.paliersCommission : [
+        { montantMin: 0, montantMax: 1000, taux: 5 },
+        { montantMin: 1001, montantMax: 5000, taux: 4 },
+        { montantMin: 5001, montantMax: null, taux: 3 }
+      ]) : []
+    }));
+  };
 
-  // ============================================
-  // 🔥 SOUMISSION AVEC IDS AUTOMATIQUES
-  // ============================================
+  const updateCommissionValue = (valeur) => {
+    setCommissionConfig(prev => ({
+      ...prev,
+      valeur: parseFloat(valeur) || 0
+    }));
+  };
 
+  const addCommissionTier = () => {
+    const lastTier = commissionConfig.paliersCommission[commissionConfig.paliersCommission.length - 1];
+    const newMin = lastTier?.montantMax ? lastTier.montantMax + 1 : 5001;
+    
+    setCommissionConfig(prev => ({
+      ...prev,
+      paliersCommission: [...prev.paliersCommission, { montantMin: newMin, montantMax: null, taux: 3 }]
+    }));
+  };
+
+  const updateCommissionTier = (index, field, value) => {
+    setCommissionConfig(prev => ({
+      ...prev,
+      paliersCommission: prev.paliersCommission.map((tier, i) => 
+        i === index 
+          ? { ...tier, [field]: field === 'taux' ? parseFloat(value) || 0 : (value === '' ? null : parseInt(value)) }
+          : tier
+      )
+    }));
+  };
+
+  const removeCommissionTier = (index) => {
+    if (commissionConfig.paliersCommission.length <= 1) {
+      Alert.alert("Erreur", "Vous devez avoir au moins un palier");
+      return;
+    }
+    
+    setCommissionConfig(prev => ({
+      ...prev,
+      paliersCommission: prev.paliersCommission.filter((_, i) => i !== index)
+    }));
+  };
+
+  // SOUMISSION AVEC IDS AUTOMATIQUES
   const onSubmit = async (data) => {
-    // 🔥 VÉRIFICATION OBLIGATOIRE DE LA LOCALISATION
     if (!locationData) {
       Alert.alert(
         'Localisation requise',
-        'Vous devez fournir une localisation pour créer ce client. Capturez votre position GPS ou saisissez les coordonnées manuellement.',
+        'Vous devez fournir une localisation pour créer ce client.',
         [{ text: 'OK', onPress: () => startAutomaticGPSCapture() }]
       );
       return;
@@ -411,29 +466,37 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     setIsLoading(true);
 
     try {
-      console.log('💾 Soumission formulaire:', { data, locationData, userInfo });
+      console.log('💾 Soumission formulaire avec commission:', { 
+        data, 
+        locationData, 
+        userInfo, 
+        commissionConfig,
+        isClientActive 
+      });
 
-      // 🔥 CONSTRUCTION DES DONNÉES AVEC IDS AUTOMATIQUES
       const clientData = {
         ...data,
-        // ✅ COORDONNÉES OBLIGATOIRES
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         coordonneesSaisieManuelle: locationData.coordonneesSaisieManuelle,
         adresseComplete: locationData.adresseComplete,
-        
-        // 🔥 IDS AUTOMATIQUES (ne pas laisser le choix au frontend)
-        // Ces champs seront de toute façon écrasés par le backend pour sécurité
+        valide: isClientActive,
         collecteurId: userInfo?.id,
-        agenceId: userInfo?.agenceId
+        agenceId: userInfo?.agenceId,
+
+        commissionParameter: commissionConfig.type !== 'INHERIT' ? {
+          type: commissionConfig.type,
+          valeur: commissionConfig.valeur,
+          paliersCommission: commissionConfig.type === 'TIER' ? commissionConfig.paliersCommission : null,
+          active: true,
+          validFrom: new Date().toISOString().split('T')[0]
+        } : null
       };
 
       console.log('📤 Données finales à envoyer:', clientData);
 
-      // Sauvegarde
       let result;
       if (isEditMode) {
-        // Pour les modifications, utiliser le DTO spécialisé
         const updateData = {
           telephone: data.telephone,
           numeroCni: data.numeroCni,
@@ -442,7 +505,9 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           latitude: locationData.latitude,
           longitude: locationData.longitude,
           coordonneesSaisieManuelle: locationData.coordonneesSaisieManuelle,
-          adresseComplete: locationData.adresseComplete
+          adresseComplete: locationData.adresseComplete,
+          valide: isClientActive,
+          commissionParameter: clientData.commissionParameter
         };
         result = await clientService.updateClient(client.id, updateData);
       } else {
@@ -460,7 +525,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
     } catch (error) {
       console.error('❌ Erreur lors de la sauvegarde:', error);
-
       Alert.alert(
         "Erreur",
         `Impossible d'enregistrer le client: ${error.message}`,
@@ -472,20 +536,22 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   };
 
   const showSuccessMessage = (savedClient) => {
-    const locationMessage = locationData 
-      ? '\n📍 Localisation enregistrée' 
-      : '';
+    const statusMessage = savedClient.valide ? 'Client actif' : 'Client inactif';
+    const commissionMessage = commissionConfig.type !== 'INHERIT' 
+      ? `\n💰 Commission ${commissionConfig.type === 'FIXED' ? 'fixe' : commissionConfig.type === 'PERCENTAGE' ? 'en pourcentage' : 'par paliers'} configurée` 
+      : '\n💰 Commission héritée de l\'agence';
+    const locationMessage = locationData ? '\n📍 Localisation enregistrée' : '';
 
     if (isEditMode) {
       Alert.alert(
         "Succès",
-        `Les informations de ${savedClient.prenom} ${savedClient.nom} ont été mises à jour avec succès.${locationMessage}`,
+        `${savedClient.prenom} ${savedClient.nom} mis à jour avec succès.\n${statusMessage}${commissionMessage}${locationMessage}`,
         [{ text: "OK", onPress: () => goToClientDetail(savedClient) }]
       );
     } else {
       Alert.alert(
         "Succès",
-        `Le client ${savedClient.prenom} ${savedClient.nom} a été créé avec succès.${locationMessage}`,
+        `Client ${savedClient.prenom} ${savedClient.nom} créé avec succès.\n${statusMessage}${commissionMessage}${locationMessage}`,
         [
           { text: "Voir les clients", onPress: () => goToClientList() },
           { text: "Voir détails", onPress: () => goToClientDetail(savedClient) }
@@ -494,10 +560,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     }
   };
 
-  // ============================================
   // UTILITAIRES
-  // ============================================
-
   const isEmulatorCoordinates = (lat, lng) => {
     return Math.abs(lat - 37.4219983) < 0.001 && Math.abs(lng - (-122.084)) < 0.001;
   };
@@ -510,10 +573,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
     return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
   };
 
-  // ============================================
   // RENDU GÉOLOCALISATION
-  // ============================================
-
   const renderLocationSection = () => {
     return (
       <Card style={styles.geoCard}>
@@ -721,11 +781,168 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       />
     </View>
   );
+  
+  // RENDU COMMISSION
+  const renderCommissionSection = () => {
+    return (
+      <Card style={styles.commissionCard}>
+        <View style={styles.commissionHeader}>
+          <Ionicons name="wallet" size={20} color={theme.colors.primary} />
+          <Text style={styles.commissionTitle}>Paramètres de Commission</Text>
+        </View>
 
-  // ============================================
+        <View style={styles.formGroup}>
+          <Text style={styles.inputLabel}>Type de commission</Text>
+          <View style={styles.commissionTypeContainer}>
+            {COMMISSION_TYPES.map((type) => (
+              <TouchableOpacity
+                key={type.value}
+                style={[
+                  styles.commissionTypeButton,
+                  commissionConfig.type === type.value && styles.commissionTypeButtonActive
+                ]}
+                onPress={() => updateCommissionType(type.value)}
+              >
+                <Text style={[
+                  styles.commissionTypeText,
+                  commissionConfig.type === type.value && styles.commissionTypeTextActive
+                ]}>
+                  {type.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {commissionConfig.type === 'FIXED' && (
+          <Input
+            label="Montant fixe (FCFA)"
+            value={commissionConfig.valeur?.toString() || '0'}
+            onChangeText={updateCommissionValue}
+            keyboardType="numeric"
+            placeholder="Ex: 500"
+            style={styles.inputSpacing}
+          />
+        )}
+
+        {commissionConfig.type === 'PERCENTAGE' && (
+          <Input
+            label="Pourcentage (%)"
+            value={commissionConfig.valeur?.toString() || '0'}
+            onChangeText={updateCommissionValue}
+            keyboardType="numeric"
+            placeholder="Ex: 2.5"
+            style={styles.inputSpacing}
+          />
+        )}
+
+        {commissionConfig.type === 'TIER' && (
+          <View style={styles.tiersContainer}>
+            <Text style={styles.tiersTitle}>Paliers de Commission</Text>
+            {commissionConfig.paliersCommission.map((tier, index) => (
+              <Card key={index} style={styles.tierCard}>
+                <View style={styles.tierHeader}>
+                  <Text style={styles.tierLabel}>Palier {index + 1}</Text>
+                  {commissionConfig.paliersCommission.length > 1 && (
+                    <TouchableOpacity onPress={() => removeCommissionTier(index)}>
+                      <Ionicons name="trash" size={20} color={theme.colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                
+                <View style={styles.tierRow}>
+                  <View style={styles.tierFieldHalf}>
+                    <Input
+                      label="Min (FCFA)"
+                      value={tier.montantMin?.toString() || ''}
+                      onChangeText={(text) => updateCommissionTier(index, 'montantMin', text)}
+                      keyboardType="numeric"
+                      editable={index === 0 ? false : true}
+                    />
+                  </View>
+                  
+                  <View style={styles.tierFieldHalf}>
+                    <Input
+                      label="Max (FCFA)"
+                      value={tier.montantMax?.toString() || ''}
+                      onChangeText={(text) => updateCommissionTier(index, 'montantMax', text)}
+                      keyboardType="numeric"
+                      placeholder="Illimité"
+                    />
+                  </View>
+                  
+                  <View style={styles.tierFieldHalf}>
+                    <Input
+                      label="Taux (%)"
+                      value={tier.taux?.toString() || ''}
+                      onChangeText={(text) => updateCommissionTier(index, 'taux', text)}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </Card>
+            ))}
+            
+            <TouchableOpacity
+              style={styles.addTierButton}
+              onPress={addCommissionTier}
+            >
+              <Ionicons name="add-circle" size={20} color={theme.colors.primary} />
+              <Text style={styles.addTierText}>Ajouter un palier</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {commissionConfig.type === 'INHERIT' && (
+          <View style={styles.inheritInfo}>
+            <Ionicons name="information-circle" size={20} color={theme.colors.info} />
+            <Text style={styles.inheritText}>
+              Le client héritera des paramètres de commission configurés au niveau de l'agence.
+            </Text>
+          </View>
+        )}
+      </Card>
+    );
+  };
+
+  // RENDU ACTIVATION CLIENT
+  const renderActivationSection = () => {
+    return (
+      <Card style={styles.activationCard}>
+        <View style={styles.activationHeader}>
+          <Ionicons 
+            name={isClientActive ? "checkmark-circle" : "pause-circle"} 
+            size={20} 
+            color={isClientActive ? theme.colors.success : theme.colors.warning} 
+          />
+          <Text style={styles.activationTitle}>Statut du Client</Text>
+        </View>
+        
+        <View style={styles.activationRow}>
+          <View style={styles.activationInfo}>
+            <Text style={styles.activationLabel}>
+              {isClientActive ? "Client actif" : "Client inactif"}
+            </Text>
+            <Text style={styles.activationDescription}>
+              {isClientActive 
+                ? "Le client pourra effectuer des opérations immédiatement"
+                : "Le client devra être activé avant de pouvoir effectuer des opérations"
+              }
+            </Text>
+          </View>
+          
+          <Switch
+            value={isClientActive}
+            onValueChange={setIsClientActive}
+            trackColor={{ false: theme.colors.lightGray, true: theme.colors.successLight }}
+            thumbColor={isClientActive ? theme.colors.success : theme.colors.gray}
+          />
+        </View>
+      </Card>
+    );
+  };
+
   // RENDU PRINCIPAL
-  // ============================================
-
   return (
     <SafeAreaView style={styles.container}>
       <Header
@@ -743,7 +960,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         >
           <View style={styles.formContainer}>
             
-            {/* Informations de base */}
             <Text style={styles.sectionTitle}>Informations d'identification</Text>
             
             <Controller
@@ -758,7 +974,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.nom?.message}
                   style={styles.inputSpacing}
-                  editable={!isEditMode} // Non modifiable en mode édition
+                  editable={!isEditMode}
                 />
               )}
             />
@@ -775,7 +991,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.prenom?.message}
                   style={styles.inputSpacing}
-                  editable={!isEditMode} // Non modifiable en mode édition
+                  editable={!isEditMode}
                 />
               )}
             />
@@ -796,7 +1012,6 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
-            {/* Coordonnées */}
             <Text style={styles.sectionTitle}>Coordonnées</Text>
             
             <Controller
@@ -848,17 +1063,19 @@ const ClientAddEditScreen = ({ navigation, route }) => {
               )}
             />
             
-            {/* 🔥 SECTION GÉOLOCALISATION OBLIGATOIRE */}
+            {renderActivationSection()}
+            
+            {renderCommissionSection()}
+            
             {renderLocationSection()}
             
-            {/* Boutons d'action */}
             <Button
               title={isEditMode ? "Mettre à jour" : "Créer le client"}
               onPress={handleSubmit(onSubmit)}
               loading={isLoading}
               style={styles.submitButton}
               fullWidth
-              disabled={!locationData} // Désactivé tant qu'il n'y a pas de localisation
+              disabled={!locationData}
             />
             
             <Button
@@ -875,9 +1092,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   );
 };
 
-// ============================================
 // STYLES
-// ============================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -910,17 +1125,165 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   
-  // Styles géolocalisation
+  // Styles Commission
+  commissionCard: {
+    marginVertical: 16,
+    backgroundColor: theme.colors.white,
+  },
+  commissionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  commissionTitle: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+    marginBottom: 8,
+  },
+  commissionTypeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  commissionTypeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.white,
+  },
+  commissionTypeButtonActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  commissionTypeText: {
+    fontSize: 12,
+    color: theme.colors.text,
+  },
+  commissionTypeTextActive: {
+    color: theme.colors.white,
+  },
+  
+  // Styles Tiers
+  tiersContainer: {
+    marginTop: 16,
+  },
+  tiersTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  tierCard: {
+    marginBottom: 12,
+    backgroundColor: theme.colors.background,
+  },
+  tierHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  tierLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  tierRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tierFieldHalf: {
+    flex: 1,
+  },
+  addTierButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    borderStyle: 'dashed',
+  },
+  addTierText: {
+    marginLeft: 8,
+    color: theme.colors.primary,
+    fontWeight: '500',
+  },
+  
+  // Styles Héritage
+  inheritInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    backgroundColor: theme.colors.infoLight,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  inheritText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: theme.colors.info,
+    flex: 1,
+  },
+  
+  // Styles Activation
+  activationCard: {
+    marginVertical: 16,
+    backgroundColor: theme.colors.white,
+  },
+  activationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  activationTitle: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  activationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activationInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  activationLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  activationDescription: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+  },
+  
+  // Styles Géolocalisation
   geoCard: {
     marginVertical: 16,
     backgroundColor: theme.colors.white,
-    borderWidth: 2,
-    borderColor: theme.colors.lightGray,
   },
   geoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   geoTitle: {
     marginLeft: 8,
@@ -932,61 +1295,38 @@ const styles = StyleSheet.create({
   geoStatus: {
     fontSize: 12,
     fontWeight: '500',
-    textTransform: 'uppercase',
   },
-  
   locationSuccess: {
-    backgroundColor: theme.colors.successLight,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.success,
+    alignItems: 'flex-start',
   },
-  locationLoading: {
-    backgroundColor: theme.colors.warningLight,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.warning,
-    alignItems: 'center',
-  },
-  locationError: {
-    backgroundColor: theme.colors.errorLight,
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: theme.colors.error,
-  },
-  locationStart: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  manualInput: {
-    padding: 12,
-  },
-  
   coordinatesText: {
     fontSize: 14,
-    fontFamily: 'monospace',
+    fontWeight: '500',
     color: theme.colors.text,
     marginBottom: 4,
   },
   accuracyText: {
     fontSize: 12,
-    color: theme.colors.success,
+    color: theme.colors.textLight,
     marginBottom: 4,
   },
   sourceText: {
     fontSize: 12,
-    color: theme.colors.primary,
+    color: theme.colors.textLight,
     marginBottom: 4,
   },
   addressText: {
     fontSize: 12,
     color: theme.colors.textLight,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  
+  recaptureButton: {
+    alignSelf: 'flex-start',
+  },
+  locationLoading: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
   loadingText: {
     fontSize: 14,
     color: theme.colors.text,
@@ -996,64 +1336,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textLight,
   },
-  
+  locationError: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
   errorText: {
-    fontSize: 12,
+    fontSize: 14,
     color: theme.colors.error,
-    marginBottom: 8,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   errorActions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  
-  startText: {
-    fontSize: 14,
-    color: theme.colors.text,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  
-  manualTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.text,
-    marginBottom: 12,
-  },
-  coordinateInput: {
-    marginBottom: 8,
-  },
-  manualActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
-  },
-  
-  // Boutons
-  recaptureButton: {
-    marginTop: 8,
-    alignSelf: 'center',
+    gap: 12,
   },
   retryButton: {
     flex: 1,
-    marginRight: 8,
   },
   manualButton: {
     flex: 1,
-    marginLeft: 8,
+  },
+  manualInput: {
+    paddingVertical: 16,
+  },
+  manualTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  coordinateInput: {
+    marginBottom: 12,
+  },
+  manualActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
   },
   validateButton: {
     flex: 1,
-    marginRight: 8,
   },
   backToGpsButton: {
     flex: 1,
-    marginLeft: 8,
+  },
+  locationStart: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  startText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   startButton: {
-    paddingHorizontal: 24,
+    alignSelf: 'center',
   },
   
+  // Boutons
   submitButton: {
     marginBottom: 12,
   },

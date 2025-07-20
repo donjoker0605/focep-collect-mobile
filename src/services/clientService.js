@@ -1,5 +1,6 @@
 // src/services/clientService.js - CORRIGÉ
 import BaseApiService from './base/BaseApiService';
+import authService from './authService';
 
 class ClientService extends BaseApiService {
   constructor() {
@@ -57,7 +58,7 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * Créer un nouveau client
+   * Créer un nouveau client avec gestion commission et compte automatique
    */
   async createClient(clientData) {
     try {
