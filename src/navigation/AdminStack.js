@@ -37,6 +37,7 @@ import ReportsScreen from '../screens/Admin/ReportsScreen';
 import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import CommissionReportScreen from '../screens/Admin/CommissionReportScreen';
+import CommissionTestScreen from '../screens/Admin/CommissionTestScreen';
 
 // Écrans de transactions et transferts
 import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
@@ -264,6 +265,15 @@ const AdminStack = () => {
           headerShown: false,
         }}
       />
+	  
+		<Stack.Screen
+		  name="CommissionTestScreen"
+		  component={CommissionTestScreen}
+		  options={{
+			headerShown: false,
+		  }}
+		/>
+
 
       <Stack.Screen
         name="CommissionReportScreen"
