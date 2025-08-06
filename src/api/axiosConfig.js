@@ -5,7 +5,9 @@ import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 
 // ✅ INSTANCE AXIOS SIMPLIFIÉE ET CORRIGÉE
 const axiosInstance = axios.create({
+
   baseURL: API_CONFIG.baseURL, // http://192.168.91.233:8080/api
+
   timeout: API_CONFIG.timeout,
   headers: {
     'Content-Type': 'application/json',

@@ -13,7 +13,7 @@ export const useClients = (overrideCollecteurId = null) => {
   const [userRole, setUserRole] = useState(null);
   const [canAccess, setCanAccess] = useState(false);
 
-  // 🔥 DÉTECTION AUTOMATIQUE DU RÔLE UTILISATEUR
+  // DÉTECTION AUTOMATIQUE DU RÔLE UTILISATEUR
   const initializeUserInfo = useCallback(async () => {
     try {
       const user = await authService.getCurrentUser();

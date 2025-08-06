@@ -1,4 +1,4 @@
-// src/screens/Admin/AdminDashboardScreen.js - NAVIGATION CORRIGÉE
+// src/screens/Admin/AdminDashboardScreen.js - CORRECTION ERREUR SYNTAXE
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -60,7 +60,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     loadDashboardStats(false);
   };
 
-  // 🔥 AJOUT : Navigation vers supervision des collecteurs
+  // Navigation handlers
   const navigateToCollecteurSupervision = () => {
     navigation.navigate('AdminCollecteurSupervision');
   };
@@ -206,7 +206,6 @@ const AdminDashboardScreen = ({ navigation }) => {
   if (loading) {
     return (
       <View style={styles.container}>
-        {/* 🔥 SUPPRESSION : Header supprimé car géré par Stack Navigator */}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Chargement des données...</Text>
@@ -221,10 +220,7 @@ const AdminDashboardScreen = ({ navigation }) => {
         colors={[theme.colors.primary, theme.colors.primaryDark]}
         style={styles.headerGradient}
       >
-        {/* 🔥 SUPPRESSION : Header personnalisé supprimé */}
-        {/* Le titre sera géré par Stack Navigator */}
-        
-        {/* Informations utilisateur - CONSERVÉES */}
+        {/* Informations utilisateur */}
         <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
           <Text style={styles.welcomeText}>Bienvenue,</Text>
           <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
@@ -357,7 +353,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           ))}
         </View>
 
-        {/* Actions rapides */}
+        {/* Actions rapides - CORRECTION ICI */}
         <View style={styles.quickActionsSection}>
           <Text style={styles.sectionTitle}>Actions rapides</Text>
           <View style={styles.quickActionsGrid}>
@@ -375,6 +371,16 @@ const AdminDashboardScreen = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
+          
+          {/* ✅ BOUTON TEMPORAIRE CORRECTEMENT PLACÉ HORS DU MAP */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={() => navigation.navigate('CommissionTestScreen')}
+            >
+              <Text style={styles.testButtonText}>🧪 Test Commission API</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Dernière mise à jour */}
@@ -586,6 +592,7 @@ const styles = StyleSheet.create({
   quickActionsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
   quickAction: {
     alignItems: 'center',
@@ -610,6 +617,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     paddingHorizontal: 20,
+  },
+  // ✅ STYLES BOUTON TEST CORRIGÉS
+  testButton: {
+    backgroundColor: '#ff9800',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    minWidth: 200,
+  },
+  testButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

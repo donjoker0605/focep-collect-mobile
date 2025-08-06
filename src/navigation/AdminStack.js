@@ -282,6 +282,15 @@ const AdminStack = () => {
           headerShown: false,
         }}
       />
+	  
+		<Stack.Screen
+		  name="CommissionTestScreen"
+		  component={CommissionTestScreen}
+		  options={{
+			headerShown: false,
+		  }}
+		/>
+
 
       <Stack.Screen
         name="CommissionReportScreen"
