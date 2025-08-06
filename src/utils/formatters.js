@@ -139,3 +139,43 @@ export const formatRelativeTime = (date) => {
     return '';
   }
 };
+
+export const formatMoney = (amount) => {
+  if (amount === null || amount === undefined || isNaN(amount)) {
+    return '0 FCFA';
+  }
+  
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  
+  if (isNaN(numericAmount)) {
+    return '0 FCFA';
+  }
+  
+  return `${numericAmount.toLocaleString('fr-FR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  })} FCFA`;
+};
+
+export const formatFileSize = (sizeInBytes) => {
+  if (!sizeInBytes || sizeInBytes === 0) return '0 B';
+  
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const bytes = parseInt(sizeInBytes, 10);
+  const unitIndex = Math.floor(Math.log(bytes) / Math.log(1024));
+  const size = bytes / Math.pow(1024, unitIndex);
+  
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
+
+// Default export object with all formatters
+export const formatters = {
+  formatCurrency,
+  formatDate,
+  formatTime,
+  formatTimeAgo,
+  formatNotificationTime,
+  formatRelativeTime,
+  formatMoney,
+  formatFileSize
+};

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Input } from '../index';
+import Input from '../Input/Input';
 import clientService from '../../services/clientService';
 import theme from '../../theme';
 

@@ -19,8 +19,8 @@ import { useAuth } from '../../hooks/useAuth';
 import theme from '../../theme';
 import journalActiviteService from '../../services/journalActiviteService';
 
-// 🔥 CORRECTION: Import des fonctions de navigation
-import { useCollecteurNavigation } from '../../navigation/CollecteurStack';
+// 🔥 CORRECTION: Utilisation de la navigation standard
+import { useNavigation } from '@react-navigation/native';
 
 // COMPOSANTS DE REMPLACEMENT TEMPORAIRES
 const Header = ({ title, showNotificationButton, onNotificationPress }) => (

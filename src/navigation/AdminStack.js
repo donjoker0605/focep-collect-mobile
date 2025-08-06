@@ -1,9 +1,9 @@
-// src/navigation/AdminStack.js - CORRECTION DE LA DÉCONNEXION
+// src/navigation/AdminStack.js - VERSION MISE À JOUR AVEC GESTION CLIENTS AMÉLIORÉE
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../hooks/useAuth'; // ✅ AJOUT CRITIQUE
+import { useAuth } from '../hooks/useAuth';
 
 // ============================= 
 // IMPORTS DES ÉCRANS
@@ -21,15 +21,24 @@ import CollecteurDetailScreen from '../screens/Admin/CollecteurDetailScreen';
 import CollecteurCreationScreen from '../screens/Admin/CollecteurCreationScreen';
 import CollecteurClientsScreen from '../screens/Admin/CollecteurClientsScreen';
 
-// Écrans de gestion des clients
-import ClientManagementScreen from '../screens/Admin/ClientManagementScreen';
+// 🔥 ÉCRANS DE GESTION DES CLIENTS - NOUVEAUX ET AMÉLIORÉS
+import ClientManagementScreen from '../screens/Admin/ClientManagementScreen'; // Ancien écran (compatible)
+import AdminClientManagementScreen from '../screens/Admin/AdminClientManagementScreen'; // 🆕 NOUVEL ÉCRAN PRINCIPAL
 import ClientDetailScreen from '../screens/Admin/ClientDetailScreen';
+
+// Import du ClientListScreen du collecteur (réutilisé pour admin)
+import ClientListScreen from '../screens/Collecteur/ClientListScreen'; // 🔄 RÉUTILISÉ AVEC COMPATIBILITÉ
+
+// Import des écrans de création/édition client
+import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen'; // 🔄 RÉUTILISÉ
 
 // Écrans de rapports et commissions
 import ReportsScreen from '../screens/Admin/ReportsScreen';
 import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
+import CommissionCalculationV2Screen from '../screens/Admin/CommissionCalculationV2Screen';
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import CommissionReportScreen from '../screens/Admin/CommissionReportScreen';
+import RubriqueRemunerationScreen from '../screens/Admin/RubriqueRemunerationScreen';
 
 // Écrans de transactions et transferts
 import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
@@ -39,10 +48,9 @@ import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 const Stack = createStackNavigator();
 
 const AdminStack = () => {
-  // ✅ CORRECTION CRITIQUE: Utiliser le hook useAuth
   const { logout } = useAuth();
   
-  // ✅ FONCTION DE DÉCONNEXION CORRIGÉE
+  // 🔥 FONCTION DE DÉCONNEXION
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -57,14 +65,9 @@ const AdminStack = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🔄 Déconnexion en cours...');
-              
-              // ✅ CORRECTION CRITIQUE: Utiliser logout du contexte
-              // Cela va automatiquement mettre à jour isAuthenticated = false
-              // et AppNavigator va rediriger vers AuthStack
+              console.log('🔄 Déconnexion admin en cours...');
               await logout();
-              
-              console.log('✅ Déconnexion réussie - Redirection automatique vers login');
+              console.log('✅ Déconnexion réussie');
             } catch (error) {
               console.error('❌ Erreur lors de la déconnexion:', error);
               Alert.alert('Erreur', 'Impossible de se déconnecter');
@@ -102,24 +105,14 @@ const AdminStack = () => {
       <Stack.Screen
         name="AdminDashboard"
         component={AdminDashboardScreen}
-        options={({ navigation }) => ({
-          title: 'Tableau de bord',
-          headerLeft: () => null, // Pas de bouton retour sur le dashboard
+        options={{
+          title: 'Dashboard Admin',
           headerRight: () => (
-            <TouchableOpacity
-              style={{ marginRight: 16, padding: 8, flexDirection: 'row', alignItems: 'center' }}
-              onPress={() => navigation.navigate('AdminNotifications')}
-            >
-              <Ionicons name="notifications-outline" size={24} color="#007AFF" style={{ marginRight: 12 }} />
-              <TouchableOpacity
-                onPress={handleLogout}
-                style={{ padding: 4 }}
-              >
-                <Ionicons name="log-out-outline" size={24} color="#EF4444" />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
+              <Ionicons name="log-out-outline" size={24} color="#dc3545" />
             </TouchableOpacity>
           ),
-        })}
+        }}
       />
 
       <Stack.Screen
@@ -127,29 +120,25 @@ const AdminStack = () => {
         component={AdminNotificationsScreen}
         options={{
           title: 'Notifications',
+          headerRight: () => (
+            <TouchableOpacity onPress={() => {}} style={{ marginRight: 15 }}>
+              <Ionicons name="refresh-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          ),
         }}
       />
-
-      {/* ============================= */}
-      {/* SUPERVISION DES COLLECTEURS */}
-      {/* ============================= */}
 
       <Stack.Screen
         name="AdminCollecteurSupervision"
         component={AdminCollecteurSupervisionScreen}
-        options={({ navigation }) => ({
+        options={{
           title: 'Supervision Collecteurs',
           headerRight: () => (
-            <TouchableOpacity
-              style={{ marginRight: 16, padding: 8 }}
-              onPress={() => {
-                navigation.setParams({ refresh: Date.now() });
-              }}
-            >
+            <TouchableOpacity onPress={() => {}} style={{ marginRight: 15 }}>
               <Ionicons name="refresh-outline" size={24} color="#007AFF" />
             </TouchableOpacity>
           ),
-        })}
+        }}
       />
 
       <Stack.Screen
@@ -162,14 +151,46 @@ const AdminStack = () => {
       />
 
       {/* ============================= */}
-      {/* ÉCRANS AVEC HEADER PERSONNALISÉ - MASQUER HEADER NATIF */}
+      {/* 🔥 ÉCRANS DE GESTION DES CLIENTS - NOUVEAUX */}
+      {/* ============================= */}
+
+      {/* 🆕 NOUVEL ÉCRAN PRINCIPAL DE GESTION CLIENTS ADMIN */}
+      <Stack.Screen
+        name="AdminClientManagement"
+        component={AdminClientManagementScreen}
+        options={{
+          headerShown: false, // Utilise son propre header
+        }}
+      />
+
+      {/* 🔄 ÉCRAN DE LISTE CLIENTS RÉUTILISÉ (collecteur compatible admin) */}
+      <Stack.Screen
+        name="ClientList"
+        component={ClientListScreen}
+        options={{
+          headerShown: false, // Utilise son propre header
+        }}
+      />
+
+      {/* 🔄 ÉCRANS D'AJOUT/ÉDITION RÉUTILISÉS */}
+      <Stack.Screen
+        name="ClientAddEdit"
+        component={ClientAddEditScreen}
+        options={({ route }) => ({
+          title: route.params?.mode === 'edit' ? 'Modifier Client' : 'Nouveau Client',
+          headerBackTitle: 'Clients',
+        })}
+      />
+
+      {/* ============================= */}
+      {/* ÉCRANS AVEC HEADER PERSONNALISÉ */}
       {/* ============================= */}
 
       <Stack.Screen
         name="CollecteurManagementScreen"
         component={CollecteurManagementScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -177,7 +198,7 @@ const AdminStack = () => {
         name="CollecteurDetailScreen"
         component={CollecteurDetailScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -185,7 +206,7 @@ const AdminStack = () => {
         name="CollecteurCreationScreen"
         component={CollecteurCreationScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -193,15 +214,16 @@ const AdminStack = () => {
         name="CollecteurClientsScreen"
         component={CollecteurClientsScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
+      {/* 🔄 ANCIEN ÉCRAN CLIENT MANAGEMENT (pour compatibilité) */}
       <Stack.Screen
         name="ClientManagementScreen"
         component={ClientManagementScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -209,7 +231,7 @@ const AdminStack = () => {
         name="ClientDetailScreen"
         component={ClientDetailScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -217,7 +239,7 @@ const AdminStack = () => {
         name="JournalClotureScreen"
         component={JournalClotureScreen}
         options={{
-          headerShown: false, // MASQUER HEADER NATIF
+          headerShown: false,
         }}
       />
 
@@ -232,6 +254,22 @@ const AdminStack = () => {
       <Stack.Screen
         name="CommissionCalculationScreen"
         component={CommissionCalculationScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="CommissionCalculationV2Screen"
+        component={CommissionCalculationV2Screen}
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="RubriqueRemunerationScreen"
+        component={RubriqueRemunerationScreen}
         options={{
           headerShown: false,
         }}

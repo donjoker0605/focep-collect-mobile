@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // ✅ CORRECTION : Imports locaux
-import { Button } from '../index';
+import Button from '../Button/Button';
 import theme from '../../theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');

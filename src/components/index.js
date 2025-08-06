@@ -1,5 +1,6 @@
-// src/components/index.js - VERSION MISE À JOUR
-// Export des composants existants pour faciliter l'importation
+// src/components/index.js - VERSION REFACTORISÉE SANS CYCLES
+// ⚠️ RÈGLE CRITIQUE : Ce fichier ne doit JAMAIS être importé par les composants qu'il exporte
+// Utilisé UNIQUEMENT par les screens et services externes
 
 // ========================================
 // 🔤 COMPOSANTS DE BASE

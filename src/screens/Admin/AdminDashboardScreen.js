@@ -145,6 +145,21 @@ const AdminDashboardScreen = ({ navigation }) => {
       icon: 'calculator-outline',
       color: theme.colors.teal,
       onPress: navigateToCommissions,
+    },
+    {
+      id: 'commission-v2',
+      title: 'Commission FOCEP v2',
+      icon: 'trending-up',
+      color: theme.colors.success,
+      badge: 'NOUVEAU',
+      onPress: () => navigation.navigate('CommissionCalculationV2Screen'),
+    },
+    {
+      id: 'rubriques',
+      title: 'Rubriques Rémunération',
+      icon: 'list-outline',
+      color: theme.colors.info,
+      onPress: () => navigation.navigate('RubriqueRemunerationScreen'),
     }
   ];
 

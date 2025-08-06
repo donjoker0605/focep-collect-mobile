@@ -10,7 +10,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Input, Button } from '../index';
+import Card from '../Card/Card';
+import Input from '../Input/Input';
+import Button from '../Button/Button';
 import AmountInput from '../AmountInput/AmountInput';
 import SelectInput from '../SelectInput/SelectInput';
 import theme from '../../theme';

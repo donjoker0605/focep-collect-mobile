@@ -30,7 +30,7 @@ import geolocationService from '../../services/geolocationService';
 import authService from '../../services/authService';
 
 // Navigation
-import { useCollecteurNavigation } from '../../navigation/CollecteurStack';
+import { useNavigation } from '@react-navigation/native';
 
 // SCHÉMAS DE VALIDATION
 const clientSchema = yup.object().shape({

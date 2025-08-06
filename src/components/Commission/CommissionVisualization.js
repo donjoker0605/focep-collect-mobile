@@ -9,7 +9,9 @@ import {
   TouchableOpacity
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, EmptyState, ProgressIndicator } from '../index';
+import Card from '../Card/Card';
+import EmptyState from '../EmptyState/EmptyState';
+import ProgressIndicator from '../ProgressIndicator/ProgressIndicator';
 import theme from '../../theme';
 import { formatCurrency } from '../../utils/formatters';
 

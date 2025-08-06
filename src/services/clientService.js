@@ -10,29 +10,133 @@ class ClientService extends BaseApiService {
   /**
    * Récupérer tous les clients (filtrés par agence côté backend)
    */
-  async getAllClients({ page = 0, size = 20, search = '' } = {}) {
+  async getAllClients({ page = 0, size = 20, search = '', collecteurId = null } = {}) {
     try {
-      console.log('📱 API: GET /clients');
+      console.log('📱 ClientService.getAllClients - Détection automatique du rôle...');
       
-      // 🔥 OBTENIR L'ID COLLECTEUR AUTOMATIQUEMENT
-      const collecteurId = await authService.getCurrentUserId();
+      // DÉTECTION AUTOMATIQUE DU RÔLE
+      const user = await authService.getCurrentUser();
+      if (!user) {
+        throw new Error('Utilisateur non authentifié');
+      }
+
+      console.log('👤 Utilisateur connecté:', {
+        id: user.id,
+        role: user.role,
+        agenceId: user.agenceId
+      });
+
+      // 🔥 LOGIQUE DIFFÉRENCIÉE PAR RÔLE - CORRECTION PRÉFIXES ROLE_
+      if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || 
+          user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') {
+        console.log('🎯 Utilisateur Admin détecté - Utilisation endpoint /admin/clients');
+        return await this.getClientsForAdmin({ page, size, search, collecteurId });
+      } else if (user.role === 'COLLECTEUR' || user.role === 'ROLE_COLLECTEUR') {
+        console.log('🎯 Utilisateur Collecteur détecté - Utilisation endpoint /clients/collecteur');
+        return await this.getClientsForCollecteur(user.id, { page, size, search });
+      } else {
+        throw new Error(`Rôle non autorisé: ${user.role}`);
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur getAllClients:', error);
+      throw this.handleError(error, 'Erreur lors de la récupération des clients');
+    }
+  }
+  
+  /**
+   * MÉTHODE SPÉCIFIQUE ADMIN - Accès à tous les clients de l'agence
+   */
+  async getClientsForAdmin({ page = 0, size = 20, search = '', collecteurId = null } = {}) {
+    try {
+      console.log('👨‍💼 API Admin: GET /admin/clients');
+      
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      if (collecteurId) params.collecteurId = collecteurId;
+      
+      // HEADERS AVEC VALIDATION TOKEN
+      const headers = await authService.getApiHeaders();
+      
+      // UTILISER L'ENDPOINT ADMIN
+      const response = await this.axios.get('/admin/clients', { 
+        params, 
+        headers 
+      });
+      
+      console.log('✅ Réponse admin clients:', {
+        totalElements: response.data?.data?.totalElements || 0,
+        numberOfElements: response.data?.data?.numberOfElements || 0
+      });
+      
+      return this.formatResponse(response, 'Clients admin récupérés');
+      
+    } catch (error) {
+      // FALLBACK vers endpoint alternatif si admin/clients non disponible
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers endpoint /clients/admin/my-clients');
+        return await this.getClientsForAdminFallback({ page, size, search, collecteurId });
+      }
+      
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      
+      throw this.handleError(error, 'Erreur lors de la récupération des clients admin');
+    }
+  }
+
+  
+  /**
+   * MÉTHODE FALLBACK ADMIN - Si /admin/clients n'est pas disponible
+   */
+  async getClientsForAdminFallback({ page = 0, size = 20, search = '', collecteurId = null } = {}) {
+    try {
+      console.log('🔄 API Admin Fallback: GET /clients/admin/my-clients');
+      
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      if (collecteurId) params.collecteurId = collecteurId;
+      
+      const headers = await authService.getApiHeaders();
+      
+      const response = await this.axios.get('/clients/admin/my-clients', { 
+        params, 
+        headers 
+      });
+      
+      return this.formatResponse(response, 'Clients admin récupérés (fallback)');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des clients admin (fallback)');
+    }
+  }
+  
+  /**
+   * MÉTHODE SPÉCIFIQUE COLLECTEUR - Accès à ses propres clients uniquement
+   */
+  async getClientsForCollecteur(collecteurId, { page = 0, size = 20, search = '' } = {}) {
+    try {
+      console.log('👨‍🏭 API Collecteur: GET /clients/collecteur/', collecteurId);
+      
       if (!collecteurId) {
-        throw new Error('Impossible d\'identifier le collecteur. Veuillez vous reconnecter.');
+        throw new Error('ID collecteur manquant');
       }
       
       const params = { page, size };
       if (search?.trim()) params.search = search.trim();
       
-      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      // HEADERS AVEC VALIDATION TOKEN
       const headers = await authService.getApiHeaders();
       
-      // 🔥 UTILISER L'ENDPOINT SÉCURISÉ PAR COLLECTEUR
+      // UTILISER L'ENDPOINT COLLECTEUR EXISTANT
       const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { 
         params, 
         headers 
       });
       
-      return this.formatResponse(response, 'Clients récupérés');
+      return this.formatResponse(response, 'Clients collecteur récupérés');
       
     } catch (error) {
       const authError = authService.handleAuthError(error);
@@ -40,7 +144,7 @@ class ClientService extends BaseApiService {
         throw new Error('Session expirée. Veuillez vous reconnecter.');
       }
       
-      throw this.handleError(error, 'Erreur lors de la récupération des clients');
+      throw this.handleError(error, 'Erreur lors de la récupération des clients collecteur');
     }
   }
 
@@ -50,7 +154,8 @@ class ClientService extends BaseApiService {
   async getClientById(clientId) {
     try {
       console.log('📱 API: GET /clients/', clientId);
-      const response = await this.axios.get(`/clients/${clientId}`);
+      const headers = await authService.getApiHeaders();
+      const response = await this.axios.get(`/clients/${clientId}`, { headers });
       return this.formatResponse(response, 'Client récupéré');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération du client');
@@ -65,7 +170,7 @@ class ClientService extends BaseApiService {
       console.log('📱 API: POST /clients');
       console.log('📤 Données client reçues:', clientData);
       
-      // 🔥 ENRICHISSEMENT AUTOMATIQUE DES DONNÉES
+      // ENRICHISSEMENT AUTOMATIQUE DES DONNÉES
       const enrichedData = await authService.enrichClientData(clientData);
       
       // Validation locale avant envoi
@@ -76,14 +181,14 @@ class ClientService extends BaseApiService {
       
       console.log('📤 Données enrichies à envoyer:', enrichedData);
       
-      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      // HEADERS AVEC VALIDATION TOKEN
       const headers = await authService.getApiHeaders();
       
       const response = await this.axios.post('/clients', enrichedData, { headers });
       return this.formatResponse(response, 'Client créé avec succès');
       
     } catch (error) {
-      // 🔥 GESTION AMÉLIORÉE DES ERREURS
+      // GESTION AMÉLIORÉE DES ERREURS
       const authError = authService.handleAuthError(error);
       if (authError.requiresLogin) {
         throw new Error('Session expirée. Veuillez vous reconnecter.');
@@ -107,7 +212,7 @@ class ClientService extends BaseApiService {
       console.log('📱 API: PUT /clients/', clientId);
       console.log('📤 Données de mise à jour:', clientData);
       
-      // 🔥 VÉRIFICATION DES PERMISSIONS
+      // VÉRIFICATION DES PERMISSIONS
       const canManage = await authService.canManageClient(clientId);
       if (!canManage) {
         throw new Error('Vous n\'êtes pas autorisé à modifier ce client');
@@ -119,14 +224,14 @@ class ClientService extends BaseApiService {
         throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
       }
       
-      // 🔥 HEADERS AVEC VALIDATION TOKEN
+      // HEADERS AVEC VALIDATION TOKEN
       const headers = await authService.getApiHeaders();
       
       const response = await this.axios.put(`/clients/${clientId}`, clientData, { headers });
       return this.formatResponse(response, 'Client mis à jour avec succès');
       
     } catch (error) {
-      // 🔥 GESTION AMÉLIORÉE DES ERREURS
+      // GESTION AMÉLIORÉE DES ERREURS
       const authError = authService.handleAuthError(error);
       if (authError.requiresLogin) {
         throw new Error('Session expirée. Veuillez vous reconnecter.');
@@ -140,7 +245,7 @@ class ClientService extends BaseApiService {
   }
   
   /**
-   * 🔥 NOUVELLE MÉTHODE: Validation spécifique pour les mises à jour
+   * Validation spécifique pour les mises à jour
    */
   validateClientUpdateDataLocally(clientData) {
     try {
@@ -184,7 +289,7 @@ class ClientService extends BaseApiService {
         }
       }
       
-      // 🔥 DÉTECTION COORDONNÉES ÉMULATEUR
+      // DÉTECTION COORDONNÉES ÉMULATEUR
       if (clientData.latitude && clientData.longitude) {
         if (Math.abs(clientData.latitude - 37.4219983) < 0.001 && 
             Math.abs(clientData.longitude - (-122.084)) < 0.001) {
@@ -226,17 +331,28 @@ class ClientService extends BaseApiService {
   /**
    * Récupérer les clients d'un collecteur
    */
-  async getClientsByCollecteur(collecteurId, { page = 0, size = 20, search = '' } = {}) {
-    try {
-      console.log('📱 API: GET /clients/collecteur/', collecteurId);
-      const params = { page, size };
-      if (search?.trim()) params.search = search.trim();
-      
-      const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
-      return this.formatResponse(response, 'Clients du collecteur récupérés');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des clients');
+  /**
+   * 🔄 MÉTHODE COMPATIBLE - Conserve l'API existante
+   * @deprecated Utiliser getAllClients() qui détecte automatiquement le rôle
+   */
+  async getClientsByCollecteur(collecteurId, options = {}) {
+    console.warn('⚠️ getClientsByCollecteur() est dépréciée, utilisez getAllClients()');
+    
+    // Vérifier si l'utilisateur actuel est bien le collecteur demandé
+    const user = await authService.getCurrentUser();
+    
+    // 🔥 CORRECTION PRÉFIXES ROLE_
+    if ((user?.role === 'COLLECTEUR' || user?.role === 'ROLE_COLLECTEUR') && user.id !== collecteurId) {
+      throw new Error('Un collecteur ne peut pas accéder aux clients d\'un autre collecteur');
     }
+    
+    if (user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' || 
+        user?.role === 'ROLE_ADMIN' || user?.role === 'ROLE_SUPER_ADMIN') {
+      // Admin peut accéder aux clients d'un collecteur spécifique
+      return await this.getClientsForAdmin({ ...options, collecteurId });
+    }
+    
+    return await this.getClientsForCollecteur(collecteurId, options);
   }
 
   /**
@@ -256,7 +372,7 @@ class ClientService extends BaseApiService {
   }
   
   /**
-   * 🔥 MÉTHODE PRINCIPALE - Récupérer client avec toutes ses données
+   * MÉTHODE PRINCIPALE - Récupérer client avec toutes ses données
    * Utilise l'endpoint unifié /with-transactions qui existe déjà
    */
   async getClientWithTransactions(clientId) {
@@ -270,7 +386,7 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
+   * - Utilise getClientWithTransactions au lieu d'endpoint séparé
    * Récupérer l'historique des transactions d'un client
    */
   async getClientTransactions(clientId, params = {}) {
@@ -368,7 +484,7 @@ class ClientService extends BaseApiService {
   }
 
   /**
-   * 🔥 CORRECTION - Utilise getClientWithTransactions au lieu d'endpoint séparé
+   * Utilise getClientWithTransactions au lieu d'endpoint séparé
    * Récupérer le solde d'un client
    */
   async getClientBalance(clientId) {
@@ -903,7 +1019,7 @@ class ClientService extends BaseApiService {
   }
   
   /**
-   * MÉTHODE MANQUANTE - Validation locale des données client
+   * Validation locale des données client
    * @param {Object} clientData - Données du client à valider
    */
   validateClientDataLocally(clientData) {
@@ -956,7 +1072,7 @@ class ClientService extends BaseApiService {
         }
       }
       
-      // 🔥 DÉTECTION COORDONNÉES ÉMULATEUR
+      // DÉTECTION COORDONNÉES ÉMULATEUR
       if (clientData.latitude && clientData.longitude) {
         if (Math.abs(clientData.latitude - 37.4219983) < 0.001 && 
             Math.abs(clientData.longitude - (-122.084)) < 0.001) {
@@ -1103,6 +1219,233 @@ class ClientService extends BaseApiService {
       
     } catch (error) {
       console.error('❌ Erreur initialisation ClientService:', error);
+      return false;
+    }
+  }
+  
+  // ============================================
+  // 🔧 MÉTHODES UTILITAIRES ET DEBUG
+  // ============================================
+
+  /**
+   * 🔍 MÉTHODE DE DEBUG - Teste l'accès selon le rôle
+   */
+  async debugUserAccess() {
+    try {
+      console.log('🔍 DEBUG: Test accès utilisateur...');
+      
+      const user = await authService.getCurrentUser();
+      if (!user) {
+        return { 
+          success: false, 
+          error: 'Utilisateur non connecté',
+          user: null 
+        };
+      }
+
+      console.log('👤 Utilisateur:', {
+        id: user.id,
+        role: user.role,
+        agenceId: user.agenceId,
+        email: user.email
+      });
+
+      // Tester l'accès selon le rôle
+      let accessTest = null;
+      let endpoint = null;
+
+      if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || 
+          user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') {
+        endpoint = '/admin/clients';
+        try {
+          accessTest = await this.getClientsForAdmin({ page: 0, size: 1 });
+        } catch (error) {
+          accessTest = { success: false, error: error.message };
+        }
+      } else if (user.role === 'COLLECTEUR' || user.role === 'ROLE_COLLECTEUR') {
+        endpoint = `/clients/collecteur/${user.id}`;
+        try {
+          accessTest = await this.getClientsForCollecteur(user.id, { page: 0, size: 1 });
+        } catch (error) {
+          accessTest = { success: false, error: error.message };
+        }
+      }
+
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          role: user.role,
+          agenceId: user.agenceId,
+          email: user.email
+        },
+        endpoint,
+        accessTest: {
+          success: accessTest?.success || false,
+          error: accessTest?.error || null,
+          dataCount: accessTest?.data?.length || 0
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Erreur debug:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        user: null 
+      };
+    }
+  }
+
+  /**
+   * 🧪 MÉTHODE DE TEST - Valide le bon fonctionnement des accès
+   */
+  async testRoleBasedAccess() {
+    try {
+      console.log('🧪 TEST: Validation accès basé sur les rôles...');
+      
+      const debugResult = await this.debugUserAccess();
+      
+      if (!debugResult.success) {
+        return {
+          success: false,
+          error: debugResult.error,
+          tests: []
+        };
+      }
+
+      const tests = [];
+      const user = debugResult.user;
+
+      // Test 1: Accès via getAllClients()
+      console.log('🧪 Test 1: getAllClients()');
+      try {
+        const result1 = await this.getAllClients({ page: 0, size: 5 });
+        tests.push({
+          name: 'getAllClients()',
+          success: result1.success,
+          endpoint: (user.role === 'ADMIN' || user.role === 'ROLE_ADMIN') ? '/admin/clients' : `/clients/collecteur/${user.id}`,
+          dataCount: result1.data?.length || 0,
+          error: null
+        });
+      } catch (error) {
+        tests.push({
+          name: 'getAllClients()',
+          success: false,
+          error: error.message
+        });
+      }
+
+      // Test 2: Accès direct selon le rôle
+      if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || 
+          user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') {
+        console.log('🧪 Test 2 Admin: getClientsForAdmin()');
+        try {
+          const result2 = await this.getClientsForAdmin({ page: 0, size: 5 });
+          tests.push({
+            name: 'getClientsForAdmin()',
+            success: result2.success,
+            endpoint: '/admin/clients',
+            dataCount: result2.data?.length || 0,
+            error: null
+          });
+        } catch (error) {
+          tests.push({
+            name: 'getClientsForAdmin()',
+            success: false,
+            error: error.message
+          });
+        }
+      } else if (user.role === 'COLLECTEUR' || user.role === 'ROLE_COLLECTEUR') {
+        console.log('🧪 Test 2 Collecteur: getClientsForCollecteur()');
+        try {
+          const result2 = await this.getClientsForCollecteur(user.id, { page: 0, size: 5 });
+          tests.push({
+            name: 'getClientsForCollecteur()',
+            success: result2.success,
+            endpoint: `/clients/collecteur/${user.id}`,
+            dataCount: result2.data?.length || 0,
+            error: null
+          });
+        } catch (error) {
+          tests.push({
+            name: 'getClientsForCollecteur()',
+            success: false,
+            error: error.message
+          });
+        }
+      }
+
+      // Test 3: Méthode de compatibilité
+      console.log('🧪 Test 3: getClientsByCollecteur() (compatibilité)');
+      try {
+        const result3 = await this.getClientsByCollecteur(user.id, { page: 0, size: 5 });
+        tests.push({
+          name: 'getClientsByCollecteur() [deprecated]',
+          success: result3.success,
+          dataCount: result3.data?.length || 0,
+          error: null
+        });
+      } catch (error) {
+        tests.push({
+          name: 'getClientsByCollecteur() [deprecated]',
+          success: false,
+          error: error.message
+        });
+      }
+
+      const allSuccess = tests.every(test => test.success);
+
+      return {
+        success: allSuccess,
+        user,
+        tests,
+        summary: {
+          totalTests: tests.length,
+          passed: tests.filter(t => t.success).length,
+          failed: tests.filter(t => !t.success).length
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Erreur test:', error);
+      return {
+        success: false,
+        error: error.message,
+        tests: []
+      };
+    }
+  }
+
+  /**
+   * 🔧 MÉTHODE UTILITAIRE - Obtenir le bon endpoint selon le rôle
+   */
+  async getEndpointForCurrentUser() {
+    const user = await authService.getCurrentUser();
+    if (!user) return null;
+
+    if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || 
+        user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') {
+      return '/admin/clients';
+    } else if (user.role === 'COLLECTEUR' || user.role === 'ROLE_COLLECTEUR') {
+      return `/clients/collecteur/${user.id}`;
+    }
+
+    return null;
+  }
+
+  /**
+   * 🔧 MÉTHODE UTILITAIRE - Vérifier si l'utilisateur peut accéder aux clients
+   */
+  async canAccessClients() {
+    try {
+      const user = await authService.getCurrentUser();
+      if (!user) return false;
+
+      const allowedRoles = ['ADMIN', 'SUPER_ADMIN', 'COLLECTEUR', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_COLLECTEUR'];
+      return allowedRoles.includes(user.role);
+    } catch (error) {
+      console.error('❌ Erreur vérification accès:', error);
       return false;
     }
   }
