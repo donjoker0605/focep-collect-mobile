@@ -34,11 +34,13 @@ import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen'; // 
 
 // Écrans de rapports et commissions
 import ReportsScreen from '../screens/Admin/ReportsScreen';
-import CommissionCalculationScreen from '../screens/Admin/CommissionCalculationScreen';
 import CommissionCalculationV2Screen from '../screens/Admin/CommissionCalculationV2Screen';
 import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import CommissionReportScreen from '../screens/Admin/CommissionReportScreen';
 import RubriqueRemunerationScreen from '../screens/Admin/RubriqueRemunerationScreen';
+import CommissionProcessusCompletScreen from '../screens/Admin/CommissionProcessusCompletScreen';
+import CommissionResultsScreen from '../screens/Admin/CommissionResultsScreen';
+import RemunerationProcessScreen from '../screens/Admin/RemunerationProcessScreen';
 
 // Écrans de transactions et transferts
 import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
@@ -252,16 +254,16 @@ const AdminStack = () => {
       />
 
       <Stack.Screen
-        name="CommissionCalculationScreen"
-        component={CommissionCalculationScreen}
+        name="CommissionCalculationV2Screen"
+        component={CommissionCalculationV2Screen}
         options={{
           headerShown: false,
         }}
       />
 
       <Stack.Screen
-        name="CommissionCalculationV2Screen"
-        component={CommissionCalculationV2Screen}
+        name="CommissionProcessusCompletScreen"
+        component={CommissionProcessusCompletScreen}
         options={{
           headerShown: false,
         }}
@@ -276,20 +278,28 @@ const AdminStack = () => {
       />
 
       <Stack.Screen
+        name="CommissionResultsScreen"
+        component={CommissionResultsScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="RemunerationProcessScreen"
+        component={RemunerationProcessScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
         name="CommissionParametersScreen"
         component={CommissionParametersScreen}
         options={{
           headerShown: false,
         }}
       />
-	  
-		<Stack.Screen
-		  name="CommissionTestScreen"
-		  component={CommissionTestScreen}
-		  options={{
-			headerShown: false,
-		  }}
-		/>
 
 
       <Stack.Screen

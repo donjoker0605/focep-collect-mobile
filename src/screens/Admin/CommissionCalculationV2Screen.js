@@ -26,6 +26,7 @@ import { useCollecteurs } from '../../hooks/useCollecteurs';
 import colors from '../../theme/colors';
 import { formatters } from '../../utils/formatters';
 import { testCommissionV2Integration } from '../../utils/testCommissionV2';
+import V2IntegrationTest from '../../components/V2IntegrationTest/V2IntegrationTest';
 
 /**
  * Écran de calcul de commission selon la nouvelle spécification FOCEP
@@ -88,7 +89,17 @@ export default function CommissionCalculationV2Screen({ navigation }) {
 
     if (result.success) {
       setShowResults(true);
-      Alert.alert('Succès', result.message);
+      Alert.alert('Succès', result.message || 'Commission calculée avec succès', [
+        {
+          text: 'Voir les résultats',
+          onPress: () => {
+            navigation.navigate('CommissionResultsScreen', {
+              commissionResult: result,
+              collecteur: selectedCollecteur
+            });
+          }
+        }
+      ]);
     }
   };
 
@@ -288,19 +299,19 @@ export default function CommissionCalculationV2Screen({ navigation }) {
           <View style={styles.statsRow}>
             <StatsCard
               title="Clients"
-              value={stats.nombreClients.toString()}
+              value={stats.totalClients?.toString() || '0'}
               icon="people"
               color={colors.info}
             />
             <StatsCard
               title="Commission"
-              value={formatters.formatMoney(stats.totalCommissions)}
-              icon="paid"
+              value={formatters.formatMoney(stats.totalCommissions || 0)}
+              icon="cash"
               color={colors.success}
             />
             <StatsCard
               title="TVA"
-              value={formatters.formatMoney(stats.totalTVA)}
+              value={formatters.formatMoney(stats.totalTaxes || 0)}
               icon="receipt"
               color={colors.warning}
             />
@@ -312,13 +323,25 @@ export default function CommissionCalculationV2Screen({ navigation }) {
           <Card style={styles.resultsCard}>
             <View style={styles.resultHeader}>
               <Text style={styles.sectionTitle}>Résultats Commission</Text>
-              <TouchableOpacity
-                style={styles.excelButton}
-                onPress={() => handleGenerateExcelReport('commission')}
-              >
-                <Icon name="file-download" size={20} color={colors.primary} />
-                <Text style={styles.excelText}>Excel</Text>
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={styles.viewButton}
+                  onPress={() => navigation.navigate('CommissionResultsScreen', {
+                    commissionResult: commissionData,
+                    collecteur: selectedCollecteur
+                  })}
+                >
+                  <Icon name="visibility" size={20} color={colors.success} />
+                  <Text style={styles.viewText}>Détails</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.excelButton}
+                  onPress={() => handleGenerateExcelReport('commission')}
+                >
+                  <Icon name="file-download" size={20} color={colors.primary} />
+                  <Text style={styles.excelText}>Excel</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.summaryRow}>
@@ -386,6 +409,13 @@ export default function CommissionCalculationV2Screen({ navigation }) {
               </Text>
             </View>
           </Card>
+        )}
+
+        {/* Tests d'intégration V2 (mode développement) */}
+        {__DEV__ && (
+          <V2IntegrationTest 
+            collecteurId={selectedCollecteur?.id}
+          />
         )}
 
         {/* Loading indicator */}
@@ -506,6 +536,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: colors.success + '20',
+    borderRadius: 8
+  },
+  viewText: {
+    marginLeft: 4,
+    color: colors.success,
+    fontWeight: '500'
   },
   excelButton: {
     flexDirection: 'row',

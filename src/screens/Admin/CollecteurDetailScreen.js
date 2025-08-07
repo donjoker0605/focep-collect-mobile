@@ -356,7 +356,7 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
         
         <Button
           title="Calculer les commissions"
-          onPress={() => navigation.navigate('CommissionCalculationScreen', {
+          onPress={() => navigation.navigate('CommissionCalculationV2Screen', {
             selectedCollecteur: collecteur.id
           })}
           style={styles.commissionButton}

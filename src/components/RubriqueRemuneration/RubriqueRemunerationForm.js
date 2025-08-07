@@ -209,8 +209,9 @@ export default function RubriqueRemunerationForm({
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Date d'Application</Text>
           <DatePicker
-            value={formData.dateApplication}
-            onChange={(date) => handleFieldChange('dateApplication', date)}
+            date={formData.dateApplication ? new Date(formData.dateApplication) : new Date()}
+            onDateChange={(date) => handleFieldChange('dateApplication', date.toISOString().split('T')[0])}
+            onClose={() => {}}
             minimumDate={new Date()}
           />
           {errors.dateApplication && (

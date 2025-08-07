@@ -155,7 +155,7 @@ const DataTable = ({
     
     return (
       <View
-        key={column.field}
+        key={`${index}-${column.field}`}
         style={[
           styles.cell,
           { flex: column.flex || 1, width: column.width },

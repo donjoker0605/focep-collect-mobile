@@ -78,7 +78,7 @@ const AdminDashboardScreen = ({ navigation }) => {
   };
 
   const navigateToCommissions = () => {
-    navigation.navigate('CommissionCalculationScreen');
+    navigation.navigate('CommissionCalculationV2Screen');
   };
 
   // Cartes de gestion principales
@@ -160,6 +160,22 @@ const AdminDashboardScreen = ({ navigation }) => {
       icon: 'list-outline',
       color: theme.colors.info,
       onPress: () => navigation.navigate('RubriqueRemunerationScreen'),
+    },
+    {
+      id: 'processus-complet',
+      title: 'Processus Complet',
+      icon: 'construct',
+      color: theme.colors.success,
+      badge: 'NOUVEAU',
+      onPress: () => navigation.navigate('CommissionProcessusCompletScreen'),
+    },
+    {
+      id: 'remuneration-process',
+      title: 'Processus Rémunération',
+      icon: 'account-balance-wallet',
+      color: theme.colors.purple,
+      badge: 'NOUVEAU',
+      onPress: () => navigation.navigate('RemunerationProcessScreen'),
     }
   ];
 
@@ -372,15 +388,6 @@ const AdminDashboardScreen = ({ navigation }) => {
             ))}
           </View>
           
-          {/* ✅ BOUTON TEMPORAIRE CORRECTEMENT PLACÉ HORS DU MAP */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={() => navigation.navigate('CommissionTestScreen')}
-            >
-              <Text style={styles.testButtonText}>🧪 Test Commission API</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Dernière mise à jour */}
@@ -617,23 +624,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     paddingHorizontal: 20,
-  },
-  // ✅ STYLES BOUTON TEST CORRIGÉS
-  testButton: {
-    backgroundColor: '#ff9800',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    minWidth: 200,
-  },
-  testButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
 

@@ -1,6 +1,7 @@
-// src/hooks/useCommissionV2.js
+// src/hooks/useCommissionV2.js - INTEGRATION V2 COMPLETE
 import { useState, useCallback, useEffect } from 'react';
 import commissionV2Service from '../services/commissionV2Service';
+import adminCommissionService from '../services/adminCommissionService';
 
 /**
  * Hook pour gérer les nouvelles fonctionnalités de commission FOCEP v2
@@ -24,17 +25,15 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Lance le calcul de commission avec hiérarchie
+   * Lance le calcul de commission avec les nouvelles API V2
    */
   const calculateCommissions = useCallback(async (collecteurId, dateDebut, dateFin) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Validation des paramètres
-      commissionV2Service.validatePeriodParams(dateDebut, dateFin);
-      
-      const result = await commissionV2Service.calculateCommissionsHierarchy(
+      // Utilisation des nouvelles API V2 backend
+      const result = await adminCommissionService.calculateCommissionsV2(
         collecteurId, 
         dateDebut, 
         dateFin
@@ -93,30 +92,28 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Processus complet automatisé
+   * Processus complet automatisé avec les nouvelles API V2
    */
   const processusComplet = useCallback(async (collecteurId, dateDebut, dateFin) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Validation des paramètres
-      commissionV2Service.validatePeriodParams(dateDebut, dateFin);
+      // Utilisation de la nouvelle API V2 backend qui fait tout en une seule fois
+      const result = await adminCommissionService.processComplet(collecteurId, dateDebut, dateFin);
       
-      const result = await commissionV2Service.processusCompletCommissionRemuneration(
-        collecteurId, 
-        dateDebut, 
-        dateFin
-      );
-      
-      setCommissionData(result.data.commission);
-      setRemunerationData(result.data.remuneration);
+      // Mettre à jour les données avec les résultats complets
+      if (result.data?.commissionResult) {
+        setCommissionData(result.data.commissionResult);
+      }
+      if (result.data?.remunerationResult) {
+        setRemunerationData(result.data.remunerationResult);
+      }
       
       return {
         success: true,
         data: result.data,
-        message: result.message,
-        periode: result.data.periode
+        message: result.message
       };
     } catch (err) {
       const errorMessage = err.message || 'Erreur lors du processus complet';
@@ -131,27 +128,22 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Génère le rapport Excel de commission
+   * Génération du rapport Excel de commission avec API V2
    */
   const generateCommissionReport = useCallback(async (collecteurId, dateDebut, dateFin) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.generateCommissionExcelReport(
-        collecteurId, 
-        dateDebut, 
-        dateFin
-      );
+      const result = await adminCommissionService.generateCommissionReport(collecteurId, dateDebut, dateFin);
       
       return {
         success: true,
-        fileName: result.data.fileName,
-        size: result.data.size,
-        message: result.message
+        data: result.data,
+        message: 'Rapport commission généré avec succès'
       };
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la génération du rapport';
+      const errorMessage = err.message || 'Erreur génération rapport commission';
       setError(errorMessage);
       return {
         success: false,
@@ -163,27 +155,22 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Génère le rapport Excel de rémunération
+   * Génération du rapport Excel de rémunération complet avec API V2
    */
   const generateRemunerationReport = useCallback(async (collecteurId, dateDebut, dateFin) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.generateRemunerationExcelReport(
-        collecteurId, 
-        dateDebut, 
-        dateFin
-      );
+      const result = await adminCommissionService.generateRemunerationReport(collecteurId, dateDebut, dateFin);
       
       return {
         success: true,
-        fileName: result.data.fileName,
-        size: result.data.size,
-        message: result.message
+        data: result.data,
+        message: 'Rapport rémunération généré avec succès'
       };
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la génération du rapport';
+      const errorMessage = err.message || 'Erreur génération rapport rémunération';
       setError(errorMessage);
       return {
         success: false,
@@ -195,14 +182,16 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Charge les rubriques d'un collecteur
+   * Récupération des rubriques de rémunération avec API V2
    */
-  const loadRubriques = useCallback(async (collecteurId) => {
+  const loadRubriques = useCallback(async (collecteurId = null) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.getRubriquesCollecteur(collecteurId);
+      const result = collecteurId 
+        ? await adminCommissionService.getRubriquesByCollecteur(collecteurId)
+        : await adminCommissionService.getAllRubriques();
       
       setRubriques(result.data || []);
       
@@ -212,7 +201,7 @@ export const useCommissionV2 = () => {
         message: result.message
       };
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors du chargement des rubriques';
+      const errorMessage = err.message || 'Erreur chargement rubriques';
       setError(errorMessage);
       return {
         success: false,
@@ -224,14 +213,14 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Crée une nouvelle rubrique
+   * Crée une nouvelle rubrique avec API V2
    */
   const createRubrique = useCallback(async (rubriqueData) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.createRubrique(rubriqueData);
+      const result = await adminCommissionService.createRubrique(rubriqueData);
       
       // Met à jour la liste locale
       setRubriques(prev => [...prev, result.data]);
@@ -254,19 +243,19 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Met à jour une rubrique
+   * Met à jour une rubrique existante avec API V2
    */
   const updateRubrique = useCallback(async (rubriqueId, rubriqueData) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.updateRubrique(rubriqueId, rubriqueData);
+      const result = await adminCommissionService.updateRubrique(rubriqueId, rubriqueData);
       
       // Met à jour la liste locale
-      setRubriques(prev => 
-        prev.map(r => r.id === rubriqueId ? result.data : r)
-      );
+      setRubriques(prev => prev.map(r => 
+        r.id === rubriqueId ? result.data : r
+      ));
       
       return {
         success: true,
@@ -274,7 +263,7 @@ export const useCommissionV2 = () => {
         message: result.message
       };
     } catch (err) {
-      const errorMessage = err.message || 'Erreur lors de la mise à jour de la rubrique';
+      const errorMessage = err.message || 'Erreur lors de la modification de la rubrique';
       setError(errorMessage);
       return {
         success: false,
@@ -286,17 +275,19 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Désactive une rubrique
+   * Désactive une rubrique avec API V2
    */
   const deactivateRubrique = useCallback(async (rubriqueId) => {
     try {
       setLoading(true);
       setError(null);
       
-      const result = await commissionV2Service.deactivateRubrique(rubriqueId);
+      const result = await adminCommissionService.deactivateRubrique(rubriqueId);
       
-      // Retire de la liste locale
-      setRubriques(prev => prev.filter(r => r.id !== rubriqueId));
+      // Met à jour la liste locale
+      setRubriques(prev => prev.map(r => 
+        r.id === rubriqueId ? { ...r, active: false } : r
+      ));
       
       return {
         success: true,
@@ -315,19 +306,47 @@ export const useCommissionV2 = () => {
   }, []);
 
   /**
-   * Calcule les statistiques des commissions actuelles
+   * Calcule les statistiques des commissions
    */
   const getCommissionStats = useCallback(() => {
-    if (!commissionData) return null;
-    
-    return commissionV2Service.calculateCommissionStats(commissionData);
+    if (!commissionData) {
+      return {
+        totalClients: 0,
+        totalCommissions: 0,
+        totalTaxes: 0,
+        montantS: 0,
+        moyenne: 0,
+        taux: 0
+      };
+    }
+
+    const clients = commissionData.clients || [];
+    const totalClients = clients.length;
+    const totalCommissions = clients.reduce((sum, client) => sum + (client.commission || 0), 0);
+    const totalTaxes = clients.reduce((sum, client) => sum + (client.taxe || 0), 0);
+    const montantS = commissionData.montantS || totalCommissions;
+    const moyenne = totalClients > 0 ? totalCommissions / totalClients : 0;
+    const totalEpargne = clients.reduce((sum, client) => sum + (client.totalEpargne || 0), 0);
+    const taux = totalEpargne > 0 ? (totalCommissions / totalEpargne) * 100 : 0;
+
+    return {
+      totalClients,
+      totalCommissions,
+      totalTaxes,
+      montantS,
+      moyenne,
+      taux: parseFloat(taux.toFixed(2))
+    };
   }, [commissionData]);
 
   /**
-   * Formate une période pour l'affichage
+   * Formate une période pour affichage
    */
   const formatPeriode = useCallback((dateDebut, dateFin) => {
-    return commissionV2Service.formatPeriode(dateDebut, dateFin);
+    if (!dateDebut || !dateFin) return '';
+    const debut = new Date(dateDebut);
+    const fin = new Date(dateFin);
+    return `${debut.toLocaleDateString('fr-FR')} - ${fin.toLocaleDateString('fr-FR')}`;
   }, []);
 
   /**
@@ -348,20 +367,19 @@ export const useCommissionV2 = () => {
     remunerationData,
     rubriques,
     
-    // Actions
+    // Actions principales V2
     calculateCommissions,
-    processRemuneration,
     processusComplet,
     generateCommissionReport,
     generateRemunerationReport,
     
-    // Rubriques
+    // Rubriques V2
     loadRubriques,
     createRubrique,
     updateRubrique,
     deactivateRubrique,
     
-    // Utilitaires
+    // Statistiques et utilitaires
     getCommissionStats,
     formatPeriode,
     clearError,

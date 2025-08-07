@@ -262,7 +262,7 @@ export default function RubriqueRemunerationScreen({ navigation }) {
             <StatsCard
               title="Montants"
               value={formatters.formatMoney(stats.totalConstant)}
-              icon="paid"
+              icon="cash"
               color={colors.warning}
               style={styles.statCard}
             />
@@ -322,7 +322,7 @@ export default function RubriqueRemunerationScreen({ navigation }) {
 
       {/* Modal formulaire */}
       <Modal
-        visible={showForm}
+        isVisible={showForm}
         onClose={() => setShowForm(false)}
         title={selectedRubrique ? 'Modifier Rubrique' : 'Nouvelle Rubrique'}
       >

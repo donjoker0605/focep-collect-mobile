@@ -5,8 +5,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
-// Components
-import { Input, SelectInput, Button } from '../../../components';
+// Components - imports directs pour éviter cycle de dépendance
+import Input from '../../Input/Input';
+import SelectInput from '../../SelectInput/SelectInput';
+import Button from '../../Button/Button';
 import Card from '../../Card/Card';
 import theme from '../../../theme';
 

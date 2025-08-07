@@ -93,8 +93,7 @@ export { default as RoleSwitcher } from './RoleSwitcher/RoleSwitcher';
 // ========================================
 // 🎛️ COMPOSANTS DE CONTRÔLE
 // ========================================
-export { default as Commission } from './Commission/Commission/CommissionParametersForm';
+export { default as CommissionParametersForm } from './Commission/Commission/CommissionParametersForm';
 export { default as CommissionVisualization } from './Commission/CommissionVisualization';
-export { default as CommissionParametersForm } from './Commission/CommissionParametersForm';
 export { default as PrintableReceipt } from './PrintableReceipt/PrintableReceipt';
 export { default as ReportGenerator } from './ReportGenerator/ReportGenerator';

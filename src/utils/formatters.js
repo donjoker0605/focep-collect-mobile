@@ -48,6 +48,24 @@ export const formatTime = (date) => {
   }
 };
 
+export const formatDateTime = (date) => {
+  if (!date) return '';
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return '';
+    
+    return dateObj.toLocaleDateString('fr-FR') + ' à ' + 
+           dateObj.toLocaleTimeString('fr-FR', {
+             hour: '2-digit',
+             minute: '2-digit'
+           });
+  } catch (error) {
+    console.error('Erreur formatage date/heure:', error);
+    return '';
+  }
+};
+
 // ✅ FONCTION MANQUANTE QUI CAUSE L'ERREUR
 export const formatTimeAgo = (date) => {
   if (!date) return 'Jamais';
@@ -173,6 +191,7 @@ export const formatters = {
   formatCurrency,
   formatDate,
   formatTime,
+  formatDateTime,
   formatTimeAgo,
   formatNotificationTime,
   formatRelativeTime,

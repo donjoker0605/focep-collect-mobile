@@ -1,9 +1,9 @@
-// src/services/adminCommissionService.js
+// src/services/adminCommissionService.js - V2 INTEGRATION
 import BaseApiService from './base/BaseApiService';
 
 /**
- * Service pour la gestion administrative des commissions
- * Utilisé par les hooks d'administration
+ * Service pour la gestion administrative des commissions V2
+ * Utilise les nouvelles API V2 commission-remuneration
  */
 class AdminCommissionService extends BaseApiService {
   constructor() {
@@ -11,180 +11,190 @@ class AdminCommissionService extends BaseApiService {
   }
 
   // ================================
-  // TRAITEMENT DES COMMISSIONS
+  // TRAITEMENT DES COMMISSIONS V2
   // ================================
 
   /**
-   * Traiter les commissions pour un collecteur
+   * Calcul des commissions V2 avec hiérarchie
    */
-  async processCommissions(collecteurId, dateDebut, dateFin, force = false) {
+  async calculateCommissionsV2(collecteurId, dateDebut, dateFin) {
     try {
-      console.log('📱 API: POST /commissions/process');
-      const response = await this.axios.post('/commissions/process', null, {
-        params: {
-          collecteurId,
-          startDate: dateDebut,
-          endDate: dateFin,
-          forceRecalculation: force
+      console.log('📱 API V2: POST /commission-remuneration/collecteur/:id/calculer');
+      const response = await this.axios.post(
+        `/v2/commission-remuneration/collecteur/${collecteurId}/calculer`,
+        null,
+        {
+          params: {
+            dateDebut,
+            dateFin
+          }
         }
-      });
-      return this.formatResponse(response, 'Commissions traitées avec succès');
+      );
+      return this.formatResponse(response, 'Commission V2 calculée avec succès');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du traitement des commissions');
+      throw this.handleError(error, 'Erreur calcul commission V2');
     }
   }
 
   /**
-   * Traitement asynchrone des commissions
+   * Processus complet : Commission + Rémunération en une seule API V2
    */
-  async processCommissionsAsync(collecteurId, dateDebut, dateFin) {
+  async processComplet(collecteurId, dateDebut, dateFin) {
     try {
-      console.log('📱 API: POST /commissions/process/async');
-      const response = await this.axios.post('/commissions/process/async', null, {
-        params: {
-          collecteurId,
-          startDate: dateDebut,
-          endDate: dateFin
+      console.log('📱 API V2: POST /commission-remuneration/collecteur/:id/processus-complet');
+      const response = await this.axios.post(
+        `/v2/commission-remuneration/collecteur/${collecteurId}/processus-complet`,
+        null,
+        {
+          params: {
+            dateDebut,
+            dateFin
+          }
         }
-      });
-      return this.formatResponse(response, 'Traitement asynchrone démarré');
+      );
+      return this.formatResponse(response, 'Processus complet V2 réussi');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du lancement du traitement asynchrone');
+      throw this.handleError(error, 'Erreur processus complet V2');
     }
   }
 
   /**
-   * Calculer les commissions (endpoint attendu par frontend)
+   * Génération du rapport Excel de commission V2
+   */
+  async generateCommissionReport(collecteurId, dateDebut, dateFin) {
+    try {
+      console.log('📱 API V2: POST /commission-remuneration/collecteur/:id/rapport-commission');
+      const response = await this.axios.post(
+        `/v2/commission-remuneration/collecteur/${collecteurId}/rapport-commission`,
+        null,
+        {
+          params: {
+            dateDebut,
+            dateFin
+          },
+          responseType: 'blob'
+        }
+      );
+      return this.formatResponse(response, 'Rapport commission généré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur génération rapport commission');
+    }
+  }
+
+  /**
+   * Génération du rapport Excel de rémunération complet V2
+   */
+  async generateRemunerationReport(collecteurId, dateDebut, dateFin) {
+    try {
+      console.log('📱 API V2: POST /commission-remuneration/collecteur/:id/rapport-remuneration');
+      const response = await this.axios.post(
+        `/v2/commission-remuneration/collecteur/${collecteurId}/rapport-remuneration`,
+        null,
+        {
+          params: {
+            dateDebut,
+            dateFin
+          },
+          responseType: 'blob'
+        }
+      );
+      return this.formatResponse(response, 'Rapport rémunération généré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur génération rapport rémunération');
+    }
+  }
+
+  /**
+   * Calculer les commissions (méthode de compatibilité pour ancien code)
    */
   async calculateCommissions(dateDebut, dateFin, collecteurId = null) {
+    // Redirection vers la nouvelle API V2
+    return this.calculateCommissionsV2(collecteurId, dateDebut, dateFin);
+  }
+
+  // ================================
+  // GESTION DES RUBRIQUES DE RÉMUNÉRATION V2
+  // ================================
+
+  /**
+   * Récupérer les rubriques actives pour un collecteur
+   */
+  async getRubriquesByCollecteur(collecteurId) {
     try {
-      console.log('📱 API: POST /commissions/calculate');
-      const response = await this.axios.post('/commissions/calculate', {
-        dateDebut,
-        dateFin,
-        collecteurId
-      });
-      return this.formatResponse(response, 'Commissions calculées');
+      console.log('📱 API V2: GET /rubriques-remuneration/collecteur/:id');
+      const response = await this.axios.get(`/v2/rubriques-remuneration/collecteur/${collecteurId}`);
+      return this.formatResponse(response, 'Rubriques récupérées');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du calcul des commissions');
+      throw this.handleError(error, 'Erreur récupération rubriques');
     }
   }
 
   /**
-   * Calculer les commissions pour toute l'agence
+   * Récupérer toutes les rubriques (pour admin)
    */
-  async calculateAgenceCommissions(dateDebut, dateFin) {
+  async getAllRubriques() {
     try {
-      console.log('📱 API: POST /commissions/agence/calculate');
-      const response = await this.axios.post('/commissions/agence/calculate', {
-        dateDebut,
-        dateFin
-      });
-      return this.formatResponse(response, 'Commissions agence calculées');
+      console.log('📱 API V2: GET /rubriques-remuneration');
+      const response = await this.axios.get('/v2/rubriques-remuneration');
+      return this.formatResponse(response, 'Toutes rubriques récupérées');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du calcul des commissions agence');
+      throw this.handleError(error, 'Erreur récupération toutes rubriques');
     }
   }
 
   /**
-   * Calculer les commissions d'un collecteur spécifique
+   * Créer une nouvelle rubrique de rémunération
    */
-  async calculateCollecteurCommissions(collecteurId, dateDebut, dateFin) {
+  async createRubrique(rubriqueData) {
     try {
-      console.log('📱 API: POST /commissions/collecteur/calculate');
-      const response = await this.axios.post(`/commissions/collecteur/${collecteurId}/calculate`, {
-        dateDebut,
-        dateFin
-      });
-      return this.formatResponse(response, 'Commissions collecteur calculées');
+      console.log('📱 API V2: POST /rubriques-remuneration');
+      const response = await this.axios.post('/v2/rubriques-remuneration', rubriqueData);
+      return this.formatResponse(response, 'Rubrique créée');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du calcul des commissions collecteur');
-    }
-  }
-
-  // ================================
-  // SIMULATION
-  // ================================
-
-  /**
-   * Simuler une commission
-   */
-  async simulateCommission(simulationData) {
-    try {
-      console.log('📱 API: POST /commissions/simulate');
-      const response = await this.axios.post('/commissions/simulate', simulationData);
-      return this.formatResponse(response, 'Simulation effectuée');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la simulation');
-    }
-  }
-
-  // ================================
-  // CONSULTATION ET RAPPORTS
-  // ================================
-
-  /**
-   * Récupérer les commissions d'un collecteur
-   */
-  async getCollecteurCommissions(collecteurId, startDate = null, endDate = null) {
-    try {
-      console.log('📱 API: GET /commissions/collecteur');
-      const params = {};
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
-
-      const response = await this.axios.get(`/commissions/collecteur/${collecteurId}`, { params });
-      return this.formatResponse(response, 'Commissions collecteur récupérées');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la récupération des commissions');
+      throw this.handleError(error, 'Erreur création rubrique');
     }
   }
 
   /**
-   * Traitement batch pour une agence
+   * Modifier une rubrique existante
    */
-  async processAgenceBatch(agenceId, dateDebut, dateFin) {
+  async updateRubrique(rubriqueId, rubriqueData) {
     try {
-      console.log('📱 API: POST /commissions/process/batch/agence');
-      const response = await this.axios.post(`/commissions/process/batch/agence/${agenceId}`, null, {
-        params: {
-          startDate: dateDebut,
-          endDate: dateFin
-        }
-      });
-      return this.formatResponse(response, 'Traitement batch agence terminé');
+      console.log('📱 API V2: PUT /rubriques-remuneration/:id');
+      const response = await this.axios.put(`/v2/rubriques-remuneration/${rubriqueId}`, rubriqueData);
+      return this.formatResponse(response, 'Rubrique mise à jour');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors du traitement batch agence');
+      throw this.handleError(error, 'Erreur modification rubrique');
+    }
+  }
+
+  /**
+   * Désactiver une rubrique
+   */
+  async deactivateRubrique(rubriqueId) {
+    try {
+      console.log('📱 API V2: DELETE /rubriques-remuneration/:id');
+      const response = await this.axios.delete(`/v2/rubriques-remuneration/${rubriqueId}`);
+      return this.formatResponse(response, 'Rubrique désactivée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur désactivation rubrique');
     }
   }
 
   // ================================
-  // MÉTHODES UTILITAIRES
+  // STATUT ET UTILITÉS V2
   // ================================
 
   /**
-   * Vérifier le statut d'un traitement asynchrone
+   * Récupérer le statut des commissions d'un collecteur V2
    */
-  async checkAsyncStatus(taskId) {
+  async getStatutCommissions(collecteurId) {
     try {
-      console.log('📱 API: GET /commissions/async/status');
-      const response = await this.axios.get(`/commissions/async/status/${taskId}`);
+      console.log('📱 API V2: GET /commission-remuneration/collecteur/:id/statut');
+      const response = await this.axios.get(`/v2/commission-remuneration/collecteur/${collecteurId}/statut`);
       return this.formatResponse(response, 'Statut récupéré');
     } catch (error) {
-      throw this.handleError(error, 'Erreur lors de la vérification du statut');
-    }
-  }
-
-  /**
-   * Annuler un traitement en cours
-   */
-  async cancelProcessing(taskId) {
-    try {
-      console.log('📱 API: DELETE /commissions/async/cancel');
-      const response = await this.axios.delete(`/commissions/async/cancel/${taskId}`);
-      return this.formatResponse(response, 'Traitement annulé');
-    } catch (error) {
-      throw this.handleError(error, 'Erreur lors de l\'annulation');
+      throw this.handleError(error, 'Erreur récupération statut V2');
     }
   }
 }
