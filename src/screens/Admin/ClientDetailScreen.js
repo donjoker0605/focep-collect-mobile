@@ -111,9 +111,10 @@ const ClientDetailScreen = ({ navigation, route }) => {
   };
 
   const handleEditClient = () => {
-    navigation.navigate('ClientCreationScreen', {
+    navigation.navigate('ClientAddEdit', {
       mode: 'edit',
       client,
+      adminEdit: true,
       onRefresh: () => loadClientDetails(false)
     });
   };

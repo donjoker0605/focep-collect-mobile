@@ -1,6 +1,6 @@
 // src/navigation/AdminStack.js - VERSION MISE À JOUR AVEC GESTION CLIENTS AMÉLIORÉE
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
@@ -47,7 +47,7 @@ import TransactionDetailScreen from '../screens/Admin/TransactionDetailScreen';
 import TransfertCompteScreen from '../screens/Admin/TransfertCompteScreen';
 import JournalClotureScreen from '../screens/Admin/JournalClotureScreen';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 const AdminStack = () => {
   const { logout } = useAuth();

@@ -196,7 +196,7 @@ export default function RubriqueRemunerationForm({
             placeholder={getValeurPlaceholder()}
             keyboardType="numeric"
             error={errors.valeur}
-            rightIcon={formData.type === 'PERCENTAGE' ? 'percent' : 'attach-money'}
+            rightIcon={formData.type === 'PERCENTAGE' ? 'percent' : 'cash-outline'}
           />
           {formData.type === 'PERCENTAGE' && (
             <Text style={styles.helpText}>

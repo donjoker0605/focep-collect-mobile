@@ -16,6 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 // ❌ RETIRÉ : import Header from '../../components/Header/Header';
 import collecteurService from '../../services/collecteurService';
+import { adminCollecteurService } from '../../services';
 
 const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   const [collecteurs, setCollecteurs] = useState([]);
@@ -26,14 +27,16 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
 
-  // Charger les collecteurs
+  // 🔥 Charger UNIQUEMENT les collecteurs assignés à l'admin
   const loadCollecteurs = useCallback(async (showLoader = true) => {
     if (showLoader) setLoading(true);
     setError(null);
 
     try {
-      console.log('📊 Chargement collecteurs pour supervision...');
-      const response = await collecteurService.getCollecteurs();
+      console.log('📊 Chargement collecteurs assignés pour supervision...');
+      
+      // 🆕 NOUVELLE LOGIQUE : Utiliser le service admin-collecteur
+      const response = await adminCollecteurService.getAssignedCollecteurs();
       
       if (response && response.data) {
         const result = Array.isArray(response.data) 
@@ -49,22 +52,23 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
           email: collecteur.adresseMail || collecteur.email,
           isActive: collecteur.active !== false,
           agenceNom: collecteur.agenceNom || 'N/A',
+          // 📊 Récupérer les vraies stats depuis les données enrichies
           stats: {
-            clients: 0,
-            collecte: 0,
-            performance: '0%'
+            clients: collecteur.nombreClients || 0,
+            collecte: collecteur.collecteJour || 0,
+            performance: collecteur.performance ? `${collecteur.performance}%` : '0%'
           }
         }));
 
         setCollecteurs(enrichedData);
         setFilteredCollecteurs(enrichedData);
-        console.log(`✅ ${result.length} collecteurs chargés`);
+        console.log(`✅ ${result.length} collecteurs assignés chargés`);
       } else {
         throw new Error('Format de données invalide');
       }
 
     } catch (error) {
-      console.error('❌ Erreur chargement collecteurs:', error);
+      console.error('❌ Erreur chargement collecteurs assignés:', error);
       setError(error.message);
       
       if (error.message.includes('Authentification')) {

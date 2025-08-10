@@ -255,7 +255,7 @@ export default function RubriqueRemunerationScreen({ navigation }) {
             <StatsCard
               title="Actives"
               value={stats.active.toString()}
-              icon="check-circle"
+              icon="checkmark-circle-outline"
               color={colors.success}
               style={styles.statCard}
             />

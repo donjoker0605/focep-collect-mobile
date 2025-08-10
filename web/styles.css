@@ -1,0 +1,41 @@
+/* FOCEP Collect - Styles Web */
+
+html, body, #root {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* CORRECTION CRITIQUE React Navigation Web - OVERRIDE COMPLET */
+div[style*="pointer-events: none"],
+div[style*="pointerEvents: none"],
+.r-pointerEvents-12vffkv,
+*[class*="pointerEvents"] {
+  pointer-events: auto !important;
+}
+
+/* FORCER ABSOLUMENT TOUS LES CONTENEURS INTERACTIFS */
+div[style*="position: absolute"] {
+  pointer-events: auto !important;
+}
+
+/* Interactions de base */
+button, [role="button"], 
+*[role="button"],
+div[data-focusable="true"],
+*[class*="TouchableOpacity"] {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+input, textarea {
+  cursor: text !important;
+  pointer-events: auto !important;
+}
+
+/* Scroll naturel */
+* {
+  -webkit-overflow-scrolling: touch;
+}

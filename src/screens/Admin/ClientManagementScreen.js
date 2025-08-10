@@ -49,9 +49,18 @@ const ClientManagementScreen = ({ navigation }) => {
       const response = await clientService.getAllClients();
       
       if (response.success) {
-        const clientsData = Array.isArray(response.data) ? response.data : [];
-        setClients(clientsData);
-        setTotalElements(clientsData.length);
+        // La réponse a une structure paginée: {data: {content: [...], totalElements: N}}
+        const clientsData = response.data?.content || response.data || [];
+        const total = response.data?.totalElements || clientsData.length || 0;
+        
+        console.log('📋 Clients reçus:', {
+          clientsData: Array.isArray(clientsData) ? clientsData.length : 'not array',
+          total,
+          firstClient: clientsData[0] || null
+        });
+        
+        setClients(Array.isArray(clientsData) ? clientsData : []);
+        setTotalElements(total);
       } else {
         setError(response.error || 'Erreur lors du chargement des clients');
         setClients([]);

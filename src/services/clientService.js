@@ -212,6 +212,13 @@ class ClientService extends BaseApiService {
       console.log('📱 API: PUT /clients/', clientId);
       console.log('📤 Données de mise à jour:', clientData);
       
+      // 💰 LOG SPÉCIFIQUE COMMISSION
+      if (clientData.commissionParameter) {
+        console.log('💰 Paramètres de commission envoyés:', clientData.commissionParameter);
+      } else {
+        console.log('⚠️ Aucun paramètre de commission dans les données');
+      }
+      
       // VÉRIFICATION DES PERMISSIONS
       const canManage = await authService.canManageClient(clientId);
       if (!canManage) {
@@ -603,6 +610,7 @@ class ClientService extends BaseApiService {
 
   /**
    * Supprimer un client (soft delete)
+   * @deprecated Utiliser toggleClientStatus() pour activer/désactiver selon les règles métier
    */
   async deleteClient(clientId) {
     try {
@@ -611,6 +619,452 @@ class ClientService extends BaseApiService {
       return this.formatResponse(response, 'Client supprimé');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la suppression du client');
+    }
+  }
+
+  // ============================================
+  // NOUVEAUX ENDPOINTS ADMIN
+  // ============================================
+
+  /**
+   * ADMIN - Récupérer les clients d'un collecteur spécifique
+   * Endpoint : GET /api/clients/admin/collecteur/{collecteurId}/clients
+   */
+  async getCollecteurClients(collecteurId, { page = 0, size = 20, search = '' } = {}) {
+    try {
+      console.log('👨‍💼 API Admin: GET /api/clients/admin/collecteur/{collecteurId}/clients');
+      console.log('🎯 Collecteur ID:', collecteurId);
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      if (!collecteurId) {
+        throw new Error('ID collecteur requis');
+      }
+
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      
+      // Headers avec authentification
+      const headers = await authService.getApiHeaders();
+      
+      // Appel à l'endpoint spécifique admin
+      const response = await this.axios.get(`/api/clients/admin/collecteur/${collecteurId}/clients`, { 
+        params, 
+        headers 
+      });
+      
+      console.log('✅ Clients du collecteur récupérés:', {
+        collecteurId,
+        totalElements: response.data?.data?.totalElements || 0,
+        numberOfElements: response.data?.data?.numberOfElements || 0
+      });
+      
+      return this.formatResponse(response, 'Clients du collecteur récupérés');
+      
+    } catch (error) {
+      // Gestion des erreurs d'authentification
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (authError.accessDenied) {
+        throw new Error('Accès non autorisé. Permissions administrateur requises.');
+      }
+      
+      throw this.handleError(error, 'Erreur lors de la récupération des clients du collecteur');
+    }
+  }
+
+  /**
+   * ADMIN - Configurer les paramètres de commission d'un client
+   * Endpoint : PUT /api/clients/admin/client/{clientId}/commission
+   */
+  async updateClientCommission(clientId, commissionParams) {
+    try {
+      console.log('👨‍💼 API Admin: PUT /api/clients/admin/client/{clientId}/commission');
+      console.log('🎯 Client ID:', clientId);
+      console.log('📤 Paramètres commission:', commissionParams);
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      if (!clientId) {
+        throw new Error('ID client requis');
+      }
+
+      // Validation des paramètres de commission
+      const validation = this.validateCommissionParams(commissionParams);
+      if (!validation.isValid) {
+        throw new Error(`Erreurs de validation commission: ${validation.errors.join(', ')}`);
+      }
+      
+      // Headers avec authentification
+      const headers = await authService.getApiHeaders();
+      
+      // Appel à l'endpoint de configuration commission
+      const response = await this.axios.put(`/api/clients/admin/client/${clientId}/commission`, commissionParams, { 
+        headers 
+      });
+      
+      console.log('✅ Commission client mise à jour:', {
+        clientId,
+        newCommission: commissionParams
+      });
+      
+      return this.formatResponse(response, 'Commission client mise à jour avec succès');
+      
+    } catch (error) {
+      // Gestion des erreurs d'authentification
+      const authError = authService.handleAuthError(error);
+      if (authError.requiresLogin) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (authError.accessDenied) {
+        throw new Error('Accès non autorisé. Permissions administrateur requises.');
+      }
+      
+      throw this.handleError(error, 'Erreur lors de la mise à jour de la commission');
+    }
+  }
+
+  /**
+   * ADMIN - Activer/Désactiver un client (respect règles métier : pas de suppression)
+   */
+  async toggleClientActivationStatus(clientId, isActive) {
+    try {
+      console.log('👨‍💼 API Admin: Basculement statut activation client');
+      console.log('🎯 Client ID:', clientId, 'Nouveau statut:', isActive);
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      if (!clientId) {
+        throw new Error('ID client requis');
+      }
+
+      // Utilisation de l'endpoint existant mais avec contrôle admin
+      const response = await this.toggleClientStatus(clientId, isActive);
+      
+      console.log(`✅ Client ${isActive ? 'activé' : 'désactivé'} avec succès`);
+      
+      return this.formatResponse(response, `Client ${isActive ? 'activé' : 'désactivé'} avec succès`);
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du changement de statut d\'activation');
+    }
+  }
+
+  /**
+   * ADMIN - Mettre à jour les informations client (respect règles : pas de nom/prénom)
+   */
+  async updateClientInfoAsAdmin(clientId, clientData) {
+    try {
+      console.log('👨‍💼 API Admin: Mise à jour informations client');
+      console.log('🎯 Client ID:', clientId);
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      // RÈGLE MÉTIER : Filtrer les champs non modifiables
+      const allowedFields = this.filterAllowedClientFields(clientData);
+      
+      if (Object.keys(allowedFields).length === 0) {
+        throw new Error('Aucun champ modifiable fourni');
+      }
+
+      console.log('📤 Champs autorisés à modifier:', Object.keys(allowedFields));
+      
+      // Validation des données filtrées
+      const validation = this.validateClientUpdateDataLocally(allowedFields);
+      if (!validation.isValid) {
+        throw new Error(`Erreurs de validation: ${validation.errors.join(', ')}`);
+      }
+      
+      // Utilisation de la méthode existante avec données filtrées
+      const response = await this.updateClient(clientId, allowedFields);
+      
+      return this.formatResponse(response, 'Informations client mises à jour par admin');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la mise à jour des informations client');
+    }
+  }
+
+  // ============================================
+  // SYSTÈME D'ANCIENNETÉ COLLECTEUR
+  // ============================================
+
+  /**
+   * Calculer l'ancienneté d'un collecteur
+   */
+  async getCollecteurSeniority(collecteurId) {
+    try {
+      console.log('🎯 Calcul ancienneté collecteur:', collecteurId);
+      
+      // Pour l'instant, récupérer depuis les données utilisateur ou endpoint dédié
+      const headers = await authService.getApiHeaders();
+      
+      try {
+        // Essai endpoint dédié si disponible
+        const response = await this.axios.get(`/api/collecteurs/${collecteurId}/seniority`, { headers });
+        return this.formatResponse(response, 'Ancienneté collecteur récupérée');
+      } catch (endpointError) {
+        if (endpointError.response?.status === 404) {
+          // Fallback : calcul côté client
+          return await this.calculateCollecteurSeniorityFallback(collecteurId);
+        }
+        throw endpointError;
+      }
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du calcul d\'ancienneté');
+    }
+  }
+
+  /**
+   * Fallback : Calcul d'ancienneté côté client
+   */
+  async calculateCollecteurSeniorityFallback(collecteurId) {
+    try {
+      console.log('🔄 Fallback calcul ancienneté côté client');
+      
+      // Récupérer les informations du collecteur
+      const headers = await authService.getApiHeaders();
+      const collecteurResponse = await this.axios.get(`/api/users/${collecteurId}`, { headers });
+      
+      if (!collecteurResponse.data || !collecteurResponse.data.dateCreation) {
+        throw new Error('Date de création collecteur non disponible');
+      }
+
+      const dateCreation = new Date(collecteurResponse.data.dateCreation);
+      const now = new Date();
+      const diffTime = Math.abs(now - dateCreation);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      const seniorityData = {
+        collecteurId: collecteurId,
+        dateCreation: collecteurResponse.data.dateCreation,
+        anciennetéJours: diffDays,
+        anciennetéMois: Math.floor(diffDays / 30),
+        anciennetéAnnées: Math.floor(diffDays / 365),
+        niveau: this.getSeniorityLevel(diffDays),
+        coefficient: this.getSeniorityCoefficient(diffDays)
+      };
+      
+      return this.formatResponse({ data: seniorityData }, 'Ancienneté calculée (fallback)');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur calcul ancienneté fallback');
+    }
+  }
+
+  /**
+   * Déterminer le niveau d'ancienneté
+   */
+  getSeniorityLevel(days) {
+    if (days < 30) return 'NOUVEAU';
+    if (days < 90) return 'JUNIOR';
+    if (days < 365) return 'CONFIRMÉ';
+    if (days < 730) return 'SENIOR';
+    return 'EXPERT';
+  }
+
+  /**
+   * Coefficient d'ancienneté pour calculs commission
+   */
+  getSeniorityCoefficient(days) {
+    if (days < 30) return 1.0;
+    if (days < 90) return 1.1;
+    if (days < 365) return 1.2;
+    if (days < 730) return 1.3;
+    return 1.5;
+  }
+
+  /**
+   * ADMIN - Obtenir un rapport complet sur un collecteur (clients + ancienneté + performance)
+   */
+  async getCollecteurReport(collecteurId) {
+    try {
+      console.log('📊 Génération rapport collecteur:', collecteurId);
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      // Récupération parallèle des données
+      const [clientsResponse, seniorityResponse] = await Promise.allSettled([
+        this.getCollecteurClients(collecteurId, { size: 1000 }), // Tous les clients
+        this.getCollecteurSeniority(collecteurId)
+      ]);
+
+      const clients = clientsResponse.status === 'fulfilled' ? clientsResponse.value.data || [] : [];
+      const seniority = seniorityResponse.status === 'fulfilled' ? seniorityResponse.value.data || {} : {};
+
+      // Calculs statistiques
+      const totalClients = clients.length;
+      const activeClients = clients.filter(c => c.valide === true || c.actif === true).length;
+      const totalEpargne = clients.reduce((sum, c) => sum + (c.soldeTotal || 0), 0);
+      
+      const report = {
+        collecteurId,
+        dateGeneration: new Date().toISOString(),
+        seniority,
+        statistiques: {
+          totalClients,
+          activeClients,
+          inactiveClients: totalClients - activeClients,
+          totalEpargne,
+          moyenneEpargneParClient: totalClients > 0 ? totalEpargne / totalClients : 0
+        },
+        performance: {
+          tauxActivation: totalClients > 0 ? (activeClients / totalClients) * 100 : 0,
+          niveauAnciennete: seniority.niveau,
+          coefficientCommission: seniority.coefficient || 1.0
+        },
+        clients: clients.slice(0, 10) // Limiter pour éviter surcharge
+      };
+
+      return this.formatResponse({ data: report }, 'Rapport collecteur généré');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la génération du rapport collecteur');
+    }
+  }
+
+  /**
+   * ADMIN - Calculer la commission d'un collecteur avec ancienneté
+   */
+  async calculateCollecteurCommissionWithSeniority(collecteurId, baseCommissionAmount, period = 'MENSUELLE') {
+    try {
+      console.log('💰 Calcul commission avec ancienneté:', { collecteurId, baseCommissionAmount, period });
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      // Récupérer l'ancienneté
+      const seniorityResponse = await this.getCollecteurSeniority(collecteurId);
+      const seniority = seniorityResponse.data || {};
+
+      // Appliquer le coefficient d'ancienneté
+      const adjustedCommission = this.applyCollecteurSeniorityToCommission(baseCommissionAmount, seniority);
+
+      const commissionDetails = {
+        collecteurId,
+        period,
+        baseCommission: baseCommissionAmount,
+        seniorityCoefficient: seniority.coefficient || 1.0,
+        seniorityLevel: seniority.niveau || 'NOUVEAU',
+        adjustedCommission,
+        calculationDate: new Date().toISOString(),
+        details: {
+          ancienneteJours: seniority.anciennetéJours || 0,
+          ancienneteMois: seniority.anciennetéMois || 0,
+          bonusAnciennete: adjustedCommission - baseCommissionAmount
+        }
+      };
+
+      return this.formatResponse({ data: commissionDetails }, 'Commission calculée avec ancienneté');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors du calcul de commission avec ancienneté');
+    }
+  }
+
+  /**
+   * ADMIN - Obtenir la liste des collecteurs avec leur ancienneté
+   */
+  async getAllCollecteursWithSeniority() {
+    try {
+      console.log('👥 Récupération collecteurs avec ancienneté');
+      
+      // Vérification des permissions admin
+      const user = await authService.getCurrentUser();
+      if (!user || !this.isAdmin(user.role)) {
+        throw new Error('Accès réservé aux administrateurs');
+      }
+
+      // Récupérer la liste des collecteurs (à adapter selon l'endpoint disponible)
+      const headers = await authService.getApiHeaders();
+      
+      try {
+        // Essayer l'endpoint dédié
+        const response = await this.axios.get('/api/admin/collecteurs/with-seniority', { headers });
+        return this.formatResponse(response, 'Collecteurs avec ancienneté récupérés');
+      } catch (endpointError) {
+        if (endpointError.response?.status === 404) {
+          // Fallback : récupérer séparément
+          return await this.getAllCollecteursFallback();
+        }
+        throw endpointError;
+      }
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des collecteurs');
+    }
+  }
+
+  /**
+   * Fallback pour récupérer les collecteurs avec ancienneté
+   */
+  async getAllCollecteursFallback() {
+    try {
+      console.log('🔄 Fallback récupération collecteurs');
+      
+      const headers = await authService.getApiHeaders();
+      
+      // Récupérer tous les utilisateurs collecteurs
+      const usersResponse = await this.axios.get('/api/users', { 
+        headers,
+        params: { role: 'COLLECTEUR', size: 1000 }
+      });
+
+      const collecteurs = usersResponse.data?.data || usersResponse.data || [];
+      
+      // Enrichir avec l'ancienneté (limité pour éviter trop d'appels)
+      const collecteursEnriched = await Promise.allSettled(
+        collecteurs.slice(0, 50).map(async (collecteur) => { // Limiter à 50 pour éviter surcharge
+          try {
+            const seniorityResponse = await this.getCollecteurSeniority(collecteur.id);
+            return {
+              ...collecteur,
+              seniority: seniorityResponse.data
+            };
+          } catch (error) {
+            return {
+              ...collecteur,
+              seniority: null,
+              seniorityError: error.message
+            };
+          }
+        })
+      );
+
+      const results = collecteursEnriched
+        .filter(result => result.status === 'fulfilled')
+        .map(result => result.value);
+
+      return this.formatResponse({ data: results }, 'Collecteurs récupérés avec ancienneté (fallback)');
+      
+    } catch (error) {
+      throw this.handleError(error, 'Erreur fallback collecteurs');
     }
   }
 
@@ -1223,6 +1677,235 @@ class ClientService extends BaseApiService {
     }
   }
   
+  // ============================================
+  // MÉTHODES UTILITAIRES RÈGLES MÉTIER
+  // ============================================
+
+  /**
+   * Vérifier si l'utilisateur a des permissions admin
+   */
+  isAdmin(userRole) {
+    const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'];
+    return adminRoles.includes(userRole);
+  }
+
+  /**
+   * Valider les paramètres de commission
+   */
+  validateCommissionParams(commissionParams) {
+    try {
+      console.log('✅ Validation paramètres commission:', commissionParams);
+      
+      const errors = [];
+      
+      if (!commissionParams || typeof commissionParams !== 'object') {
+        errors.push('Paramètres de commission invalides');
+        return { isValid: false, errors };
+      }
+
+      // Validation taux de commission (si fourni)
+      if (commissionParams.tauxCommission !== undefined && commissionParams.tauxCommission !== null) {
+        const taux = parseFloat(commissionParams.tauxCommission);
+        if (isNaN(taux) || taux < 0 || taux > 100) {
+          errors.push('Le taux de commission doit être entre 0 et 100%');
+        }
+      }
+
+      // Validation montant fixe (si fourni)
+      if (commissionParams.montantFixe !== undefined && commissionParams.montantFixe !== null) {
+        const montant = parseFloat(commissionParams.montantFixe);
+        if (isNaN(montant) || montant < 0) {
+          errors.push('Le montant fixe doit être positif');
+        }
+      }
+
+      // Validation seuil minimum (si fourni)
+      if (commissionParams.seuilMinimum !== undefined && commissionParams.seuilMinimum !== null) {
+        const seuil = parseFloat(commissionParams.seuilMinimum);
+        if (isNaN(seuil) || seuil < 0) {
+          errors.push('Le seuil minimum doit être positif');
+        }
+      }
+
+      // Validation type de commission
+      if (commissionParams.typeCommission) {
+        const typesValides = ['POURCENTAGE', 'MONTANT_FIXE', 'MIXTE'];
+        if (!typesValides.includes(commissionParams.typeCommission)) {
+          errors.push('Type de commission invalide (POURCENTAGE, MONTANT_FIXE, ou MIXTE)');
+        }
+      }
+
+      // Validation période d'application
+      if (commissionParams.periodeApplication) {
+        const periodesValides = ['TRANSACTION', 'MENSUELLE', 'TRIMESTRIELLE'];
+        if (!periodesValides.includes(commissionParams.periodeApplication)) {
+          errors.push('Période d\'application invalide (TRANSACTION, MENSUELLE, ou TRIMESTRIELLE)');
+        }
+      }
+
+      // Validation dates de validité (si fournies)
+      if (commissionParams.dateDebut) {
+        const dateDebut = new Date(commissionParams.dateDebut);
+        if (isNaN(dateDebut.getTime())) {
+          errors.push('Date de début invalide');
+        }
+      }
+
+      if (commissionParams.dateFin) {
+        const dateFin = new Date(commissionParams.dateFin);
+        if (isNaN(dateFin.getTime())) {
+          errors.push('Date de fin invalide');
+        }
+        
+        // Si les deux dates sont fournies, vérifier que dateFin > dateDebut
+        if (commissionParams.dateDebut) {
+          const dateDebut = new Date(commissionParams.dateDebut);
+          if (!isNaN(dateDebut.getTime()) && dateFin <= dateDebut) {
+            errors.push('La date de fin doit être postérieure à la date de début');
+          }
+        }
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors: errors,
+        message: errors.length === 0 ? 'Paramètres commission valides' : 'Erreurs de validation détectées'
+      };
+
+    } catch (error) {
+      console.error('❌ Erreur validation commission:', error);
+      return {
+        isValid: false,
+        errors: ['Erreur lors de la validation des paramètres commission'],
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Filtrer les champs modifiables par admin (RÈGLE MÉTIER : pas de nom/prénom)
+   */
+  filterAllowedClientFields(clientData) {
+    console.log('🔍 Filtrage champs autorisés pour admin');
+    
+    // RÈGLE MÉTIER : Champs NON modifiables
+    const forbiddenFields = ['nom', 'prenom', 'numeroCompte', 'id', 'collecteurId', 'agenceId'];
+    
+    // Champs autorisés à la modification par admin
+    const allowedFields = [
+      'telephone',
+      'numeroCni', 
+      'ville',
+      'quartier',
+      'latitude',
+      'longitude',
+      'adresseComplete',
+      'profession',
+      'situationMatrimoniale',
+      'nombreEnfants',
+      'revenuEstime',
+      'objectifEpargne',
+      'frequenceVersement',
+      'commentaires',
+      'valide', // statut activation
+      'actif'   // statut activation
+    ];
+
+    const filteredData = {};
+    
+    Object.keys(clientData).forEach(key => {
+      if (forbiddenFields.includes(key)) {
+        console.warn(`⚠️ Champ '${key}' non modifiable par admin - ignoré`);
+      } else if (allowedFields.includes(key)) {
+        filteredData[key] = clientData[key];
+      } else {
+        console.warn(`⚠️ Champ '${key}' non reconnu - ignoré`);
+      }
+    });
+
+    console.log('✅ Champs filtrés autorisés:', Object.keys(filteredData));
+    
+    return filteredData;
+  }
+
+  /**
+   * Valider qu'un collecteur peut être activé/désactivé (RÈGLE MÉTIER : pas de suppression)
+   */
+  async validateCollecteurStatusChange(collecteurId, newStatus) {
+    try {
+      console.log('✅ Validation changement statut collecteur:', { collecteurId, newStatus });
+      
+      const errors = [];
+
+      // Vérifier que le collecteur existe
+      if (!collecteurId) {
+        errors.push('ID collecteur requis');
+        return { isValid: false, errors };
+      }
+
+      // Vérifier que le statut est valide (seulement actif/inactif)
+      const validStatuses = [true, false, 'true', 'false', 'actif', 'inactif', 'active', 'inactive'];
+      if (!validStatuses.includes(newStatus)) {
+        errors.push('Statut invalide - utilisez true/false pour actif/inactif');
+      }
+
+      // RÈGLE MÉTIER : Vérifier qu'il n'y a pas de clients actifs si on désactive le collecteur
+      if (newStatus === false || newStatus === 'false' || newStatus === 'inactif' || newStatus === 'inactive') {
+        try {
+          const clientsResponse = await this.getCollecteurClients(collecteurId, { size: 1 });
+          if (clientsResponse.success && clientsResponse.data && clientsResponse.data.length > 0) {
+            console.warn('⚠️ Collecteur a des clients actifs');
+            // Avertissement mais pas d'erreur bloquante - laisser le backend décider
+          }
+        } catch (clientCheckError) {
+          console.warn('⚠️ Impossible de vérifier les clients du collecteur:', clientCheckError.message);
+          // Ne pas bloquer pour cette erreur
+        }
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors: errors,
+        warning: newStatus === false ? 'La désactivation du collecteur peut affecter ses clients' : null,
+        message: errors.length === 0 ? 'Changement de statut autorisé' : 'Erreurs de validation détectées'
+      };
+
+    } catch (error) {
+      console.error('❌ Erreur validation changement statut:', error);
+      return {
+        isValid: false,
+        errors: ['Erreur lors de la validation du changement de statut'],
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Appliquer coefficient d'ancienneté aux calculs de commission
+   */
+  applyCollecteurSeniorityToCommission(baseCommission, seniorityData) {
+    try {
+      if (!seniorityData || !seniorityData.coefficient) {
+        console.warn('⚠️ Pas de données d\'ancienneté - coefficient par défaut appliqué');
+        return baseCommission;
+      }
+
+      const adjustedCommission = baseCommission * seniorityData.coefficient;
+      
+      console.log('📊 Application coefficient ancienneté:', {
+        baseCommission,
+        coefficient: seniorityData.coefficient,
+        niveau: seniorityData.niveau,
+        adjustedCommission
+      });
+
+      return Math.round(adjustedCommission * 100) / 100; // Arrondir à 2 décimales
+    } catch (error) {
+      console.error('❌ Erreur application coefficient ancienneté:', error);
+      return baseCommission; // Retourner la commission de base en cas d'erreur
+    }
+  }
+
   // ============================================
   // 🔧 MÉTHODES UTILITAIRES ET DEBUG
   // ============================================

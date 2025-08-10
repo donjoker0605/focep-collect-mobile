@@ -372,7 +372,7 @@ export default function CommissionProcessusCompletScreen({ navigation }) {
             </View>
 
             <View style={styles.processCompleteBox}>
-              <Icon name="check-circle" size={32} color={colors.success} />
+              <Icon name="checkmark-circle-outline" size={32} color={colors.success} />
               <Text style={styles.processCompleteText}>
                 Processus complet terminé avec succès !
               </Text>

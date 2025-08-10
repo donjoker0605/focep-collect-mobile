@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,11 +19,11 @@ import { fr } from 'date-fns/locale';
 
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
-import { adminService } from '../../services';
+import { adminService, adminCollecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
 
 const AdminDashboardScreen = ({ navigation }) => {
-  const insets = useSafeAreaInsets();
+  const insets = Platform.OS === 'web' ? { top: 0, bottom: 0 } : useSafeAreaInsets();
   const { user } = useAuth();
   
   const [stats, setStats] = useState(null);
@@ -70,7 +71,8 @@ const AdminDashboardScreen = ({ navigation }) => {
   };
 
   const navigateToClientManagement = () => {
-    navigation.navigate('ClientManagementScreen');
+    // 🔥 Navigation vers le NOUVEAU écran admin clients
+    navigation.navigate('AdminClientManagement');
   };
 
   const navigateToReports = () => {
@@ -172,7 +174,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     {
       id: 'remuneration-process',
       title: 'Processus Rémunération',
-      icon: 'account-balance-wallet',
+      icon: 'wallet-outline',
       color: theme.colors.purple,
       badge: 'NOUVEAU',
       onPress: () => navigation.navigate('RemunerationProcessScreen'),
@@ -232,19 +234,30 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <LinearGradient
-        colors={[theme.colors.primary, theme.colors.primaryDark]}
-        style={styles.headerGradient}
-      >
-        {/* Informations utilisateur */}
-        <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
-          <Text style={styles.welcomeText}>Bienvenue,</Text>
-          <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
-          <Text style={styles.agenceName}>
-            {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
-          </Text>
+      {Platform.OS === 'web' ? (
+        <View style={[styles.headerGradient, styles.headerGradientWeb]}>
+          <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
+            <Text style={styles.welcomeText}>Bienvenue,</Text>
+            <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
+            <Text style={styles.agenceName}>
+              {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
+            </Text>
+          </View>
         </View>
-      </LinearGradient>
+      ) : (
+        <LinearGradient
+          colors={[theme.colors.primary, theme.colors.primaryDark]}
+          style={styles.headerGradient}
+        >
+          <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
+            <Text style={styles.welcomeText}>Bienvenue,</Text>
+            <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
+            <Text style={styles.agenceName}>
+              {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
+            </Text>
+          </View>
+        </LinearGradient>
+      )}
 
       <ScrollView
         style={styles.content}
@@ -294,15 +307,15 @@ const AdminDashboardScreen = ({ navigation }) => {
             style={styles.statsScroll}
           >
             {renderStatCard(
-              'Collecteurs',
-              stats?.totalCollecteurs || 0,
+              'Collecteurs Assignés',
+              stats?.totalCollecteursAssignes || stats?.totalCollecteurs || 0,
               'people',
               theme.colors.primary,
               `${stats?.collecteursActifs || 0} actifs`
             )}
             {renderStatCard(
-              'Clients',
-              stats?.totalClients || 0,
+              'Clients Accessibles',
+              stats?.totalClientsAccessibles || stats?.totalClients || 0,
               'person',
               theme.colors.secondary,
               `${stats?.clientsActifs || 0} actifs`
@@ -315,11 +328,11 @@ const AdminDashboardScreen = ({ navigation }) => {
               'En attente'
             )}
             {renderStatCard(
-              'Agences',
-              stats?.agencesActives || 1,
-              'business',
+              'Mes Relations',
+              stats?.adminCollecteurRelations || 0,
+              'link',
               theme.colors.info,
-              'Actives'
+              'Admin-Collecteur'
             )}
           </ScrollView>
         </View>
@@ -408,6 +421,9 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingBottom: 20,
+  },
+  headerGradientWeb: {
+    backgroundImage: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.primaryDark})`,
   },
   userInfo: {
     paddingHorizontal: 20,

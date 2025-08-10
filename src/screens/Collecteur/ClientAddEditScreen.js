@@ -26,11 +26,13 @@ import Card from '../../components/Card/Card';
 // Services
 import theme from '../../theme';
 import clientService from '../../services/clientService';
+import { adminCollecteurService } from '../../services';
 import geolocationService from '../../services/geolocationService';
 import authService from '../../services/authService';
 
 // Navigation
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../hooks/useAuth';
 
 // SCHÉMAS DE VALIDATION
 const clientSchema = yup.object().shape({
@@ -81,9 +83,15 @@ const COMMISSION_TYPES = [
 
 // COMPOSANT PRINCIPAL
 const ClientAddEditScreen = ({ navigation, route }) => {
-  const { mode, client } = route.params || { mode: 'add' };
+  const { mode, client, adminEdit, adminCreate } = route.params || { mode: 'add' };
   const isEditMode = mode === 'edit';
-  const { goToClientList, goToClientDetail } = useCollecteurNavigation(navigation);
+  const isAdminMode = adminEdit || adminCreate;
+  const { user } = useAuth();
+  
+  // 🚨 RÈGLES DE PERMISSIONS STRICTES
+  const isCollecteur = user?.role === 'ROLE_COLLECTEUR';
+  const canEdit = !isCollecteur || !isEditMode; // Collecteurs peuvent créer, mais pas modifier
+  const canEditPersonalInfo = false; // Nom/prénom JAMAIS éditables
   
   // États
   const [isLoading, setIsLoading] = useState(false);
@@ -93,8 +101,8 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   const [gpsAttempts, setGpsAttempts] = useState(0);
   const [userInfo, setUserInfo] = useState(null);
 
-  // États pour commission et activation
-  const [isClientActive, setIsClientActive] = useState(true);
+  // États pour commission et activation - Les collecteurs créent des clients inactifs par défaut
+  const [isClientActive, setIsClientActive] = useState(isCollecteur ? false : true);
   const [commissionConfig, setCommissionConfig] = useState({
     type: 'INHERIT',
     valeur: 0,
@@ -329,15 +337,20 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
   const processValidGPSLocation = async (position) => {
     try {
+      console.log('🎯 Position GPS capturée:', position);
+      
       let address = '';
       try {
         const addressInfo = await geolocationService.reverseGeocode(
           position.latitude,
           position.longitude
         );
+        console.log('🏠 Adresse géocodée:', addressInfo);
         address = addressInfo?.formattedAddress || '';
       } catch (geocodeError) {
         console.warn('⚠️ Géocodage inverse échoué:', geocodeError);
+        // Continuer quand même avec une adresse générique
+        address = `Coordonnées: ${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}`;
       }
 
       const locationData = {
@@ -349,6 +362,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         isDefault: position.isDefault || false
       };
 
+      console.log('✅ LocationData créé et sauvegardé:', locationData);
       setLocationData(locationData);
       setGpsState(GPS_STATES.CAPTURED);
 
@@ -454,7 +468,10 @@ const ClientAddEditScreen = ({ navigation, route }) => {
 
   // SOUMISSION AVEC IDS AUTOMATIQUES
   const onSubmit = async (data) => {
+    console.log('🎯 onSubmit déclenché avec:', { data, locationData, isLoading });
+    
     if (!locationData) {
+      console.log('❌ Pas de locationData - blocage soumission');
       Alert.alert(
         'Localisation requise',
         'Vous devez fournir une localisation pour créer ce client.',
@@ -509,7 +526,25 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           valide: isClientActive,
           commissionParameter: clientData.commissionParameter
         };
-        result = await clientService.updateClient(client.id, updateData);
+
+        console.log('💰 COMMISSION DEBUG:', {
+          commissionConfig,
+          commissionParameter: clientData.commissionParameter,
+          includeInUpdate: !!clientData.commissionParameter
+        });
+        
+        // 🔥 Détecter si c'est un admin en utilisant le hook useAuth
+        const isAdmin = user?.role === 'ROLE_ADMIN' || user?.role === 'ADMIN';
+        
+        console.log('🔍 Utilisateur actuel:', { role: user?.role, isAdmin, userId: user?.id, email: user?.email });
+        
+        if (isAdmin) {
+          console.log('🔥 Admin détecté - utilisation du service client avec autorisation admin');
+          result = await clientService.updateClient(client.id, updateData);
+        } else {
+          console.log('👤 Collecteur - utilisation du service client standard');
+          result = await clientService.updateClient(client.id, updateData);
+        }
       } else {
         result = await clientService.createClient(clientData);
       }
@@ -933,7 +968,8 @@ const ClientAddEditScreen = ({ navigation, route }) => {
           
           <Switch
             value={isClientActive}
-            onValueChange={setIsClientActive}
+            onValueChange={isCollecteur ? undefined : setIsClientActive}
+            disabled={isCollecteur}
             trackColor={{ false: theme.colors.lightGray, true: theme.colors.successLight }}
             thumbColor={isClientActive ? theme.colors.success : theme.colors.gray}
           />
@@ -941,6 +977,27 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       </Card>
     );
   };
+
+  // 🚨 VÉRIFICATION DE PERMISSIONS STRICTES
+  if (isCollecteur && isEditMode) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Header
+          title="Accès refusé"
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={[styles.errorContainer, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+          <Ionicons name="lock-closed" size={64} color={theme.colors.error} />
+          <Text style={[styles.errorText, { fontSize: 18, marginTop: 16, textAlign: 'center' }]}>
+            Accès interdit
+          </Text>
+          <Text style={[styles.errorSubText, { marginTop: 8, textAlign: 'center', color: theme.colors.textSecondary }]}>
+            Seuls les administrateurs peuvent modifier les clients
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // RENDU PRINCIPAL
   return (
@@ -974,7 +1031,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.nom?.message}
                   style={styles.inputSpacing}
-                  editable={!isEditMode}
+                  editable={canEditPersonalInfo}
                 />
               )}
             />
@@ -991,7 +1048,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.prenom?.message}
                   style={styles.inputSpacing}
-                  editable={!isEditMode}
+                  editable={canEditPersonalInfo}
                 />
               )}
             />
@@ -1008,6 +1065,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.numeroCni?.message}
                   style={styles.inputSpacing}
+                  editable={canEdit}
                 />
               )}
             />
@@ -1027,6 +1085,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   keyboardType="phone-pad"
                   error={errors.telephone?.message}
                   style={styles.inputSpacing}
+                  editable={canEdit}
                 />
               )}
             />
@@ -1043,6 +1102,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.ville?.message}
                   style={styles.inputSpacing}
+                  editable={canEdit}
                 />
               )}
             />
@@ -1059,6 +1119,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
                   onBlur={onBlur}
                   error={errors.quartier?.message}
                   style={styles.inputSpacing}
+                  editable={canEdit}
                 />
               )}
             />
@@ -1071,7 +1132,31 @@ const ClientAddEditScreen = ({ navigation, route }) => {
             
             <Button
               title={isEditMode ? "Mettre à jour" : "Créer le client"}
-              onPress={handleSubmit(onSubmit)}
+              onPress={() => {
+                console.log('🖱️ Bouton cliqué !', { isLoading, canEdit, errors });
+                if (!canEdit) {
+                  console.log('❌ canEdit = false - édition bloquée');
+                  return;
+                }
+                
+                // Debug React Hook Form
+                console.log('📝 État du formulaire:', {
+                  errors,
+                  hasErrors: Object.keys(errors).length > 0,
+                  locationData: !!locationData,
+                  userInfo: !!userInfo
+                });
+                
+                handleSubmit(
+                  (data) => {
+                    console.log('✅ Validation réussie, appel onSubmit:', data);
+                    onSubmit(data);
+                  },
+                  (validationErrors) => {
+                    console.log('❌ Erreurs de validation:', validationErrors);
+                  }
+                )();
+              }}
               loading={isLoading}
               style={styles.submitButton}
               fullWidth

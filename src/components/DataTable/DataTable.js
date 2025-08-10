@@ -202,7 +202,7 @@ const DataTable = ({
     <View style={[styles.container, style]}>
       {/* En-tête du tableau */}
       <View style={styles.header}>
-        {columns.map(renderColumnHeader)}
+        {columns.map((column) => renderColumnHeader(column))}
       </View>
       
       {/* Corps du tableau */}

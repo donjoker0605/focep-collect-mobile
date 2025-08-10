@@ -1,6 +1,6 @@
 // src/components/Card/Card.js
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import theme from '../../theme';
 
 const Card = ({
@@ -53,22 +53,48 @@ const styles = StyleSheet.create({
   },
   noShadow: {
     elevation: 0,
-    // Utiliser boxShadow au lieu de shadowOpacity
-    boxShadow: 'none',
+    ...(Platform.OS === 'web' && {
+      boxShadow: 'none',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowOpacity: 0,
+    }),
   },
   shadowSmall: {
-    // Pour React Native Web, utiliser boxShadow
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-    // Pour React Native mobile, conserver elevation
     elevation: 2,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+    }),
   },
   shadowMedium: {
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
     elevation: 4,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.1)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    }),
   },
   shadowLarge: {
-    boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.1)',
     elevation: 8,
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0px 8px 16px rgba(0, 0, 0, 0.1)',
+    }),
+    ...(Platform.OS !== 'web' && {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+    }),
   },
   border: {
     borderWidth: 1,

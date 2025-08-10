@@ -225,8 +225,10 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
           Clients ({clients.length})
         </Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('ClientCreationScreen', {
-            collecteurId: collecteur.id
+          onPress={() => navigation.navigate('ClientAddEdit', {
+            mode: 'create',
+            collecteurId: collecteur.id,
+            adminCreate: true
           })}
         >
           <Ionicons name="add-circle" size={24} color={theme.colors.primary} />

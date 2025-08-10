@@ -62,7 +62,7 @@ export const TestScreen = ({ navigation }) => {
     if (!result) return null;
     
     const isSuccess = result.success;
-    const icon = isSuccess ? 'check-circle' : 'alert-circle';
+    const icon = isSuccess ? 'checkmark-circle-outline' : 'alert-circle';
     const color = isSuccess ? 'green' : 'red';
     
     return (
@@ -140,7 +140,7 @@ export const TestScreen = ({ navigation }) => {
         <Card style={styles.card}>
           <Card.Content>
             <Title>Configuration Backend</Title>
-            <Text style={styles.configText}>URL: http://192.168.111.57:8080</Text>
+            <Text style={styles.configText}>URL: http://192.168.89.44:8080</Text>
             <Text style={styles.configText}>Endpoints testés:</Text>
             <Text style={styles.configText}>• GET /api/public/ping</Text>
             <Text style={styles.configText}>• POST /api/auth/login</Text>

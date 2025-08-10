@@ -1,5 +1,5 @@
 // src/screens/Admin/AdminClientManagementScreen.js - HOTFIX AFFICHAGE
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,34 +21,29 @@ import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import useClients from '../../hooks/useClients';
 import adminService from '../../services/adminService';
+import { adminCollecteurService } from '../../services';
 
 const AdminClientManagementScreen = ({ navigation }) => {
   const { user } = useAuth();
   
-  // Hook principal pour tous les clients
-  const {
-    clients: allClients,
-    loading: clientsLoading,
-    error: clientsError,
-    refreshing: clientsRefreshing,
-    userRole,
-    canAccess,
-    refreshClients,
-    searchClients,
-    clearError,
-    totalClients
-  } = useClients(); // Pas de collecteurId = tous les clients de l'agence
+  // 🔥 NOUVELLE LOGIQUE : Utiliser les clients accessibles via admin-collecteur
+  const [allAssignedClients, setAllAssignedClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(true);
+  const [clientsError, setClientsError] = useState(null);
+  const [clientsRefreshing, setClientsRefreshing] = useState(false);
+  const [canAccess, setCanAccess] = useState(true);
+  const userRole = 'admin';
 
   // 🔍 DEBUG - Surveiller les changements de données
   useEffect(() => {
     console.log('🔍 AdminClientManagementScreen - Données clients mises à jour:', {
-      count: allClients.length,
-      clients: allClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom })),
+      count: allAssignedClients.length,
+      clients: allAssignedClients.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom })),
       loading: clientsLoading,
       error: clientsError,
       canAccess
     });
-  }, [allClients, clientsLoading, clientsError, canAccess]);
+  }, [allAssignedClients, clientsLoading, clientsError, canAccess]);
 
   // États locaux
   const [collecteurs, setCollecteurs] = useState([]);
@@ -63,18 +58,34 @@ const AdminClientManagementScreen = ({ navigation }) => {
     totalCollecteurs: 0
   });
 
-  // Hook pour les clients d'un collecteur spécifique
-  const {
-    clients: collecteurClients,
-    loading: collecteurClientsLoading,
-    refreshClients: refreshCollecteurClients,
-  } = useClients(selectedCollecteur?.id);
+  // Clients filtrés selon la recherche et les critères
+  const filteredClients = useMemo(() => {
+    let filtered = allAssignedClients;
+    
+    // Filtrer par collecteur sélectionné
+    if (selectedCollecteur) {
+      filtered = filtered.filter(c => c.collecteurId === selectedCollecteur.id);
+    }
+    
+    // Filtrer par recherche
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(client => 
+        `${client.prenom} ${client.nom}`.toLowerCase().includes(query) ||
+        client.telephone?.includes(searchQuery) ||
+        client.numeroCni?.toLowerCase().includes(query) ||
+        client.collecteurNom?.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  }, [allAssignedClients, selectedCollecteur, searchQuery]);
 
-  // 🔄 CHARGEMENT DES COLLECTEURS
+  // 🔥 CHARGEMENT DES COLLECTEURS ASSIGNÉS
   const loadCollecteurs = useCallback(async () => {
     try {
       setLoadingCollecteurs(true);
-      const response = await adminService.getCollecteurs({ size: 100 });
+      const response = await adminCollecteurService.getAssignedCollecteurs({ size: 100 });
       
       if (response.success) {
         const collecteursData = Array.isArray(response.data) 
@@ -82,26 +93,75 @@ const AdminClientManagementScreen = ({ navigation }) => {
           : response.data?.content || [];
         
         setCollecteurs(collecteursData);
-        console.log('✅ Collecteurs chargés:', collecteursData.length);
+        console.log('✅ Collecteurs assignés chargés:', collecteursData.length);
+        
+        // Charger aussi tous les clients de ces collecteurs
+        await loadAllAssignedClients(collecteursData);
       } else {
-        console.error('❌ Erreur chargement collecteurs:', response.error);
+        console.error('❌ Erreur chargement collecteurs assignés:', response.error);
+        setClientsError(response.error || 'Erreur chargement collecteurs');
       }
     } catch (error) {
-      console.error('❌ Erreur chargement collecteurs:', error);
-      Alert.alert('Erreur', 'Impossible de charger les collecteurs');
+      console.error('❌ Erreur chargement collecteurs assignés:', error);
+      setClientsError(error.message);
     } finally {
       setLoadingCollecteurs(false);
     }
   }, []);
 
+  // 🔥 CHARGEMENT DE TOUS LES CLIENTS DES COLLECTEURS ASSIGNÉS
+  const loadAllAssignedClients = useCallback(async (collecteursData = collecteurs) => {
+    try {
+      setClientsLoading(true);
+      setClientsError(null);
+      const allClients = [];
+      
+      for (const collecteur of collecteursData) {
+        try {
+          const clientsResponse = await adminCollecteurService.getAssignedCollecteurClients(
+            collecteur.id,
+            { page: 0, size: 100 }
+          );
+          
+          if (clientsResponse.data) {
+            const collecteurClients = Array.isArray(clientsResponse.data)
+              ? clientsResponse.data
+              : clientsResponse.data.content || [];
+            
+            // Enrichir avec info collecteur
+            const enrichedClients = collecteurClients.map(client => ({
+              ...client,
+              collecteurNom: `${collecteur.prenom} ${collecteur.nom}`,
+              collecteurId: collecteur.id,
+              valide: client.active !== false
+            }));
+            
+            allClients.push(...enrichedClients);
+          }
+        } catch (clientError) {
+          console.warn(`⚠️ Erreur clients collecteur ${collecteur.id}:`, clientError.message);
+        }
+      }
+      
+      setAllAssignedClients(allClients);
+      console.log(`✅ ${allClients.length} clients accessibles chargés`);
+    } catch (error) {
+      console.error('❌ Erreur chargement clients assignés:', error);
+      setClientsError(error.message);
+    } finally {
+      setClientsLoading(false);
+      setClientsRefreshing(false);
+    }
+  }, [collecteurs]);
+
   // 📊 CALCUL DES STATISTIQUES
   const calculateStats = useCallback(() => {
-    console.log('📊 Calcul des stats pour', allClients.length, 'clients');
-    const activeClients = allClients.filter(c => c.valide).length;
-    const inactiveClients = allClients.filter(c => !c.valide).length;
+    console.log('📊 Calcul des stats pour', allAssignedClients.length, 'clients assignés');
+    const activeClients = allAssignedClients.filter(c => c.valide).length;
+    const inactiveClients = allAssignedClients.filter(c => !c.valide).length;
     
     const newStats = {
-      totalClients: allClients.length,
+      totalClients: allAssignedClients.length,
       activeClients,
       inactiveClients,
       totalCollecteurs: collecteurs.length
@@ -109,23 +169,13 @@ const AdminClientManagementScreen = ({ navigation }) => {
     
     setStats(newStats);
     console.log('📊 Stats calculées:', newStats);
-  }, [allClients, collecteurs.length]);
+  }, [allAssignedClients, collecteurs.length]);
 
-  // 🔍 GESTION DE LA RECHERCHE
+  // 🔍 GESTION DE LA RECHERCHE (recherche locale dans les clients assignés)
   const handleSearch = useCallback((text) => {
     setSearchQuery(text);
-    if (text.length === 0) {
-      if (activeTab === 'all') {
-        refreshClients();
-      } else if (selectedCollecteur) {
-        refreshCollecteurClients();
-      }
-    } else if (text.length >= 2) {
-      if (activeTab === 'all') {
-        searchClients(text);
-      }
-    }
-  }, [activeTab, selectedCollecteur, refreshClients, refreshCollecteurClients, searchClients]);
+    // La recherche se fait maintenant côté frontend dans les clients déjà chargés
+  }, []);
 
   // 📋 CHANGEMENT D'ONGLET
   const handleTabChange = useCallback((tab) => {
@@ -143,7 +193,8 @@ const AdminClientManagementScreen = ({ navigation }) => {
 
   // 🎯 NAVIGATION VERS DÉTAILS CLIENT
   const handleClientPress = useCallback((client) => {
-    navigation.navigate('ClientDetail', {
+    // 🔥 Utiliser le nom correct de l'écran dans AdminStack
+    navigation.navigate('ClientDetailScreen', {
       client: client,
       clientId: client.id,
       isAdminView: true,
@@ -174,11 +225,14 @@ const AdminClientManagementScreen = ({ navigation }) => {
   // 🔄 RAFRAÎCHISSEMENT GLOBAL
   const handleRefresh = useCallback(async () => {
     console.log('🔄 Rafraîchissement global...');
-    await Promise.all([
-      loadCollecteurs(),
-      refreshClients()
-    ]);
-  }, [loadCollecteurs, refreshClients]);
+    setClientsRefreshing(true);
+    await loadCollecteurs();
+  }, [loadCollecteurs]);
+
+  // Fonction refresh pour la compatibility
+  const refreshClients = useCallback(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   // Chargement initial
   useFocusEffect(
@@ -292,7 +346,7 @@ const AdminClientManagementScreen = ({ navigation }) => {
         {__DEV__ && (
           <View style={styles.debugInfo}>
             <Text style={styles.debugText}>
-              DEBUG: {allClients.length} clients • Loading: {clientsLoading ? 'OUI' : 'NON'} • 
+              DEBUG: {allAssignedClients.length} clients assignés • {filteredClients.length} filtrés • Loading: {clientsLoading ? 'OUI' : 'NON'} • 
               CanAccess: {canAccess ? 'OUI' : 'NON'}
             </Text>
           </View>
@@ -347,17 +401,19 @@ const AdminClientManagementScreen = ({ navigation }) => {
           // 🎨 LISTE DES CLIENTS
           <View style={styles.clientsContainer}>
             <Text style={styles.sectionTitle}>
-              {allClients.length} client{allClients.length > 1 ? 's' : ''} trouvé{allClients.length > 1 ? 's' : ''}
+              {filteredClients.length} client{filteredClients.length > 1 ? 's' : ''} accessible{filteredClients.length > 1 ? 's' : ''}
+              {searchQuery && ` (recherche: "${searchQuery}")`}
+              {selectedCollecteur && ` - ${selectedCollecteur.nom}`}
             </Text>
             
             <FlatList
-              data={allClients}
+              data={filteredClients}
               renderItem={renderClientItem}
-              keyExtractor={item => `all-${item.id}`}
+              keyExtractor={item => `assigned-${item.id}`}
               refreshControl={
                 <RefreshControl 
                   refreshing={clientsRefreshing} 
-                  onRefresh={refreshClients}
+                  onRefresh={handleRefresh}
                   colors={[theme.colors.primary]}
                 />
               }
@@ -365,15 +421,23 @@ const AdminClientManagementScreen = ({ navigation }) => {
                 <View style={styles.emptyContainer}>
                   <Ionicons name="people-outline" size={64} color={theme.colors.textLight} />
                   <Text style={styles.emptyText}>
-                    {searchQuery ? 'Aucun client trouvé' : 'Aucun client dans cette agence'}
+                    {searchQuery 
+                      ? 'Aucun client trouvé pour cette recherche' 
+                      : collecteurs.length === 0 
+                        ? 'Aucun collecteur assigné' 
+                        : 'Aucun client accessible'
+                    }
                   </Text>
                   <Text style={styles.emptySubtext}>
-                    {!searchQuery && 'Les clients devraient s\'afficher ici'}
+                    {collecteurs.length === 0 
+                      ? 'Demandez à votre super admin de vous assigner des collecteurs'
+                      : !searchQuery && 'Vos collecteurs assignés n\'ont pas encore de clients'
+                    }
                   </Text>
                 </View>
               }
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={allClients.length === 0 ? styles.emptyListContainer : undefined}
+              contentContainerStyle={filteredClients.length === 0 ? styles.emptyListContainer : undefined}
             />
           </View>
         )}

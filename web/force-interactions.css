@@ -1,0 +1,41 @@
+/* FOCEP COLLECT - FORCER INTERACTIONS WEB */
+
+/* OVERRIDE BRUTAL DE TOUTES LES CLASSES REACT NATIVE WEB */
+.r-pointerEvents-12vffkv,
+.r-pointerEvents-auto,
+.r-pointerEvents-none,
+*[class*="r-pointerEvents"],
+*[class*="pointerEvents"] {
+  pointer-events: auto !important;
+}
+
+/* FORCER TOUS LES OVERLAYS ET CONTENEURS ABSOLUS */
+div[style*="position: absolute"],
+div[style*="position:absolute"],
+*[style*="position: absolute"],
+*[style*="position:absolute"] {
+  pointer-events: auto !important;
+}
+
+/* FORCER TOUS LES ÉLÉMENTS AVEC DIMENSIONS COMPLÈTES */
+div[style*="left: 0"][style*="right: 0"][style*="top: 0"][style*="bottom: 0"],
+div[style*="left:0"][style*="right:0"][style*="top:0"][style*="bottom:0"] {
+  pointer-events: auto !important;
+}
+
+/* FORCER TOUS LES BOUTONS ET ÉLÉMENTS INTERACTIFS */
+button,
+*[role="button"],
+div[data-focusable="true"],
+*[class*="TouchableOpacity"],
+*[class*="Touchable"],
+*[class*="Button"] {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+/* FORCER LES INPUTS */
+input, textarea, select {
+  cursor: text !important;
+  pointer-events: auto !important;
+}

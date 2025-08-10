@@ -31,7 +31,24 @@
       ]
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png",
+      "name": "FOCEP Collecte",
+      "shortName": "FOCEP",
+      "lang": "fr",
+      "scope": "/",
+      "themeColor": "#007AFF",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "build": {
+        "babel": {
+          "include": [
+            "src/styles/web.css"
+          ]
+        }
+      }
     },
     "plugins": [
       "expo-file-system",

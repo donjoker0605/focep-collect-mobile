@@ -132,7 +132,7 @@ export default function CommissionResultsScreen({ route, navigation }) {
             <StatsCard
               title="Total Épargne"
               value={formatters.formatMoney(stats.totalEpargne)}
-              icon="savings"
+              icon="bookmark-outline"
               color={colors.success}
               style={styles.statCard}
             />

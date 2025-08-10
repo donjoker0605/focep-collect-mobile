@@ -1,5 +1,6 @@
 // src/services/secureStorage.js
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 // Clés pour le stockage sécurisé
 export const SECURE_KEYS = {
@@ -10,10 +11,10 @@ export const SECURE_KEYS = {
   PIN_HASH: 'focep_pin_hash',
 };
 
-// Options de stockage sécurisé
-const secureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED, // Uniquement disponible lorsque l'appareil est déverrouillé
-};
+// Options de stockage sécurisé pour mobile
+const secureStoreOptions = Platform.OS !== 'web' ? {
+  keychainAccessible: SecureStore.WHEN_UNLOCKED,
+} : {};
 
 export const SecureStorage = {
   // Stockage sécurisé
@@ -22,7 +23,12 @@ export const SecureStorage = {
       if (typeof value !== 'string') {
         value = JSON.stringify(value);
       }
-      await SecureStore.setItemAsync(key, value, secureStoreOptions);
+      
+      if (Platform.OS === 'web') {
+        localStorage.setItem(key, value);
+      } else {
+        await SecureStore.setItemAsync(key, value, secureStoreOptions);
+      }
       return true;
     } catch (error) {
       console.error(`Erreur lors du stockage sécurisé de ${key}:`, error);
@@ -33,8 +39,11 @@ export const SecureStorage = {
   // Récupération sécurisée
   getItem: async (key) => {
     try {
-      const value = await SecureStore.getItemAsync(key, secureStoreOptions);
-      return value;
+      if (Platform.OS === 'web') {
+        return localStorage.getItem(key);
+      } else {
+        return await SecureStore.getItemAsync(key, secureStoreOptions);
+      }
     } catch (error) {
       console.error(`Erreur lors de la récupération sécurisée de ${key}:`, error);
       return null;
@@ -44,7 +53,12 @@ export const SecureStorage = {
   // Récupération et parsing JSON sécurisé
   getJSON: async (key) => {
     try {
-      const value = await SecureStore.getItemAsync(key, secureStoreOptions);
+      let value;
+      if (Platform.OS === 'web') {
+        value = localStorage.getItem(key);
+      } else {
+        value = await SecureStore.getItemAsync(key, secureStoreOptions);
+      }
       if (!value) return null;
       return JSON.parse(value);
     } catch (error) {
@@ -56,7 +70,11 @@ export const SecureStorage = {
   // Suppression sécurisée
   removeItem: async (key) => {
     try {
-      await SecureStore.deleteItemAsync(key, secureStoreOptions);
+      if (Platform.OS === 'web') {
+        localStorage.removeItem(key);
+      } else {
+        await SecureStore.deleteItemAsync(key, secureStoreOptions);
+      }
       return true;
     } catch (error) {
       console.error(`Erreur lors de la suppression sécurisée de ${key}:`, error);
@@ -67,8 +85,12 @@ export const SecureStorage = {
   // Vérifier si une clé existe
   hasItem: async (key) => {
     try {
-      const value = await SecureStore.getItemAsync(key, secureStoreOptions);
-      return value !== null;
+      if (Platform.OS === 'web') {
+        return localStorage.getItem(key) !== null;
+      } else {
+        const value = await SecureStore.getItemAsync(key, secureStoreOptions);
+        return value !== null;
+      }
     } catch (error) {
       console.error(`Erreur lors de la vérification de l'existence de ${key}:`, error);
       return false;
@@ -84,9 +106,13 @@ export const SecureStorage = {
         SECURE_KEYS.USER_SESSION,
       ];
       
-      await Promise.all(keys.map(key => 
-        SecureStore.deleteItemAsync(key, secureStoreOptions)
-      ));
+      if (Platform.OS === 'web') {
+        keys.forEach(key => localStorage.removeItem(key));
+      } else {
+        await Promise.all(keys.map(key => 
+          SecureStore.deleteItemAsync(key, secureStoreOptions)
+        ));
+      }
       return true;
     } catch (error) {
       console.error('Erreur lors du nettoyage des données d\'authentification:', error);

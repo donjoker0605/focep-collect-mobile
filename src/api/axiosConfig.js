@@ -6,7 +6,7 @@ import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 // ✅ INSTANCE AXIOS SIMPLIFIÉE ET CORRIGÉE
 const axiosInstance = axios.create({
 
-  baseURL: API_CONFIG.baseURL, // http://192.168.111.57:8080/api
+  baseURL: API_CONFIG.baseURL, // http://192.168.89.44:8080/api
 
   timeout: API_CONFIG.timeout,
   headers: {
@@ -92,9 +92,9 @@ axiosInstance.interceptors.response.use(
       console.error('Network error:', error.message);
     }
     
-    // Gestion spécifique des erreurs 401 (Non autorisé)
-    if (error.response?.status === 401) {
-      console.log('🔑 Token expiré, nettoyage des données d\'authentification');
+    // Gestion spécifique des erreurs 401/403 (Token expiré ou non autorisé)
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      console.log('🔑 Token expiré ou accès refusé, nettoyage des données d\'authentification');
       
       try {
         await AsyncStorage.multiRemove([
@@ -102,11 +102,15 @@ axiosInstance.interceptors.response.use(
           STORAGE_KEYS.REFRESH_TOKEN,
           STORAGE_KEYS.USER_DATA,
         ]);
+        
+        // 🔄 Forcer un reload de l'app pour retourner à l'écran de login
+        if (typeof window !== 'undefined' && window.location) {
+          console.log('🔄 Redirection vers login (web)');
+          setTimeout(() => window.location.reload(), 100);
+        }
       } catch (storageError) {
         console.error('Erreur lors du nettoyage du stockage:', storageError);
       }
-      
-      // Vous pouvez ajouter ici une logique de redirection vers l'écran de connexion
     }
     
     return Promise.reject(error);

@@ -14,15 +14,54 @@ class AdminCollecteurService extends BaseApiService {
   }
 
   // =====================================
+  // 🔥 MÉTHODES ADMIN-COLLECTEUR SPÉCIFIQUES
+  // =====================================
+
+  /**
+   * 👥 Récupère les collecteurs ASSIGNÉS à l'admin connecté
+   * Cette méthode utilise la nouvelle logique admin-collecteur
+   */
+  async getAssignedCollecteurs({ page = 0, size = 20, search = '' } = {}) {
+    try {
+      console.log('👥 API Admin: GET /admin/mes-collecteurs');
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      
+      // Essayer l'endpoint spécialisé d'abord
+      try {
+        const response = await this.axios.get('/admin/mes-collecteurs', { params });
+        return this.formatResponse(response, 'Collecteurs assignés récupérés');
+      } catch (notFoundError) {
+        if (notFoundError.response?.status === 404) {
+          console.log('📋 Fallback vers endpoint collecteurs standard');
+          return await this.getCollecteursFallback(params);
+        }
+        throw notFoundError;
+      }
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des collecteurs assignés');
+    }
+  }
+
+  /**
+   * 🔄 Fallback pour récupérer les collecteurs via l'endpoint standard
+   */
+  async getCollecteursFallback(params) {
+    const response = await this.axios.get('/collecteurs', { params });
+    return this.formatResponse(response, 'Collecteurs récupérés (fallback)');
+  }
+
+  // =====================================
   // MÉTHODES PRINCIPALES COLLECTEURS
   // =====================================
 
   /**
-   * 📊 Récupère tous les collecteurs pour l'admin
+   * 📊 Récupère tous les collecteurs pour l'admin (ANCIEN - pour compatibilité)
+   * @deprecated Utiliser getAssignedCollecteurs() à la place
    */
   async getCollecteurs({ page = 0, size = 20, search = '', agenceId = null } = {}) {
     try {
-      console.log('👥 API Admin: GET /collecteurs');
+      console.log('👥 API Admin: GET /collecteurs (DEPRECATED)');
       const params = { page, size };
       if (search?.trim()) params.search = search.trim();
       if (agenceId) params.agenceId = agenceId;
@@ -48,11 +87,45 @@ class AdminCollecteurService extends BaseApiService {
   }
 
   /**
-   * 👥 Récupère les clients d'un collecteur
+   * 👥 Récupère les clients d'un collecteur ASSIGNÉ (avec vérification d'accès)
+   */
+  async getAssignedCollecteurClients(collecteurId, { page = 0, size = 20, search = '' } = {}) {
+    try {
+      console.log(`👥 API Admin: GET /admin/collecteurs/${collecteurId}/clients`);
+      const params = { page, size };
+      if (search?.trim()) params.search = search.trim();
+      
+      // Essayer l'endpoint admin spécialisé d'abord
+      try {
+        const response = await this.axios.get(`/admin/collecteurs/${collecteurId}/clients`, { params });
+        return this.formatResponse(response, 'Clients du collecteur assigné récupérés');
+      } catch (notFoundError) {
+        if (notFoundError.response?.status === 404) {
+          console.log('📋 Fallback vers endpoint clients/collecteur standard');
+          return await this.getCollecteurClientsFallback(collecteurId, params);
+        }
+        throw notFoundError;
+      }
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des clients du collecteur assigné');
+    }
+  }
+
+  /**
+   * 🔄 Fallback pour récupérer les clients d'un collecteur
+   */
+  async getCollecteurClientsFallback(collecteurId, params) {
+    const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { params });
+    return this.formatResponse(response, 'Clients du collecteur récupérés (fallback)');
+  }
+
+  /**
+   * 👥 Récupère les clients d'un collecteur (ANCIEN - pour compatibilité)
+   * @deprecated Utiliser getAssignedCollecteurClients() à la place
    */
   async getCollecteurClients(collecteurId, { page = 0, size = 20, search = '' } = {}) {
     try {
-      console.log('👥 API Admin: GET /clients/collecteur/', collecteurId);
+      console.log('👥 API Admin: GET /clients/collecteur/', collecteurId, '(DEPRECATED)');
       const params = { page, size };
       if (search?.trim()) params.search = search.trim();
       
@@ -64,11 +137,51 @@ class AdminCollecteurService extends BaseApiService {
   }
 
   /**
-   * 📊 Récupère le résumé des activités de tous les collecteurs
+   * 📊 Récupère le résumé des activités des collecteurs ASSIGNÉS à l'admin
+   */
+  async getAssignedCollecteursActivitySummary(dateDebut = null, dateFin = null) {
+    try {
+      console.log('📊 Chargement résumé activités collecteurs assignés...');
+      
+      // Construire les paramètres de la requête
+      const params = {};
+      if (dateDebut) params.dateDebut = dateDebut;
+      if (dateFin) params.dateFin = dateFin;
+
+      // Vérifier le cache
+      const cacheKey = this.getCacheKey('admin-assigned-collecteurs-summary', params);
+      const cached = this.getCache(cacheKey);
+      if (cached) {
+        console.log('📊 Résumé depuis cache');
+        return cached;
+      }
+
+      // 🔥 NOUVELLE LOGIQUE : Utiliser l'endpoint des collecteurs assignés
+      const collecteursResponse = await this.getAssignedCollecteurs(params);
+      const collecteurs = collecteursResponse.data || [];
+      
+      // Enrichir les données pour l'affichage
+      const collecteursEnrichis = collecteurs.map(this.enrichirCollecteurSummary);
+
+      // Mettre en cache
+      this.setCache(cacheKey, collecteursEnrichis);
+      
+      console.log(`✅ ${collecteursEnrichis.length} collecteurs assignés récupérés`);
+      return collecteursEnrichis;
+
+    } catch (error) {
+      console.error('❌ Erreur getAssignedCollecteursActivitySummary:', error);
+      throw this.handleError(error, 'Impossible de récupérer le résumé des activités');
+    }
+  }
+
+  /**
+   * 📊 Récupère le résumé des activités de tous les collecteurs (ANCIEN - pour compatibilité)
+   * @deprecated Utiliser getAssignedCollecteursActivitySummary() à la place
    */
   async getCollecteursActivitySummary(dateDebut = null, dateFin = null) {
     try {
-      console.log('📊 Chargement résumé activités collecteurs...');
+      console.log('📊 Chargement résumé activités collecteurs... (DEPRECATED)');
       
       // Construire les paramètres de la requête
       const params = {};

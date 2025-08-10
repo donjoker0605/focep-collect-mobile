@@ -1,8 +1,9 @@
 // src/screens/Auth/LoginScreen.js - VERSION DÉFINITIVEMENT CORRIGÉE
 import React, { useState } from 'react';
-import { View, Alert, StyleSheet, Image } from 'react-native';
+import { View, Alert, StyleSheet, Image, Platform } from 'react-native';
 import { Button, TextInput, Text } from 'react-native-paper';
 import { useAuth } from '../../hooks/useAuth';
+import { getContainerStyles } from '../../utils/platformUtils';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -55,7 +56,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, getContainerStyles()]}>
       {/* ✅ LOGO AJOUTÉ */}
       <View style={styles.logoContainer}>
         <Image 
@@ -134,6 +135,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
     backgroundColor: '#f5f5f5',
+    ...(Platform.OS === 'web' && {
+      minHeight: '100vh',
+      maxWidth: 400,
+      alignSelf: 'center'
+    }),
   },
   logoContainer: {
     alignItems: 'center',

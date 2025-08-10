@@ -22,7 +22,7 @@ export const calculateCommissionsV2 = async ({ collecteurId, dateDebut, dateFin 
   try {
     console.log('📱 API V2: POST /commission-remuneration/collecteur/calculer');
     const response = await axios.post(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/calculer`,
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/calculer`,
       null,
       {
         params: { dateDebut, dateFin }
@@ -47,7 +47,7 @@ export const processRemuneration = async ({ collecteurId, montantS }) => {
   try {
     console.log('📱 API V2: POST /commission-remuneration/collecteur/remunerer');
     const response = await axios.post(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/remunerer`,
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/remunerer`,
       null,
       {
         params: { montantS }
@@ -73,7 +73,7 @@ export const processusComplet = async ({ collecteurId, dateDebut, dateFin }) => 
   try {
     console.log('📱 API V2: POST /commission-remuneration/processus-complet');
     const response = await axios.post(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/processus-complet`,
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/processus-complet`,
       null,
       {
         params: { dateDebut, dateFin }
@@ -99,7 +99,7 @@ export const generateCommissionExcelReport = async ({ collecteurId, dateDebut, d
   try {
     console.log('📱 API V2: POST /commission-remuneration/rapport-commission Excel');
     const response = await axios.post(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/rapport-commission`,
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/rapport-commission`,
       null,
       {
         params: { dateDebut, dateFin },
@@ -126,7 +126,7 @@ export const generateRemunerationExcelReport = async ({ collecteurId, dateDebut,
   try {
     console.log('📱 API V2: POST /commission-remuneration/rapport-remuneration Excel');
     const response = await axios.post(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/rapport-remuneration`,
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/rapport-remuneration`,
       null,
       {
         params: { dateDebut, dateFin },
@@ -151,7 +151,7 @@ export const getCollecteurCommissionStatus = async ({ collecteurId }) => {
   try {
     console.log('📱 API V2: GET /commission-remuneration/statut');
     const response = await axios.get(
-      `/v2/commission-remuneration/collecteur/${collecteurId}/statut`
+      `/api/v2/commission-remuneration/collecteur/${collecteurId}/statut`
     );
     return response.data;
   } catch (error) {
@@ -175,7 +175,7 @@ export const getRubriquesRemuneration = async ({ collecteurId }) => {
   try {
     console.log('📱 API V2: GET /rubriques-remuneration/collecteur');
     const response = await axios.get(
-      `/v2/rubriques-remuneration/collecteur/${collecteurId}`
+      `/api/v2/commission-remuneration/rubriques/collecteur/${collecteurId}`
     );
     return response.data;
   } catch (error) {
@@ -199,7 +199,7 @@ export const getRubriquesRemuneration = async ({ collecteurId }) => {
 export const createRubriqueRemuneration = async (rubrique) => {
   try {
     console.log('📱 API V2: POST /rubriques-remuneration');
-    const response = await axios.post('/v2/rubriques-remuneration', rubrique);
+    const response = await axios.post('/api/v2/commission-remuneration/rubriques', rubrique);
     return response.data;
   } catch (error) {
     console.error('Erreur création rubrique:', error);
@@ -218,7 +218,7 @@ export const createRubriqueRemuneration = async (rubrique) => {
 export const updateRubriqueRemuneration = async ({ rubriqueId, rubrique }) => {
   try {
     console.log('📱 API V2: PUT /rubriques-remuneration');
-    const response = await axios.put(`/v2/rubriques-remuneration/${rubriqueId}`, rubrique);
+    const response = await axios.put(`/api/v2/commission-remuneration/rubriques/${rubriqueId}`, rubrique);
     return response.data;
   } catch (error) {
     console.error('Erreur mise à jour rubrique:', error);
@@ -236,7 +236,7 @@ export const updateRubriqueRemuneration = async ({ rubriqueId, rubrique }) => {
 export const deactivateRubriqueRemuneration = async ({ rubriqueId }) => {
   try {
     console.log('📱 API V2: DELETE /rubriques-remuneration');
-    const response = await axios.delete(`/v2/rubriques-remuneration/${rubriqueId}`);
+    const response = await axios.delete(`/api/v2/commission-remuneration/rubriques/${rubriqueId}`);
     return response.data;
   } catch (error) {
     console.error('Erreur désactivation rubrique:', error);
