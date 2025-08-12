@@ -9,7 +9,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  RefreshControl
+  RefreshControl,
+  Platform,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -34,34 +36,52 @@ export default function ProfileScreen({ navigation }) {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Confirmation',
-      'Êtes-vous sûr de vouloir vous déconnecter ?',
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Déconnexion',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await logout();
-              // La navigation sera gérée automatiquement par AuthContext
-            } catch (error) {
-              console.error('Erreur lors de la déconnexion:', error);
-              Alert.alert('Erreur', 'Impossible de se déconnecter');
-            } finally {
-              setLoading(false);
-            }
+  const handleLogoutPress = () => {
+    if (Platform.OS === 'web') {
+      // Pour le web, utiliser un modal personnalisé
+      setShowLogoutModal(true);
+    } else {
+      // Pour mobile, utiliser Alert.alert
+      Alert.alert(
+        'Confirmation',
+        'Êtes-vous sûr de vouloir vous déconnecter ?',
+        [
+          {
+            text: 'Annuler',
+            style: 'cancel',
           },
-        },
-      ]
-    );
+          {
+            text: 'Déconnexion',
+            style: 'destructive',
+            onPress: confirmLogout,
+          },
+        ]
+      );
+    }
+  };
+
+  const confirmLogout = async () => {
+    try {
+      setLoading(true);
+      setShowLogoutModal(false);
+      await logout();
+      // La navigation sera gérée automatiquement par AuthContext
+    } catch (error) {
+      console.error('Erreur lors de la déconnexion:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Erreur: Impossible de se déconnecter');
+      } else {
+        Alert.alert('Erreur', 'Impossible de se déconnecter');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const onRefresh = async () => {
@@ -192,7 +212,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Bouton de déconnexion */}
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={handleLogout}
+          onPress={handleLogoutPress}
           disabled={loading}
         >
           <Ionicons name="log-out-outline" size={24} color="#FFF" />
@@ -201,6 +221,37 @@ export default function ProfileScreen({ navigation }) {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal de confirmation pour le web */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showLogoutModal}
+        onRequestClose={cancelLogout}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Confirmation</Text>
+            <Text style={styles.modalMessage}>
+              Êtes-vous sûr de vouloir vous déconnecter ?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={cancelLogout}
+              >
+                <Text style={styles.modalCancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.modalConfirmButtonText}>Déconnexion</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -344,5 +395,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  // Styles du modal de confirmation
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: theme.colors.white,
+    borderRadius: 20,
+    padding: 24,
+    maxWidth: 400,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: theme.colors.lightGray,
+  },
+  modalConfirmButton: {
+    backgroundColor: theme.colors.error,
+  },
+  modalCancelButtonText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

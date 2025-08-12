@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import clientService from '../services/clientService';
 import authService from '../services/authService';
+import balanceCalculationService from '../services/balanceCalculationService';
 
 export const useClients = (overrideCollecteurId = null) => {
   const [clients, setClients] = useState([]);
@@ -129,11 +130,15 @@ export const useClients = (overrideCollecteurId = null) => {
           clients: clientsData.map(c => ({ id: c.id, nom: c.nom, prenom: c.prenom }))
         });
         
+        // Calcul des soldes disponibles pour tous les clients
+        console.log('💰 Calcul des soldes disponibles...');
+        const clientsWithBalances = await balanceCalculationService.calculateMultipleClientsBalances(clientsData);
+        
         // Mise à jour de l'état en fonction de la page
         if (page === 0) {
-          setClients(clientsData);
+          setClients(clientsWithBalances);
         } else {
-          setClients(prevClients => [...prevClients, ...clientsData]);
+          setClients(prevClients => [...prevClients, ...clientsWithBalances]);
         }
         
         setCurrentPage(page);

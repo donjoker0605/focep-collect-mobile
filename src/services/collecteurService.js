@@ -138,6 +138,79 @@ class CollecteurService extends BaseApiService {
     }
   }
 
+  /**
+   * Récupérer les soldes des comptes du collecteur
+   */
+  async getCollecteurAccountBalances(collecteurId) {
+    try {
+      console.log('📱 API: GET /collecteurs/account-balances/', collecteurId);
+      const response = await this.axios.get(`/collecteurs/${collecteurId}/account-balances`);
+      return this.formatResponse(response, 'Soldes des comptes récupérés');
+    } catch (error) {
+      // Fallback vers méthodes individuelles si endpoint unifié pas disponible
+      if (error.response?.status === 404) {
+        console.warn('⚠️ Fallback vers récupération manuelle des soldes');
+        return await this.getCollecteurAccountBalancesFallback(collecteurId);
+      }
+      throw this.handleError(error, 'Erreur lors de la récupération des soldes');
+    }
+  }
+
+  /**
+   * Fallback - Récupérer les soldes individuellement
+   */
+  async getCollecteurAccountBalancesFallback(collecteurId) {
+    try {
+      console.log('🔄 Fallback récupération soldes collecteur:', collecteurId);
+      
+      const [salaireBalance, manquantBalance] = await Promise.allSettled([
+        this.getCompteSalaireBalance(collecteurId),
+        this.getCompteManquantBalance(collecteurId)
+      ]);
+
+      const balances = {
+        soldeSalaire: salaireBalance.status === 'fulfilled' ? salaireBalance.value?.data || 0 : 0,
+        soldeManquant: manquantBalance.status === 'fulfilled' ? manquantBalance.value?.data || 0 : 0,
+        hasError: salaireBalance.status === 'rejected' || manquantBalance.status === 'rejected'
+      };
+
+      return this.formatResponse({ data: balances }, 'Soldes récupérés (fallback)');
+    } catch (error) {
+      console.error('❌ Erreur fallback soldes:', error);
+      return this.formatResponse({ 
+        data: { soldeSalaire: 0, soldeManquant: 0, hasError: true } 
+      }, 'Soldes par défaut');
+    }
+  }
+
+  /**
+   * Récupérer le solde du compte salaire
+   */
+  async getCompteSalaireBalance(collecteurId) {
+    try {
+      console.log('💰 API: GET compte salaire balance pour collecteur:', collecteurId);
+      const response = await this.axios.get(`/comptes/collecteur/${collecteurId}/salaire/solde`);
+      return this.formatResponse(response, 'Solde compte salaire récupéré');
+    } catch (error) {
+      console.warn('⚠️ Impossible de récupérer le solde compte salaire:', error.message);
+      return this.formatResponse({ data: 0 }, 'Solde par défaut');
+    }
+  }
+
+  /**
+   * Récupérer le solde du compte manquant
+   */
+  async getCompteManquantBalance(collecteurId) {
+    try {
+      console.log('💰 API: GET compte manquant balance pour collecteur:', collecteurId);
+      const response = await this.axios.get(`/comptes/collecteur/${collecteurId}/manquant/solde`);
+      return this.formatResponse(response, 'Solde compte manquant récupéré');
+    } catch (error) {
+      console.warn('⚠️ Impossible de récupérer le solde compte manquant:', error.message);
+      return this.formatResponse({ data: 0 }, 'Solde par défaut');
+    }
+  }
+
   // Méthode pour récupérer les collecteurs d'une agence
   async getCollecteursByAgence(agenceId, params = {}) {
     try {

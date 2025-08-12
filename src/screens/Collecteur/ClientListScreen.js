@@ -19,6 +19,8 @@ import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import useClients from '../../hooks/useClients';
+import { formatCurrency } from '../../utils/formatters';
+import balanceCalculationService from '../../services/balanceCalculationService';
 
 const ClientListScreen = ({ navigation, route }) => {
   const { user } = useAuth();
@@ -183,6 +185,22 @@ const ClientListScreen = ({ navigation, route }) => {
                   Compte: #{item.numeroCompte}
                 </Text>
               )}
+              
+              {/* Soldes */}
+              <View style={styles.balanceSection}>
+                <View style={styles.balanceItem}>
+                  <Text style={styles.balanceLabel}>Solde Total:</Text>
+                  <Text style={[styles.balanceValue, { color: theme.colors.primary }]}>
+                    {formatCurrency(item.soldeTotal || 0)}
+                  </Text>
+                </View>
+                <View style={styles.balanceItem}>
+                  <Text style={styles.balanceLabel}>Solde Disponible:</Text>
+                  <Text style={[styles.balanceValue, { color: theme.colors.success }]}>
+                    {formatCurrency(item.soldeDisponible || item.soldeTotal || 0)}
+                  </Text>
+                </View>
+              </View>
             </View>
             
             <View style={styles.clientActions}>
@@ -399,10 +417,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 25,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
   },
   searchIcon: {
     marginRight: 8,
@@ -450,6 +465,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffeaa7',
     borderRadius: 4,
     alignItems: 'center',
+  },
+  balanceSection: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+  },
+  balanceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  balanceLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+  },
+  balanceValue: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   testButtonText: {
     fontSize: 12,

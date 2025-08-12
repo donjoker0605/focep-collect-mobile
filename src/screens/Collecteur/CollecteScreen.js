@@ -195,7 +195,10 @@ const CollecteScreen = () => {
   const handlePhoneModalEdit = () => {
     setShowPhoneModal(false);
     if (selectedClient) {
-      navigation.navigate('EditClient', { clientId: selectedClient.id });
+      navigation.navigate('Clients', {
+        screen: 'ClientAddEdit',
+        params: { mode: 'edit', client: selectedClient }
+      });
     }
   };
 

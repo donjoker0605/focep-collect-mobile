@@ -13,6 +13,7 @@ export { default as SyncService } from './SyncService';
 
 export { default as journalActiviteService } from './journalActiviteService';
 export { default as versementService } from './versementService';
+export { default as balanceCalculationService } from './balanceCalculationService';
 
 // Services Admin
 export { default as adminService } from './adminService';

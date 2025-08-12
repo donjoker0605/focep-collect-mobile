@@ -27,6 +27,7 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
   const [collecteur, setCollecteur] = useState(initialCollecteur);
   const [statistics, setStatistics] = useState(null);
   const [clients, setClients] = useState([]);
+  const [accountBalances, setAccountBalances] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('info'); // info, clients, stats
@@ -40,10 +41,11 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
       if (showLoading) setLoading(true);
       
       // Charger les détails du collecteur
-      const [collecteurResponse, statsResponse, clientsResponse] = await Promise.all([
+      const [collecteurResponse, statsResponse, clientsResponse, balancesResponse] = await Promise.all([
         collecteurService.getCollecteurById(collecteur.id),
         collecteurService.getCollecteurStatistics(collecteur.id),
-        clientService.getClientsByCollecteur(collecteur.id)
+        clientService.getAllClients({ collecteurId: collecteur.id, size: 50 }),
+        collecteurService.getCollecteurAccountBalances(collecteur.id)
       ]);
       
       if (collecteurResponse.success) {
@@ -55,7 +57,17 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
       }
       
       if (clientsResponse.success) {
-        setClients(Array.isArray(clientsResponse.data) ? clientsResponse.data : []);
+        const clientsData = clientsResponse.data;
+        // Gérer structure paginée ou simple array
+        if (clientsData?.content) {
+          setClients(Array.isArray(clientsData.content) ? clientsData.content : []);
+        } else {
+          setClients(Array.isArray(clientsData) ? clientsData : []);
+        }
+      }
+      
+      if (balancesResponse.success) {
+        setAccountBalances(balancesResponse.data);
       }
       
     } catch (error) {
@@ -326,6 +338,36 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
               {new Intl.NumberFormat('fr-FR').format(statistics?.soldeNet || 0)} FCFA
             </Text>
           </View>
+        </View>
+      </Card>
+
+      {/* Soldes des comptes */}
+      <Card style={styles.card}>
+        <Text style={styles.sectionTitle}>Soldes des comptes</Text>
+        
+        <View style={styles.balanceInfo}>
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceItem}>
+              <Text style={styles.balanceLabel}>Compte Salaire</Text>
+              <Text style={[styles.balanceValue, { color: theme.colors.success }]}>
+                {new Intl.NumberFormat('fr-FR').format(accountBalances?.soldeSalaire || 0)} FCFA
+              </Text>
+            </View>
+            
+            <View style={styles.balanceItem}>
+              <Text style={styles.balanceLabel}>Compte Manquant</Text>
+              <Text style={[styles.balanceValue, { color: accountBalances?.soldeManquant > 0 ? theme.colors.error : theme.colors.textLight }]}>
+                {new Intl.NumberFormat('fr-FR').format(accountBalances?.soldeManquant || 0)} FCFA
+              </Text>
+            </View>
+          </View>
+          
+          {accountBalances?.hasError && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="warning-outline" size={16} color={theme.colors.warning} />
+              <Text style={styles.errorText}>Certains soldes n'ont pas pu être chargés</Text>
+            </View>
+          )}
         </View>
       </Card>
 
@@ -663,6 +705,42 @@ const styles = StyleSheet.create({
   },
   commissionButton: {
     marginTop: 8,
+  },
+  balanceInfo: {
+    marginBottom: 16,
+  },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 8,
+  },
+  balanceValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    color: theme.colors.warning,
+    marginLeft: 4,
   },
 });
 

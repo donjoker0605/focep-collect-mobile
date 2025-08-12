@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 // Services et Hooks
 import { collecteurService } from '../../services';
 import { useAuth } from '../../hooks/useAuth';
+import { useCollecteurNavigation } from '../../navigation/CollecteurStack';
 import theme from '../../theme';
 import journalActiviteService from '../../services/journalActiviteService';
 

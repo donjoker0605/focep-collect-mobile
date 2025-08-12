@@ -123,17 +123,26 @@ export const authService = {
     }
   },
 
-  // Déconnexion
+  // Déconnexion améliorée
   logout: async () => {
+    console.log('🚪 Début du processus de déconnexion...');
+    
     try {
-      // Tenter d'appeler l'endpoint de logout
+      // Tenter d'appeler l'endpoint de logout serveur
       try {
-        await axiosInstance.post('/auth/logout');
-      } catch (error) {
-        console.warn('Erreur lors de la déconnexion côté serveur:', error);
+        console.log('📞 Appel endpoint /auth/logout...');
+        const response = await axiosInstance.post('/auth/logout');
+        console.log('✅ Déconnexion serveur réussie:', response.data);
+      } catch (serverError) {
+        console.warn('⚠️ Erreur déconnexion serveur (continuons quand même):', {
+          status: serverError.response?.status,
+          message: serverError.response?.data?.message || serverError.message
+        });
+        // Ne pas bloquer si le serveur répond mal
       }
       
-      // Nettoyage des données locales
+      // Nettoyage des données locales (toujours effectué)
+      console.log('🧹 Nettoyage des données locales...');
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.JWT_TOKEN,
         STORAGE_KEYS.REFRESH_TOKEN,
@@ -141,16 +150,26 @@ export const authService = {
         'lastLoginAt'
       ]);
       
+      console.log('✅ Déconnexion locale réussie');
       return { success: true };
+      
     } catch (error) {
-      console.error('Erreur de déconnexion:', error);
-      // Même en cas d'erreur, nettoyer les données locales
-      await AsyncStorage.multiRemove([
-        STORAGE_KEYS.JWT_TOKEN,
-        STORAGE_KEYS.REFRESH_TOKEN,
-        STORAGE_KEYS.USER_DATA,
-        'lastLoginAt'
-      ]);
+      console.error('❌ Erreur critique lors de la déconnexion:', error);
+      
+      // Même en cas d'erreur critique, nettoyer les données locales
+      try {
+        console.log('🧹 Nettoyage forcé des données locales...');
+        await AsyncStorage.multiRemove([
+          STORAGE_KEYS.JWT_TOKEN,
+          STORAGE_KEYS.REFRESH_TOKEN,
+          STORAGE_KEYS.USER_DATA,
+          'lastLoginAt'
+        ]);
+        console.log('✅ Nettoyage forcé réussi');
+      } catch (cleanupError) {
+        console.error('💥 Erreur lors du nettoyage forcé:', cleanupError);
+      }
+      
       return { success: false, error: error.message };
     }
   },

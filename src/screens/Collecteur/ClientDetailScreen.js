@@ -22,6 +22,7 @@ import Button from '../../components/Button/Button';
 import theme from '../../theme';
 import { clientService } from '../../services';
 import { formatCurrency } from '../../utils/formatters';
+import balanceCalculationService from '../../services/balanceCalculationService';
 
 const ClientDetailScreen = () => {
   const insets = useSafeAreaInsets();
@@ -34,6 +35,7 @@ const ClientDetailScreen = () => {
   const [client, setClient] = useState(initialClient || null);
   const [transactions, setTransactions] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [balances, setBalances] = useState({ soldeTotal: 0, soldeDisponible: 0, commissionSimulee: 0 });
   const [loading, setLoading] = useState(!initialClient);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -56,9 +58,45 @@ const ClientDetailScreen = () => {
       const response = await clientService.getClientWithTransactions(id);
 
       if (response.success) {
-        setClient(response.data);
-        setTransactions(response.data.transactions || []);
-        setBalance(response.data.soldeTotal || 0);
+        const clientData = response.data;
+        console.log('🔍 Données client reçues du backend:', {
+          id: clientData.id,
+          nom: clientData.nom,
+          soldeTotal: clientData.soldeTotal,
+          totalEpargne: clientData.totalEpargne,
+          commissionParameter: clientData.commissionParameter,
+          compteClient: clientData.compteClient,
+          transactions: clientData.transactions?.length
+        });
+        
+        // 🔍 DEBUG SPÉCIFIQUE COMMISSION PARAMETER
+        if (clientData.commissionParameter) {
+          console.log('✅ Paramètre de commission trouvé:', clientData.commissionParameter);
+        } else {
+          console.warn('⚠️ Paramètre de commission manquant dans la réponse /with-transactions');
+          console.log('🔍 Clés disponibles:', Object.keys(clientData));
+        }
+        
+        // 🔍 DEBUG DÉTAILLÉ DES TRANSACTIONS
+        if (clientData.transactions && clientData.transactions.length > 0) {
+          console.log('✅ Transactions trouvées:', clientData.transactions.length);
+          console.log('🔍 Première transaction:', clientData.transactions[0]);
+        } else {
+          console.warn('⚠️ Aucune transaction trouvée dans la réponse backend');
+        }
+        
+        setClient(clientData);
+        setTransactions(clientData.transactions || []);
+        setBalance(clientData.soldeTotal || 0);
+        
+        // 🔍 DEBUG ÉTAT LOCAL DES TRANSACTIONS
+        console.log('🔄 État local transactions mis à jour:', (clientData.transactions || []).length);
+        
+        // Calcul des soldes (total et disponible)
+        const calculatedBalances = await balanceCalculationService.calculateClientAvailableBalance(clientData);
+        setBalances(calculatedBalances);
+        
+        console.log('💰 Soldes calculés:', calculatedBalances);
       } else {
         throw new Error(response.message || 'Échec du chargement du client');
       }
@@ -74,10 +112,13 @@ const ClientDetailScreen = () => {
 
   // Effet de chargement initial
   useEffect(() => {
-    if (!client && clientId) {
+    // 🔥 CORRECTION: Toujours charger les détails complets avec transactions
+    const id = clientId || client?.id;
+    if (id) {
+      console.log('🔄 Chargement forcé des détails complets pour client:', id);
       loadClientDetails();
     }
-  }, [clientId, loadClientDetails]);
+  }, [clientId, client?.id, loadClientDetails]);
 
   // Gestion du rafraîchissement
   const onRefresh = () => {
@@ -250,10 +291,44 @@ const ClientDetailScreen = () => {
           </View>
         </Card>
 
-        {/* Solde et actions */}
+        {/* Soldes et actions */}
         <Card style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Solde actuel</Text>
-          <Text style={styles.balanceValue}>{formatCurrency(balance)}</Text>
+          <Text style={styles.sectionTitle}>Soldes du compte</Text>
+          
+          {/* Solde Total */}
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceInfo}>
+              <Text style={styles.balanceLabel}>Solde Total</Text>
+              <Text style={styles.balanceSubLabel}>Montant total épargné</Text>
+            </View>
+            <Text style={[styles.balanceValue, { color: theme.colors.primary }]}>
+              {formatCurrency(balances.soldeTotal)}
+            </Text>
+          </View>
+          
+          {/* Solde Disponible */}
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceInfo}>
+              <Text style={styles.balanceLabel}>Solde Disponible</Text>
+              <Text style={styles.balanceSubLabel}>Montant retirable</Text>
+            </View>
+            <Text style={[styles.balanceValue, { color: theme.colors.success }]}>
+              {formatCurrency(balances.soldeDisponible)}
+            </Text>
+          </View>
+          
+          {/* Commission simulée (si > 0) */}
+          {balances.commissionSimulee > 0 && (
+            <View style={[styles.balanceRow, styles.commissionRow]}>
+              <View style={styles.balanceInfo}>
+                <Text style={[styles.balanceLabel, { fontSize: 13 }]}>Commission mensuelle</Text>
+                <Text style={[styles.balanceSubLabel, { fontSize: 11 }]}>Simulation (non prélevée)</Text>
+              </View>
+              <Text style={[styles.balanceValue, { color: theme.colors.warning, fontSize: 14 }]}>
+                -{formatCurrency(balances.commissionSimulee)}
+              </Text>
+            </View>
+          )}
           
           <View style={styles.transactionButtons}>
             <Button
@@ -292,9 +367,76 @@ const ClientDetailScreen = () => {
           </View>
         </Card>
 
+        {/* Paramètres de commission */}
+        {client?.commissionParameter && (
+          <Card style={styles.card}>
+            <Text style={styles.sectionTitle}>Paramètres de commission</Text>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Type de commission</Text>
+              <Text style={styles.infoValue}>
+                {/* 🔥 CORRECTION: Utiliser les bons champs du backend */}
+                {(client.commissionParameter.typeCommission === 'POURCENTAGE' || client.commissionParameter.type === 'PERCENTAGE') ? 'Pourcentage' :
+                 (client.commissionParameter.typeCommission === 'FIXE' || client.commissionParameter.type === 'FIXED') ? 'Montant fixe' :
+                 (client.commissionParameter.typeCommission === 'PALIER' || client.commissionParameter.type === 'TIER') ? 'Par paliers' : 
+                 client.commissionParameter.typeCommission || client.commissionParameter.type || 'Non défini'}
+              </Text>
+            </View>
+            
+            {/* 🔥 CORRECTION: Vérifier les deux formats et utiliser 'valeur' du backend */}
+            {((client.commissionParameter.typeCommission === 'POURCENTAGE' || client.commissionParameter.type === 'PERCENTAGE')) && 
+             (client.commissionParameter.pourcentage || client.commissionParameter.valeur) && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Taux de commission</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.warning }]}>
+                  {client.commissionParameter.pourcentage || client.commissionParameter.valeur}%
+                </Text>
+              </View>
+            )}
+            
+            {/* 🔥 CORRECTION: Montant fixe avec les bons champs */}
+            {(client.commissionParameter.typeCommission === 'FIXE' || client.commissionParameter.type === 'FIXED') && 
+             (client.commissionParameter.montantFixe || client.commissionParameter.valeur) && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Montant fixe</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.warning }]}>
+                  {formatCurrency(client.commissionParameter.montantFixe || client.commissionParameter.valeur)}
+                </Text>
+              </View>
+            )}
+            
+            {client.commissionParameter.type === 'PALIER' && client.commissionParameter.paliersCommission && (
+              <View style={styles.palierContainer}>
+                <Text style={[styles.infoLabel, { marginBottom: 8 }]}>Paliers de commission</Text>
+                {client.commissionParameter.paliersCommission.map((palier, index) => (
+                  <View key={index} style={styles.palierRow}>
+                    <Text style={styles.palierText}>
+                      {formatCurrency(palier.montantMin)} - {formatCurrency(palier.montantMax)}
+                    </Text>
+                    <Text style={[styles.palierValue, { color: theme.colors.warning }]}>
+                      {palier.pourcentage}%
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            {client.commissionParameter.codeProduit && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Code produit</Text>
+                <Text style={styles.infoValue}>
+                  {client.commissionParameter.codeProduit}
+                </Text>
+              </View>
+            )}
+          </Card>
+        )}
+
         {/* Dernières transactions */}
         <Card style={styles.card}>
           <Text style={styles.sectionTitle}>Dernières transactions</Text>
+          
+          {console.log('🔍 Rendu transactions - Nombre:', transactions.length)}
           
           {transactions.length === 0 ? (
             <View style={styles.emptyContainer}>
@@ -366,11 +508,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   balanceCard: {
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 20,
-    alignItems: 'center',
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.white,
+    marginBottom: 16,
+    padding: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -395,17 +535,37 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: '500',
   },
+  balanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  balanceInfo: {
+    flex: 1,
+  },
   balanceLabel: {
     fontSize: 16,
-    color: theme.colors.white,
-    opacity: 0.8,
-    marginBottom: 8,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  balanceSubLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
   },
   balanceValue: {
-    fontSize: 32,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: theme.colors.white,
-    marginBottom: 24,
+    textAlign: 'right',
+  },
+  commissionRow: {
+    backgroundColor: theme.colors.background,
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 0,
   },
   transactionButtons: {
     flexDirection: 'row',
@@ -468,6 +628,28 @@ const styles = StyleSheet.create({
   viewAllText: {
     color: theme.colors.primary,
     fontWeight: '500',
+  },
+  palierContainer: {
+    marginTop: 8,
+  },
+  palierRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.background,
+    marginVertical: 2,
+    borderRadius: 6,
+  },
+  palierText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    flex: 1,
+  },
+  palierValue: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

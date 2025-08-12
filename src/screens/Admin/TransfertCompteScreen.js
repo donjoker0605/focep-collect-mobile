@@ -22,11 +22,15 @@ import {
   Button,
   SelectInput,
   EmptyState,
-  Input
+  Input,
+  TransferPreview,
+  ClientFilters
 } from '../../components';
 
 // Services et Hooks - ✅ UTILISATION DU SERVICE UNIFIÉ
 import { useAuth } from '../../hooks/useAuth';
+import { useTransferLogic } from '../../hooks/useTransferLogic';
+import { useClientFilters } from '../../hooks/useClientFilters';
 import theme from '../../theme';
 
 const TransfertCompteScreen = ({ navigation, route }) => {
@@ -38,14 +42,33 @@ const TransfertCompteScreen = ({ navigation, route }) => {
   const [clients, setClients] = useState([]);
   const [selectedSourceCollecteur, setSelectedSourceCollecteur] = useState(null);
   const [selectedDestCollecteur, setSelectedDestCollecteur] = useState(null);
-  const [selectedClients, setSelectedClients] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
   
   // États de chargement
   const [loadingCollecteurs, setLoadingCollecteurs] = useState(true);
   const [loadingClients, setLoadingClients] = useState(false);
-  const [transferring, setTransferring] = useState(false);
-  const [error, setError] = useState(null);
+  
+  // Hooks personnalisés
+  const {
+    transferring,
+    showPreview,
+    error,
+    prepareTransfer,
+    executeTransfer,
+    cancelTransfer,
+    resetTransferState,
+    setError
+  } = useTransferLogic();
+
+  const {
+    filteredClients,
+    selectedClients,
+    stats,
+    updateFilters,
+    toggleClientSelection,
+    selectAllFiltered,
+    clearSelection,
+    setSelectedClients
+  } = useClientFilters(clients);
   
   // Paramètres initiaux de la route
   useEffect(() => {
@@ -104,14 +127,26 @@ const TransfertCompteScreen = ({ navigation, route }) => {
       setError(null);
       setClients([]);
       
-      const response = await clientService.getClients({ collecteurId });
+      const response = await clientService.getAllClients({ collecteurId });
       
       if (response.success) {
-        setClients(response.data);
+        // Gérer les différents formats de réponse (admin paginé vs collecteur direct)
+        let clientsData = response.data;
+        
+        // Si c'est un format paginé (admin), extraire le content
+        if (clientsData && typeof clientsData === 'object' && clientsData.content) {
+          clientsData = clientsData.content;
+        } else if (clientsData && !Array.isArray(clientsData)) {
+          // Si ce n'est pas un array, essayer de le convertir
+          clientsData = [];
+          console.warn('Format de données clients inattendu:', clientsData);
+        }
+        
+        setClients(Array.isArray(clientsData) ? clientsData : []);
         
         // Si des clients sont pré-sélectionnés, les filtrer
-        if (route.params?.selectedClientIds && route.params.selectedClientIds.length > 0) {
-          const validClientIds = response.data
+        if (route.params?.selectedClientIds && route.params.selectedClientIds.length > 0 && Array.isArray(clientsData)) {
+          const validClientIds = clientsData
             .filter(client => route.params.selectedClientIds.includes(client.id))
             .map(client => client.id);
           
@@ -147,112 +182,33 @@ const TransfertCompteScreen = ({ navigation, route }) => {
     setSelectedDestCollecteur(collecteurId);
   };
   
-  // Sélectionner ou désélectionner un client
-  const toggleClientSelection = (clientId) => {
-    setSelectedClients(prev => {
-      if (prev.includes(clientId)) {
-        return prev.filter(id => id !== clientId);
-      } else {
-        return [...prev, clientId];
-      }
-    });
-    
-    // Feedback haptique
-    HapticsCompat.impactAsync(HapticsCompat.ImpactFeedbackStyle.Light);
-  };
+  // Les fonctions de filtrage et sélection sont maintenant dans les hooks personnalisés
   
-  // Sélectionner ou désélectionner tous les clients
-  const toggleSelectAll = () => {
-    if (selectedClients.length === clients.length) {
-      setSelectedClients([]);
-    } else {
-      setSelectedClients(clients.map(client => client.id));
-    }
-    
-    // Feedback haptique
-    HapticsCompat.impactAsync(HapticsCompat.ImpactFeedbackStyle.Medium);
-  };
-  
-  // Filtrer les clients en fonction de la recherche
-  const filteredClients = searchQuery 
-    ? clients.filter(client => 
-        `${client.prenom} ${client.nom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (client.numeroCni && client.numeroCni.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : clients;
-  
-  // ✅ EXÉCUTER LE TRANSFERT AVEC LE SERVICE UNIFIÉ
+  // ✅ OUVRIR L'APERÇU DU TRANSFERT
   const handleTransfer = () => {
-    if (!selectedSourceCollecteur || !selectedDestCollecteur || selectedClients.length === 0) {
-      setError('Veuillez sélectionner un collecteur source, un collecteur destination et au moins un client');
-      return;
-    }
-    
-    if (selectedSourceCollecteur === selectedDestCollecteur) {
-      setError('Les collecteurs source et destination ne peuvent pas être identiques');
-      return;
-    }
-    
-    // Confirmer le transfert
-    Alert.alert(
-      'Confirmation',
-      `Êtes-vous sûr de vouloir transférer ${selectedClients.length} client(s) vers ce collecteur ?`,
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel'
-        },
-        {
-          text: 'Confirmer',
-          onPress: executeTransfer
-        }
-      ]
-    );
+    const success = prepareTransfer(selectedSourceCollecteur, selectedDestCollecteur, selectedClients);
+    if (!success) return; // L'erreur est gérée par le hook
   };
   
-  // ✅ EXÉCUTER LE TRANSFERT
-  const executeTransfer = async () => {
-    try {
-      setTransferring(true);
-      setError(null);
-      
-      const transferData = {
-        sourceCollecteurId: selectedSourceCollecteur,
-        destinationCollecteurId: selectedDestCollecteur,
-        clientIds: selectedClients
-      };
-      
-      const response = await transferService.transferComptes(transferData);
-      
-      if (response.success) {
-        // Réinitialiser la sélection
-        setSelectedClients([]);
-        
-        // Recharger les clients
-        loadClients(selectedSourceCollecteur);
-        
-        // Afficher un message de succès
-        Alert.alert(
-          'Succès',
-          response.message || 'Les clients ont été transférés avec succès.',
-          [{ text: 'OK' }]
-        );
-        
-        // Vibration de succès
-        HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Success);
-      } else {
-        setError(response.error || 'Erreur lors du transfert des clients');
-        HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Error);
-      }
-    } catch (err) {
-      console.error('Erreur lors du transfert des clients:', err);
-      setError(err.message || 'Erreur lors du transfert des clients');
-      
-      // Vibration d'erreur
-      HapticsCompat.notificationAsync(HapticsCompat.NotificationFeedbackType.Error);
-    } finally {
-      setTransferring(false);
+  // ✅ EXÉCUTER LE TRANSFERT AVEC GESTION AVANCÉE
+  const handleExecuteTransfer = async (forceConfirm = false) => {
+    const transferData = {
+      sourceCollecteurId: selectedSourceCollecteur,
+      destinationCollecteurId: selectedDestCollecteur,
+      clientIds: selectedClients
+    };
+    
+    const result = await executeTransfer(transferData, forceConfirm);
+    
+    if (result.success) {
+      // Réinitialiser la sélection et recharger les clients
+      clearSelection();
+      loadClients(selectedSourceCollecteur);
+    } else if (result.needsConfirmation) {
+      // Le système a déjà affiché la demande de confirmation
+      console.log('Transfert nécessite confirmation:', result.message);
     }
+    // Les erreurs sont gérées par le hook
   };
   
   // Rendu d'un item client
@@ -346,24 +302,22 @@ const TransfertCompteScreen = ({ navigation, route }) => {
             />
           ) : (
             <View style={styles.clientListContainer}>
-              {/* Barre de recherche et sélection */}
-              <View style={styles.clientListHeader}>
-                <Input
-                  placeholder="Rechercher un client..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  icon="search"
-                  style={styles.searchInput}
-                  disabled={transferring}
-                />
-                
+              {/* Filtres intelligents */}
+              <ClientFilters
+                onFiltersChange={updateFilters}
+                totalClients={stats.totalClients}
+                filteredCount={stats.filteredCount}
+              />
+              
+              {/* Actions de sélection */}
+              <View style={styles.selectionActions}>
                 <TouchableOpacity 
                   style={styles.selectAllButton}
-                  onPress={toggleSelectAll}
-                  disabled={transferring}
+                  onPress={selectAllFiltered}
+                  disabled={transferring || stats.filteredCount === 0}
                 >
                   <Text style={styles.selectAllText}>
-                    {selectedClients.length === clients.length ? 'Désélectionner tout' : 'Sélectionner tout'}
+                    {stats.allFilteredSelected ? 'Désélectionner tout' : 'Sélectionner tout'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -371,7 +325,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
               {/* Texte d'information sur la sélection */}
               <View style={styles.selectionInfoContainer}>
                 <Text style={styles.selectionInfoText}>
-                  {selectedClients.length} client(s) sélectionné(s) sur {clients.length}
+                  {stats.selectedCount} client(s) sélectionné(s) sur {stats.totalClients}
                 </Text>
               </View>
               
@@ -392,7 +346,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
                   transferring || 
                   !selectedSourceCollecteur || 
                   !selectedDestCollecteur || 
-                  selectedClients.length === 0
+                  stats.selectedCount === 0
                 }
                 loading={transferring}
                 style={styles.transferButton}
@@ -401,6 +355,18 @@ const TransfertCompteScreen = ({ navigation, route }) => {
           )}
         </View>
       </View>
+      
+      {/* Aperçu du transfert */}
+      {showPreview && (
+        <TransferPreview
+          sourceCollecteur={collecteurs.find(c => c.value === selectedSourceCollecteur)}
+          destinationCollecteur={collecteurs.find(c => c.value === selectedDestCollecteur)}
+          selectedClients={clients.filter(c => selectedClients.includes(c.id))}
+          onConfirm={handleExecuteTransfer}
+          onCancel={cancelTransfer}
+          visible={showPreview}
+        />
+      )}
     </View>
   );
 };
@@ -459,14 +425,12 @@ const styles = StyleSheet.create({
   clientListContainer: {
     flex: 1,
   },
-  clientListHeader: {
+  selectionActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  searchInput: {
-    flex: 1,
-    marginBottom: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   selectAllButton: {
     marginLeft: 12,

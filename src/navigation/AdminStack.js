@@ -52,7 +52,7 @@ const Stack = createNativeStackNavigator();
 const AdminStack = () => {
   const { logout } = useAuth();
   
-  // 🔥 FONCTION DE DÉCONNEXION
+  // 🔥 FONCTION DE DÉCONNEXION AMÉLIORÉE
   const handleLogout = () => {
     Alert.alert(
       'Déconnexion',
@@ -68,11 +68,39 @@ const AdminStack = () => {
           onPress: async () => {
             try {
               console.log('🔄 Déconnexion admin en cours...');
-              await logout();
-              console.log('✅ Déconnexion réussie');
+              
+              // Appel de la fonction logout avec gestion d'erreur
+              const result = await logout();
+              
+              if (result && !result.success) {
+                console.warn('⚠️ Déconnexion partiellement échouée:', result.error);
+                // Même en cas d'erreur serveur, la déconnexion locale a été effectuée
+                console.log('✅ Déconnexion locale réussie malgré l\'erreur serveur');
+              } else {
+                console.log('✅ Déconnexion complètement réussie');
+              }
+              
+              // Ne pas afficher d'erreur si la déconnexion locale a fonctionné
+              
             } catch (error) {
-              console.error('❌ Erreur lors de la déconnexion:', error);
-              Alert.alert('Erreur', 'Impossible de se déconnecter');
+              console.error('❌ Erreur critique lors de la déconnexion:', error);
+              
+              // Même en cas d'erreur, tenter de forcer la déconnexion locale
+              Alert.alert(
+                'Déconnexion',
+                'Déconnexion effectuée localement. L\'application va se recharger.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      // Forcer le rafraîchissement de l'app
+                      if (typeof window !== 'undefined' && window.location) {
+                        window.location.reload();
+                      }
+                    }
+                  }
+                ]
+              );
             }
           },
         },
@@ -108,12 +136,7 @@ const AdminStack = () => {
         name="AdminDashboard"
         component={AdminDashboardScreen}
         options={{
-          title: 'Dashboard Admin',
-          headerRight: () => (
-            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
-              <Ionicons name="log-out-outline" size={24} color="#dc3545" />
-            </TouchableOpacity>
-          ),
+          headerShown: false, // Masquer le header de navigation pour utiliser celui de l'écran
         }}
       />
 

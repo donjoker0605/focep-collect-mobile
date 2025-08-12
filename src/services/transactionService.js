@@ -1,6 +1,8 @@
 // src/services/transactionService.js - VERSION CORRIGÉE AVEC BONNES URLS
 
 import BaseApiService from './base/BaseApiService';
+import balanceCalculationService from './balanceCalculationService';
+import clientService from './clientService';
 
 class TransactionService extends BaseApiService {
   constructor() {
@@ -78,6 +80,21 @@ class TransactionService extends BaseApiService {
   async validateRetrait(clientId, collecteurId, montant, description = '') {
     try {
       console.log('📋 Validation retrait:', { clientId, collecteurId, montant });
+      
+      // 🔥 VÉRIFICATION SOLDE DISPONIBLE AVANT VALIDATION - CORRECTION ENDPOINT
+      try {
+        // Utiliser l'endpoint avec données complètes selon le collecteur de l'utilisateur actuel
+        const clientData = await clientService.getClientWithCompleteData(clientId, collecteurId);
+        if (clientData.success) {
+          const canWithdraw = await balanceCalculationService.canClientWithdraw(clientData.data, montant);
+          if (!canWithdraw.possible) {
+            throw new Error(canWithdraw.message);
+          }
+          console.log('✅ Solde suffisant pour retrait:', canWithdraw.soldeDisponible);
+        }
+      } catch (balanceError) {
+        console.warn('⚠️ Erreur vérification solde, validation continue:', balanceError.message);
+      }
       
       const requestData = {
         clientId,

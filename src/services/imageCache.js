@@ -1,16 +1,28 @@
 // src/services/imageCache.js
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 
 class ImageCacheService {
  constructor() {
-   this.cacheDir = `${FileSystem.cacheDirectory}images/`;
-   this.pending = {};
-   this.initialized = this._initCacheDirectory();
+   if (Platform.OS === 'web') {
+     // Sur web, pas de cache de fichier - utiliser directement les URLs
+     this.isWebPlatform = true;
+     this.initialized = Promise.resolve(true);
+   } else {
+     this.isWebPlatform = false;
+     this.cacheDir = `${FileSystem.cacheDirectory}images/`;
+     this.pending = {};
+     this.initialized = this._initCacheDirectory();
+   }
  }
 
  // Initialiser le répertoire de cache
  async _initCacheDirectory() {
+   if (this.isWebPlatform) {
+     return true;
+   }
+   
    try {
      const dirInfo = await FileSystem.getInfoAsync(this.cacheDir);
      if (!dirInfo.exists) {
@@ -42,6 +54,11 @@ class ImageCacheService {
 
  // Récupérer le chemin de l'image en cache ou la télécharger
  async getCachedImage(url) {
+   // Sur web, retourner directement l'URL
+   if (this.isWebPlatform) {
+     return url;
+   }
+   
    // S'assurer que le répertoire de cache existe
    await this.initialized;
    

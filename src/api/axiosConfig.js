@@ -6,7 +6,7 @@ import { API_CONFIG, STORAGE_KEYS } from '../config/apiConfig';
 // ✅ INSTANCE AXIOS SIMPLIFIÉE ET CORRIGÉE
 const axiosInstance = axios.create({
 
-  baseURL: API_CONFIG.baseURL, // http://192.168.89.44:8080/api
+  baseURL: API_CONFIG.baseURL, // http://192.168.111.57:8080/api
 
   timeout: API_CONFIG.timeout,
   headers: {
@@ -37,7 +37,7 @@ axiosInstance.interceptors.request.use(
     }
     
     // Routes publiques qui n'ont pas besoin de token
-    const publicRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password', '/public/'];
+    const publicRoutes = ['/auth/login', '/auth/logout', '/auth/register', '/auth/forgot-password', '/public/'];
     const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
     
     // Ajouter le token JWT pour les routes protégées

@@ -83,8 +83,11 @@ const WebInteractionFix = ({ children }) => {
   } : {};
 
   return React.cloneElement(children, {
-    style: [children.props.style, webStyles],
-    pointerEvents: Platform.OS === 'web' ? 'auto' : children.props.pointerEvents
+    style: [
+      children.props.style, 
+      webStyles, 
+      Platform.OS === 'web' ? { pointerEvents: 'auto' } : {}
+    ]
   });
 };
 

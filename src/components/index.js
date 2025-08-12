@@ -74,6 +74,8 @@ export { default as ActivityLogItem } from './ActivityLogItem/ActivityLogItem';
 // ========================================
 export { default as OptimizedImage } from './OptimizedImage/OptimizedImage';
 export { default as OptimizedList } from './OptimizedList/OptimizedList';
+export { default as TransferPreview } from './TransferPreview/TransferPreview';
+export { default as ClientFilters } from './ClientFilters/ClientFilters';
 
 // ========================================
 // 🌐 COMPOSANTS RÉSEAU ET SYNC

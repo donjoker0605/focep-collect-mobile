@@ -9,10 +9,10 @@ class TransferService extends BaseApiService {
   // ✅ TRANSFERT PRINCIPAL - ENDPOINT RÉEL
   async transferComptes(transferData) {
     try {
-      console.log('🔄 API: POST /transfers/collecteurs', transferData);
+      console.log('🔄 API: POST /transfers (transfert réel)', transferData);
       
       // Validation côté client
-      if (!transferData.sourceCollecteurId || !transferData.destinationCollecteurId) {
+      if (!transferData.sourceCollecteurId || !transferData.targetCollecteurId) {
         throw new Error('Collecteur source et destination requis');
       }
       
@@ -20,19 +20,19 @@ class TransferService extends BaseApiService {
         throw new Error('Au moins un client doit être sélectionné');
       }
       
-      if (transferData.sourceCollecteurId === transferData.destinationCollecteurId) {
+      if (transferData.sourceCollecteurId === transferData.targetCollecteurId) {
         throw new Error('Les collecteurs source et destination ne peuvent pas être identiques');
       }
 
-      // ✅ UTILISER L'ENDPOINT RÉEL DU BACKEND
+      // ✅ UTILISER LE NOUVEL ENDPOINT UNIFIÉ  
       const requestData = {
         sourceCollecteurId: transferData.sourceCollecteurId,
-        targetCollecteurId: transferData.destinationCollecteurId, // Backend attend "targetCollecteurId"
+        targetCollecteurId: transferData.targetCollecteurId,
         clientIds: transferData.clientIds,
         justification: transferData.justification || 'Transfert administratif'
       };
 
-      const response = await this.axios.post('/transfers/collecteurs', requestData);
+      const response = await this.axios.post('/transfers', requestData);
       return this.formatResponse(response, 'Transfert effectué avec succès');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors du transfert des comptes');
@@ -126,6 +126,34 @@ class TransferService extends BaseApiService {
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la validation du transfert');
     }
+  }
+
+  // ✅ VALIDATION COMPLÈTE AVEC CALCULS DÉTAILLÉS
+  async validateTransferFull(transferData) {
+    try {
+      console.log('🔍 API: POST /transfers/validate-full', transferData);
+      const response = await this.axios.post('/transfers/validate-full', transferData);
+      return this.formatResponse(response, 'Validation complète effectuée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la validation complète');
+    }
+  }
+
+  // ✅ VALIDATION UNIFIÉE - DRY RUN
+  async validateTransfer(transferData) {
+    try {
+      console.log('🧪 API: POST /transfers?dryRun=true', transferData);
+      const response = await this.axios.post('/transfers?dryRun=true', transferData);
+      return this.formatResponse(response, 'Validation effectuée');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la validation');
+    }
+  }
+
+  // ✅ MÉTHODE DE COMPATIBILITÉ (à supprimer plus tard)
+  async validateTransferQuick(transferData) {
+    console.warn('⚠️ validateTransferQuick est déprécié - utiliser validateTransfer');
+    return this.validateTransfer(transferData);
   }
 
   // ✅ ANNULER UN TRANSFERT (SI POSSIBLE)

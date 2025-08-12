@@ -163,6 +163,46 @@ class ClientService extends BaseApiService {
   }
 
   /**
+   * 🔥 NOUVEAU: Récupérer un client avec toutes ses données complètes (balance, transactions, etc.)
+   * Utilise l'endpoint qui retourne les données complètes incluant le solde
+   */
+  async getClientWithCompleteData(clientId, collecteurId = null) {
+    try {
+      console.log('📱 API: GET Client avec données complètes:', clientId);
+      const headers = await authService.getApiHeaders();
+      
+      // Utiliser l'endpoint collecteur qui retourne les données complètes avec solde
+      if (collecteurId) {
+        // Récupérer via l'endpoint collecteur qui inclut les données de balance
+        const response = await this.axios.get(`/clients/collecteur/${collecteurId}`, { 
+          headers,
+          params: { clientId: clientId }
+        });
+        
+        // Extraire le client spécifique de la liste
+        if (response.data && response.data.success && Array.isArray(response.data.data)) {
+          const client = response.data.data.find(c => c.id === clientId);
+          if (client) {
+            return this.formatResponse({ data: { success: true, data: client } }, 'Client avec données complètes récupéré');
+          } else {
+            throw new Error('Client non trouvé dans la liste du collecteur');
+          }
+        }
+      }
+      
+      // Fallback vers l'endpoint avec transactions
+      console.log('📱 Fallback: utilisation endpoint with-transactions');
+      const response = await this.axios.get(`/clients/${clientId}/with-transactions`, { headers });
+      return this.formatResponse(response, 'Client avec données complètes récupéré (fallback)');
+      
+    } catch (error) {
+      console.warn('⚠️ Erreur récupération données complètes, fallback vers endpoint standard');
+      // Dernier fallback vers endpoint standard
+      return this.getClientById(clientId);
+    }
+  }
+
+  /**
    * Créer un nouveau client avec gestion commission et compte automatique
    */
   async createClient(clientData) {
@@ -386,6 +426,19 @@ class ClientService extends BaseApiService {
     try {
       console.log('📱 API: GET /clients/', clientId, '/with-transactions');
       const response = await this.axios.get(`/clients/${clientId}/with-transactions`);
+      
+      // 🔍 LOG DEBUG COMMISSION
+      if (response.data?.data?.commissionParameter) {
+        console.log('💰 Commission reçue du backend:', response.data.data.commissionParameter);
+      } else {
+        console.log('⚠️ Aucune commission dans la réponse backend pour client:', clientId);
+        console.log('🔍 Structure réponse:', {
+          hasData: !!response.data,
+          hasInnerData: !!response.data?.data,
+          keys: response.data?.data ? Object.keys(response.data.data) : 'N/A'
+        });
+      }
+      
       return this.formatResponse(response, 'Détails client récupérés');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération des détails du client');

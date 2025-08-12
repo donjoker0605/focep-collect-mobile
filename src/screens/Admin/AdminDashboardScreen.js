@@ -24,7 +24,7 @@ import { useAuth } from '../../hooks/useAuth';
 
 const AdminDashboardScreen = ({ navigation }) => {
   const insets = Platform.OS === 'web' ? { top: 0, bottom: 0 } : useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -81,6 +81,78 @@ const AdminDashboardScreen = ({ navigation }) => {
 
   const navigateToCommissions = () => {
     navigation.navigate('CommissionCalculationV2Screen');
+  };
+
+  // 🔥 FONCTION DE DÉCONNEXION - VERSION WEB-COMPATIBLE
+  const handleLogout = async () => {
+    console.log('🚨 BOUTON DE DÉCONNEXION CLIQUÉ !');
+    
+    // Pour React Native Web, utiliser confirm au lieu d'Alert
+    if (Platform.OS === 'web') {
+      console.log('🌐 Mode web détecté - utilisation de window.confirm');
+      const confirmed = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+      
+      if (!confirmed) {
+        console.log('❌ Déconnexion annulée par l\'utilisateur');
+        return;
+      }
+      
+      console.log('✅ Déconnexion confirmée par l\'utilisateur');
+    } else {
+      // Pour mobile, utiliser Alert comme d'habitude
+      console.log('📱 Mode mobile détecté - utilisation d\'Alert');
+      Alert.alert(
+        'Confirmation',
+        'Êtes-vous sûr de vouloir vous déconnecter ?',
+        [
+          {
+            text: 'Annuler',
+            style: 'cancel',
+            onPress: () => console.log('❌ Déconnexion annulée par l\'utilisateur'),
+          },
+          {
+            text: 'Déconnexion',
+            style: 'destructive',
+            onPress: () => performLogout(),
+          },
+        ]
+      );
+      return; // Sortir ici pour mobile, performLogout sera appelé par l'Alert
+    }
+    
+    // Exécuter la déconnexion (pour web ou après confirmation mobile)
+    await performLogout();
+  };
+
+  const performLogout = async () => {
+    try {
+      console.log('🔄 Déconnexion admin en cours...');
+      setLoading(true);
+      
+      const result = await logout();
+      console.log('📊 Résultat logout:', result);
+      
+      console.log('✅ Déconnexion réussie - navigation automatique via AuthContext');
+      
+      // Pour le web, forcer le rechargement si nécessaire
+      if (Platform.OS === 'web') {
+        console.log('🔄 Rechargement de la page web...');
+        setTimeout(() => {
+          window.location.href = window.location.origin;
+        }, 500);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur lors de la déconnexion:', error);
+      
+      if (Platform.OS === 'web') {
+        alert('Erreur lors de la déconnexion: ' + error.message);
+      } else {
+        Alert.alert('Erreur', 'Impossible de se déconnecter');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Cartes de gestion principales
@@ -236,6 +308,25 @@ const AdminDashboardScreen = ({ navigation }) => {
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {Platform.OS === 'web' ? (
         <View style={[styles.headerGradient, styles.headerGradientWeb]}>
+          {/* Bouton de déconnexion */}
+          <TouchableOpacity 
+            onPress={handleLogout} 
+            style={[styles.logoutButton, { top: insets.top + 10 }]}
+            activeOpacity={0.7}
+            disabled={loading}
+          >
+            <View style={styles.logoutButtonContent}>
+              {loading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="log-out-outline" size={20} color="white" />
+              )}
+              <Text style={styles.logoutButtonText}>
+                {loading ? 'Déconnexion...' : 'Déconnexion'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
           <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
             <Text style={styles.welcomeText}>Bienvenue,</Text>
             <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
@@ -249,6 +340,25 @@ const AdminDashboardScreen = ({ navigation }) => {
           colors={[theme.colors.primary, theme.colors.primaryDark]}
           style={styles.headerGradient}
         >
+          {/* Bouton de déconnexion */}
+          <TouchableOpacity 
+            onPress={handleLogout} 
+            style={[styles.logoutButton, { top: insets.top + 10 }]}
+            activeOpacity={0.7}
+            disabled={loading}
+          >
+            <View style={styles.logoutButtonContent}>
+              {loading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons name="log-out-outline" size={20} color="white" />
+              )}
+              <Text style={styles.logoutButtonText}>
+                {loading ? 'Déconnexion...' : 'Déconnexion'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          
           <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
             <Text style={styles.welcomeText}>Bienvenue,</Text>
             <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
@@ -640,6 +750,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     paddingHorizontal: 20,
+  },
+  logoutButton: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  logoutButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

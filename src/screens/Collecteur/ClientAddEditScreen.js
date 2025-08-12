@@ -138,10 +138,39 @@ const ClientAddEditScreen = ({ navigation, route }) => {
       loadExistingLocation();
       setIsClientActive(client.valide || true);
       loadExistingCommission();
+      // 🔥 NOUVEAU : Recharger les données complètes du client avec commission
+      loadCompleteClientData();
     } else {
       startAutomaticGPSCapture();
     }
   }, []);
+
+  // 🔥 NOUVELLE MÉTHODE : Charger les données complètes du client avec commission
+  const loadCompleteClientData = async () => {
+    if (!client?.id) return;
+    
+    try {
+      console.log('🔄 Rechargement données complètes client:', client.id);
+      const response = await clientService.getClientWithTransactions(client.id);
+      
+      if (response.success && response.data) {
+        console.log('✅ Données client complètes rechargées:', response.data);
+        
+        // Recharger les paramètres de commission avec les nouvelles données
+        if (response.data.commissionParameter) {
+          const newConfig = {
+            type: response.data.commissionParameter.type,
+            valeur: response.data.commissionParameter.valeur || 0,
+            paliersCommission: response.data.commissionParameter.paliersCommission || []
+          };
+          console.log('💰 Configuration commission rechargée:', newConfig);
+          setCommissionConfig(newConfig);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur rechargement données client:', error);
+    }
+  };
 
   const loadUserInfo = async () => {
     try {
@@ -167,12 +196,23 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   };
 
   const loadExistingCommission = () => {
+    console.log('🔍 loadExistingCommission appelée avec client:', {
+      hasClient: !!client,
+      hasCommissionParameter: !!client?.commissionParameter,
+      commissionParameter: client?.commissionParameter,
+      clientKeys: client ? Object.keys(client) : 'N/A'
+    });
+    
     if (client?.commissionParameter) {
-      setCommissionConfig({
+      const newConfig = {
         type: client.commissionParameter.type,
         valeur: client.commissionParameter.valeur || 0,
         paliersCommission: client.commissionParameter.paliersCommission || []
-      });
+      };
+      console.log('✅ Configuration commission chargée:', newConfig);
+      setCommissionConfig(newConfig);
+    } else {
+      console.log('⚠️ Aucun paramètre de commission trouvé dans les données client');
     }
   };
 
