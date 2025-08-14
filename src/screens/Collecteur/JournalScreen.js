@@ -162,9 +162,8 @@ console.log('📋 EST-CE UN ARRAY?:', Array.isArray(response.data));
   );
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity 
+    <View 
       style={styles.transactionItem}
-      onPress={() => navigation.navigate('TransactionDetail', { transaction: item })}
     >
       <View style={styles.transactionLeft}>
         <Ionicons 
@@ -190,7 +189,7 @@ console.log('📋 EST-CE UN ARRAY?:', Array.isArray(response.data));
       ]}>
         {item.sens === 'epargne' ? '+' : '-'}{formatCurrency(item.montant)} FCFA
       </Text>
-    </TouchableOpacity>
+    </View>
   );
 
   const EmptyState = ({ title, message, onRetry }) => (

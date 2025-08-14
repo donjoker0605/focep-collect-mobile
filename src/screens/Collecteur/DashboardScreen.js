@@ -320,6 +320,16 @@ const DashboardScreen = ({ navigation }) => {
           <Text style={styles.welcomeSubtext}>
             Voici votre résumé d'activité
           </Text>
+          
+          {/* Indicateur de période filtrée */}
+          {dashboard?.periodInfo?.isFiltered && (
+            <View style={styles.periodInfoContainer}>
+              <Ionicons name="information-circle" size={16} color={theme.colors.info} />
+              <Text style={styles.periodInfoText}>
+                Données depuis dernière clôture ({dashboard.periodInfo.fromDate})
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Statistiques principales */}
@@ -515,6 +525,23 @@ const styles = StyleSheet.create({
   welcomeSubtext: {
     fontSize: 16,
     color: theme.colors.textLight,
+  },
+  periodInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: `${theme.colors.info}10`,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.info,
+  },
+  periodInfoText: {
+    fontSize: 14,
+    color: theme.colors.info,
+    marginLeft: 8,
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 // Écrans super admin (ajustez selon vos fichiers)
+import SuperAdminDashboardScreen from '../screens/SuperAdmin/SuperAdminDashboardScreen';
 import AgenceManagementScreen from '../screens/SuperAdmin/AgenceManagementScreen';
 import AdminManagementScreen from '../screens/SuperAdmin/AdminManagementScreen';
 import UserManagementScreen from '../screens/SuperAdmin/UserManagementScreen';

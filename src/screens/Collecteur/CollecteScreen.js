@@ -72,6 +72,22 @@ const CollecteScreen = () => {
   const handleValidateOperation = async () => {
     if (!validateForm()) return;
     
+    // Vérifier si collecteur inactif peut faire un retrait
+    if (operationType === 'retrait' && user && user.actif === false) {
+      setValidationError('Collecteur inactif : seules les opérations d\'épargne sont autorisées');
+      return;
+    }
+    
+    // 🔥 NOUVEAU : Vérifier si le client est activé pour les retraits
+    if (operationType === 'retrait' && selectedClient && selectedClient.valide === false) {
+      setValidationError(
+        `Le client "${selectedClient.displayName}" n'est pas activé. ` +
+        'Les retraits ne sont autorisés que pour les clients activés. ' +
+        'Contactez votre administrateur pour activer ce client.'
+      );
+      return;
+    }
+    
     try {
       setValidationLoading(true);
       setValidationError(null);
@@ -109,8 +125,8 @@ const CollecteScreen = () => {
           return;
         }
         
-        // Validation réussie, procéder à l'opération
-        await handleSubmitOperation();
+        // Validation réussie, demander confirmation
+        showConfirmationAlert();
       } else {
         setValidationError('Erreur lors de la validation');
       }
@@ -120,6 +136,39 @@ const CollecteScreen = () => {
     } finally {
       setValidationLoading(false);
     }
+  };
+
+  // Confirmation avant opération
+  const showConfirmationAlert = () => {
+    const operationText = operationType === 'epargne' ? 'Épargne' : 'Retrait';
+    const montantFormat = parseFloat(montant).toLocaleString('fr-FR') + ' FCFA';
+    const dateFormatted = new Date().toLocaleDateString('fr-FR');
+    const timeFormatted = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    
+    const transactionDetails = [
+      `📋 Opération: ${operationText}`,
+      `💰 Montant: ${montantFormat}`,
+      `👤 Client: ${selectedClient.displayName}`,
+      `💳 Compte: ${selectedClient.numeroCompte}`,
+      `📅 Date: ${dateFormatted} à ${timeFormatted}`,
+      description ? `📝 Description: ${description}` : '',
+    ].filter(detail => detail).join('\n');
+    
+    Alert.alert(
+      `Confirmer ${operationText}`,
+      `${transactionDetails}\n\nVoulez-vous continuer ?`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Confirmer',
+          onPress: handleSubmitOperation,
+          style: 'default',
+        },
+      ]
+    );
   };
 
   // Soumission de l'opération
@@ -156,8 +205,8 @@ const CollecteScreen = () => {
             {
               text: 'OK',
               onPress: () => {
-                // Rediriger vers l'écran des transactions ou dashboard
-                navigation.navigate('Dashboard');
+                // Rediriger vers le journal d'opération
+                navigation.navigate('Journal');
               }
             }
           ]

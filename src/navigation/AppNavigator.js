@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import AuthStack from './AuthStack';
 import CollecteurStack from './CollecteurStack';
 import AdminStack from './AdminStack'; // ✅ IMPORT CORRIGÉ
+import SuperAdminStack from './SuperAdminStack'; // ✅ IMPORT SUPERADMIN STACK
 
 const Stack = createNativeStackNavigator();
 
@@ -72,8 +73,12 @@ export default function AppNavigator() {
               <Stack.Screen name="Collecteur" component={CollecteurStack} />
             )}
             
-            {(user?.role === 'ROLE_ADMIN' || user?.role === 'ROLE_SUPER_ADMIN') && (
+            {(user?.role === 'ROLE_ADMIN') && (
               <Stack.Screen name="Admin" component={AdminStack} />
+            )}
+            
+            {(user?.role === 'ROLE_SUPER_ADMIN') && (
+              <Stack.Screen name="SuperAdmin" component={SuperAdminStack} />
             )}
             
             {/* Fallback sécurisé */}

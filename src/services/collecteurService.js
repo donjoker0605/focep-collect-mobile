@@ -131,10 +131,50 @@ class CollecteurService extends BaseApiService {
   async getCollecteurDashboard(collecteurId) {
     try {
       console.log('📱 API: GET /collecteurs/dashboard/', collecteurId);
-      const response = await this.axios.get(`/collecteurs/${collecteurId}/dashboard`);
-      return this.formatResponse(response, 'Dashboard récupéré');
+      
+      // Récupérer d'abord la date de dernière clôture
+      const lastClosureDate = await this.getLastClosureDate(collecteurId);
+      
+      // Construire les paramètres avec la date de début
+      const params = {};
+      if (lastClosureDate) {
+        params.fromDate = lastClosureDate;
+        console.log('📅 Dashboard calculé depuis dernière clôture:', lastClosureDate);
+      }
+      
+      const response = await this.axios.get(`/collecteurs/${collecteurId}/dashboard`, { params });
+      const result = this.formatResponse(response, 'Dashboard récupéré');
+      
+      // Ajouter les informations de période pour le frontend
+      if (result.success && result.data) {
+        result.data.periodInfo = {
+          hasLastClosure: !!lastClosureDate,
+          fromDate: lastClosureDate,
+          isFiltered: !!lastClosureDate
+        };
+      }
+      
+      return result;
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération du dashboard');
+    }
+  }
+
+  async getLastClosureDate(collecteurId) {
+    try {
+      console.log('📅 API: GET dernière date clôture pour collecteur:', collecteurId);
+      const response = await this.axios.get(`/collecteurs/${collecteurId}/last-closure-date`);
+      
+      // Le backend renvoie un ApiResponse avec data contenant { lastClosureDate, hasClosureHistory }
+      if (response.data && response.data.success && response.data.data) {
+        const closureData = response.data.data;
+        console.log('📅 Données de clôture reçues:', closureData);
+        return closureData.lastClosureDate; // peut être null si aucune clôture
+      }
+      return null;
+    } catch (error) {
+      console.warn('⚠️ Impossible de récupérer la dernière date de clôture:', error.message);
+      return null;
     }
   }
 

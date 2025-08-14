@@ -148,14 +148,20 @@ const JournalActiviteScreen = ({ navigation }) => {
 
   const handleFilterChange = (filter) => {
     setSelectedFilter(filter);
-    // TODO: Implémenter le filtrage local ou refaire une requête
+    // Le filtrage se fait maintenant dans filteredActivities
   };
+
+  // Filtrage des activités selon le filtre sélectionné
+  const filteredActivities = activities.filter(activity => {
+    if (selectedFilter === 'all') return true;
+    return activity.action === selectedFilter;
+  });
 
   // Rendu des éléments
   const renderActivity = ({ item }) => (
     <ActivityLogItem
       activity={item}
-      onPress={() => handleActivityPress(item)}
+      onPress={null}
     />
   );
 
@@ -310,7 +316,7 @@ const JournalActiviteScreen = ({ navigation }) => {
           />
         ) : (
           <FlatList
-            data={activities}
+            data={filteredActivities}
             renderItem={renderActivity}
             keyExtractor={(item) => item.id.toString()}
             refreshControl={

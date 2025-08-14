@@ -328,11 +328,16 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 20,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web' 
+      ? { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }
+    ),
   },
   infoItem: {
     flexDirection: 'row',
@@ -360,11 +365,16 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     marginHorizontal: 20,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...(Platform.OS === 'web' 
+      ? { boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }
+    ),
   },
   actionButton: {
     flexDirection: 'row',
@@ -410,11 +420,16 @@ const styles = StyleSheet.create({
     padding: 24,
     maxWidth: 400,
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    ...(Platform.OS === 'web' 
+      ? { boxShadow: '0 4px 6px rgba(0,0,0,0.3)' }
+      : {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 8,
+        }
+    ),
   },
   modalTitle: {
     fontSize: 20,

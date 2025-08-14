@@ -284,4 +284,185 @@ const AdminDetailScreen = ({ navigation, route }) => {
   );
 };
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 16,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: theme.colors.textLight,
+  },
+  editButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+  },
+  profileCard: {
+    marginBottom: 16,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  avatarContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.white,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  adminName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 4,
+  },
+  adminEmail: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  activeBadge: {
+    backgroundColor: theme.colors.success,
+  },
+  inactiveBadge: {
+    backgroundColor: theme.colors.error,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.white,
+  },
+  detailsContainer: {
+    marginBottom: 16,
+  },
+  detailRow: {
+    marginBottom: 12,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginLeft: 8,
+    marginRight: 8,
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: theme.colors.text,
+    flex: 1,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+  },
+  activerButton: {
+    backgroundColor: theme.colors.success,
+  },
+  desactiverButton: {
+    backgroundColor: theme.colors.error,
+  },
+  actionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.white,
+    marginLeft: 8,
+  },
+  collecteursSection: {
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  emptyCollecteurs: {
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyCollecteursText: {
+    fontSize: 16,
+    color: theme.colors.textLight,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  collecteurCard: {
+    marginBottom: 8,
+  },
+  collecteurHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  collecteurInfo: {
+    flex: 1,
+  },
+  collecteurName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+  },
+  collecteurStat: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  viewButtonText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+});
+
 export default AdminDetailScreen;

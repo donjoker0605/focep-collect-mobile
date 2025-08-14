@@ -16,67 +16,47 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
-
-// Données fictives pour la démo
-const mockAgences = [
-  {
-    id: 1,
-    nomAgence: 'Agence Centrale',
-    adresse: 'Avenue de la Liberté, Douala',
-    telephone: '+237 233 123 456',
-    email: 'agence.centrale@focep.cm',
-    status: 'active',
-    totalAdmins: 2,
-    totalCollecteurs: 8,
-  },
-  {
-    id: 2,
-    nomAgence: 'Agence Nord',
-    adresse: 'Quartier Bastos, Yaoundé',
-    telephone: '+237 233 234 567',
-    email: 'agence.nord@focep.cm',
-    status: 'active',
-    totalAdmins: 1,
-    totalCollecteurs: 5,
-  },
-  {
-    id: 3,
-    nomAgence: 'Agence Sud',
-    adresse: 'Quartier Akwa, Douala',
-    telephone: '+237 233 345 678',
-    email: 'agence.sud@focep.cm',
-    status: 'inactive',
-    totalAdmins: 0,
-    totalCollecteurs: 0,
-  },
-];
+import { useSuperAdmin } from '../../hooks/useSuperAdmin';
 
 const AgenceManagementScreen = ({ navigation }) => {
-  const [agences, setAgences] = useState(mockAgences);
-  const [filteredAgences, setFilteredAgences] = useState(mockAgences);
+  const {
+    loading,
+    error,
+    agences,
+    loadAgences,
+    clearError
+  } = useSuperAdmin();
+
+  const [filteredAgences, setFilteredAgences] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all, active, inactive
-  const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadAgences();
+  }, []);
 
   useEffect(() => {
     filterAgences();
   }, [searchQuery, filter, agences]);
 
   const filterAgences = () => {
-    let filtered = agences;
+    let filtered = agences || [];
 
     // Filtrer par statut
     if (filter !== 'all') {
-      filtered = filtered.filter(agence => agence.status === filter);
+      filtered = filtered.filter(agence => 
+        filter === 'active' ? agence.active : !agence.active
+      );
     }
 
     // Filtrer par recherche
     if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(agence =>
-        agence.nomAgence.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        agence.adresse.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        agence.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        agence.nomAgence.toLowerCase().includes(query) ||
+        agence.adresse.toLowerCase().includes(query) ||
+        agence.email.toLowerCase().includes(query) ||
         agence.telephone.includes(searchQuery)
       );
     }
@@ -84,27 +64,23 @@ const AgenceManagementScreen = ({ navigation }) => {
     setFilteredAgences(filtered);
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-
-    // Simuler une requête API
-    setTimeout(() => {
-      // Dans une implémentation réelle, vous récupéreriez les données du serveur
-      setRefreshing(false);
-    }, 1500);
+    await loadAgences();
+    setRefreshing(false);
   };
 
   const handleAddAgence = () => {
-    navigation.navigate('AgenceCreationScreen');
+    navigation.navigate('AgenceCreation');
   };
 
   const handleEditAgence = (agence) => {
-    navigation.navigate('AgenceEditScreen', { agence });
+    navigation.navigate('AgenceDetail', { agenceId: agence.id });
   };
 
   const handleToggleStatus = (agence) => {
-    const newStatus = agence.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
+    const newStatus = !agence.active;
+    const action = newStatus ? 'activer' : 'désactiver';
 
     Alert.alert(
       `Confirmation`,
@@ -116,27 +92,13 @@ const AgenceManagementScreen = ({ navigation }) => {
         },
         {
           text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
-            
-            // Simuler une requête API
-            setTimeout(() => {
-              const updatedAgences = agences.map(a => {
-                if (a.id === agence.id) {
-                  return { ...a, status: newStatus };
-                }
-                return a;
-              });
-              
-              setAgences(updatedAgences);
-              setIsLoading(false);
-              
-              const message = newStatus === 'active'
-                ? `L'agence ${agence.nomAgence} a été activée avec succès.`
-                : `L'agence ${agence.nomAgence} a été désactivée avec succès.`;
-              
-              Alert.alert('Succès', message);
-            }, 1000);
+          onPress: async () => {
+            // TODO: Implémenter l'API de changement de statut d'agence
+            // Pour l'instant, juste un message informatif
+            Alert.alert(
+              'Information', 
+              'La fonction de changement de statut sera implémentée dans la prochaine version.'
+            );
           },
         },
       ]
@@ -156,36 +118,28 @@ const AgenceManagementScreen = ({ navigation }) => {
         </View>
         <View style={[
           styles.statusBadge, 
-          item.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+          item.active ? styles.activeBadge : styles.inactiveBadge
         ]}>
           <Text style={styles.statusText}>
-            {item.status === 'active' ? 'Active' : 'Inactive'}
+            {item.active ? 'Active' : 'Inactive'}
           </Text>
         </View>
       </View>
       
       <View style={styles.agenceDetails}>
         <View style={styles.detailItem}>
-          <Ionicons name="location-outline" size={16} color={theme.colors.textLight} />
+          <Ionicons name="location-outline" size={16} color={theme.colors.textSecondary} />
           <Text style={styles.detailText}>{item.adresse}</Text>
         </View>
         <View style={styles.detailItem}>
-          <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
+          <Ionicons name="call-outline" size={16} color={theme.colors.textSecondary} />
           <Text style={styles.detailText}>{item.telephone}</Text>
         </View>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Ionicons name="people-outline" size={16} color={theme.colors.primary} />
-            <Text style={styles.statText}>
-              {item.totalAdmins} admin{item.totalAdmins !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="person-outline" size={16} color={theme.colors.primary} />
-            <Text style={styles.statText}>
-              {item.totalCollecteurs} collecteur{item.totalCollecteurs !== 1 ? 's' : ''}
-            </Text>
-          </View>
+        <View style={styles.detailItem}>
+          <Ionicons name="calendar-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.detailText}>
+            Créée le {item.dateCreation ? new Date(item.dateCreation).toLocaleDateString() : 'N/A'}
+          </Text>
         </View>
       </View>
       
@@ -195,33 +149,26 @@ const AgenceManagementScreen = ({ navigation }) => {
           onPress={() => handleViewAgence(item)}
         >
           <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Voir</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleEditAgence(item)}
-        >
-          <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Modifier</Text>
+          <Text style={styles.actionButtonText}>Détails</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.actionButton}
           onPress={() => handleToggleStatus(item)}
+          disabled={loading}
         >
           <Ionicons 
-            name={item.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"} 
+            name={item.active ? "close-circle-outline" : "checkmark-circle-outline"} 
             size={18} 
-            color={item.status === 'active' ? theme.colors.error : theme.colors.success} 
+            color={item.active ? theme.colors.warning : theme.colors.success} 
           />
           <Text 
             style={[
               styles.actionButtonText, 
-              { color: item.status === 'active' ? theme.colors.error : theme.colors.success }
+              { color: item.active ? theme.colors.warning : theme.colors.success }
             ]}
           >
-            {item.status === 'active' ? 'Désactiver' : 'Activer'}
+            {item.active ? 'Désactiver' : 'Activer'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -286,11 +233,24 @@ const AgenceManagementScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         
+        {/* Gestion des erreurs */}
+        {error && (
+          <Card style={styles.errorCard}>
+            <View style={styles.errorContent}>
+              <Ionicons name="alert-circle" size={24} color={theme.colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={clearError} style={styles.errorButton}>
+                <Text style={styles.errorButtonText}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        )}
+
         {/* Liste des agences */}
-        {isLoading ? (
+        {loading && !refreshing && filteredAgences.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement...</Text>
+            <Text style={styles.loadingText}>Chargement des agences...</Text>
           </View>
         ) : (
           <FlatList
@@ -306,20 +266,24 @@ const AgenceManagementScreen = ({ navigation }) => {
               />
             }
             ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="business" size={64} color={theme.colors.gray} />
-                <Text style={styles.emptyText}>
-                  {searchQuery.trim() !== '' 
-                    ? 'Aucune agence ne correspond à votre recherche' 
-                    : 'Aucune agence disponible'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={handleAddAgence}
-                >
-                  <Text style={styles.emptyButtonText}>Ajouter une agence</Text>
-                </TouchableOpacity>
-              </View>
+              !loading && (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="business" size={64} color={theme.colors.textSecondary} />
+                  <Text style={styles.emptyText}>
+                    {searchQuery.trim() !== '' 
+                      ? 'Aucune agence ne correspond à votre recherche' 
+                      : 'Aucune agence trouvée'}
+                  </Text>
+                  {searchQuery.trim() === '' && (
+                    <TouchableOpacity
+                      style={styles.emptyButton}
+                      onPress={handleAddAgence}
+                    >
+                      <Text style={styles.emptyButtonText}>Ajouter une agence</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )
             }
           />
         )}
@@ -509,6 +473,31 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: theme.colors.white,
     fontWeight: '500',
+  },
+  errorCard: {
+    backgroundColor: theme.colors.errorLight || 'rgba(255, 59, 48, 0.1)',
+    borderColor: theme.colors.error,
+    borderWidth: 1,
+    marginBottom: 16,
+    marginHorizontal: 16,
+  },
+  errorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+  },
+  errorText: {
+    flex: 1,
+    marginLeft: 8,
+    color: theme.colors.error,
+    fontSize: 14,
+  },
+  errorButton: {
+    padding: 8,
+  },
+  errorButtonText: {
+    color: theme.colors.error,
+    fontWeight: '600',
   },
 });
 

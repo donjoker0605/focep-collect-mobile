@@ -59,6 +59,29 @@ export const formatDate = (date, formatStr = 'dd/MM/yyyy') => {
 };
 
 /**
+ * Formate l'heure d'une date
+ * @param {Date|string} date - La date à formater
+ * @param {string} formatStr - Le format de sortie (défaut: 'HH:mm')
+ * @returns {string} - L'heure formatée
+ */
+export const formatTime = (date, formatStr = 'HH:mm') => {
+  if (!date) return '';
+  
+  try {
+    const dateObj = typeof date === 'string' ? parseISODate(date) : date;
+    
+    if (!dateObj || !isValid(dateObj)) {
+      return '';
+    }
+    
+    return format(dateObj, formatStr, { locale: fr });
+  } catch (error) {
+    console.error('Erreur lors du formatage de l\'heure:', error);
+    return '';
+  }
+};
+
+/**
  * Vérifie si une date est postérieure à une autre
  * @param {Date|string} date - La date à vérifier
  * @param {Date|string} comparedTo - La date de comparaison

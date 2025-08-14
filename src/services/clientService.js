@@ -383,7 +383,7 @@ class ClientService extends BaseApiService {
    * @deprecated Utiliser getAllClients() qui détecte automatiquement le rôle
    */
   async getClientsByCollecteur(collecteurId, options = {}) {
-    console.warn('⚠️ getClientsByCollecteur() est dépréciée, utilisez getAllClients()');
+    // Migration vers getAllClients() en cours - Support legacy maintenu
     
     // Vérifier si l'utilisateur actuel est bien le collecteur demandé
     const user = await authService.getCurrentUser();

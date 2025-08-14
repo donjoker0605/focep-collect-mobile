@@ -84,6 +84,26 @@ class VersementService extends BaseApiService {
         });
       }
       
+      // Déclencher le rafraîchissement du dashboard et du journal après clôture réussie
+      if (result.success) {
+        try {
+          const { default: collecteurService } = await import('./collecteurService');
+          const { default: journalActiviteService } = await import('./journalActiviteService');
+          
+          // Rafraîchir en arrière-plan sans bloquer la réponse
+          Promise.all([
+            collecteurService.getCollecteurDashboard(versementData.collecteurId),
+            journalActiviteService.refreshAfterClosure(versementData.collecteurId)
+          ]).catch(error => {
+            console.warn('⚠️ Erreur rafraîchissement après clôture:', error.message);
+          });
+          
+          console.log('🔄 Rafraîchissement dashboard et journal déclenché après clôture');
+        } catch (error) {
+          console.warn('⚠️ Impossible de déclencher le rafraîchissement après clôture:', error.message);
+        }
+      }
+      
       return result;
     } catch (error) {
       console.error('❌ Erreur versement avec logique corrigée:', error);

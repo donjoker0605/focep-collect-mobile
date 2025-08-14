@@ -91,7 +91,7 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   // 🚨 RÈGLES DE PERMISSIONS STRICTES
   const isCollecteur = user?.role === 'ROLE_COLLECTEUR';
   const canEdit = !isCollecteur || !isEditMode; // Collecteurs peuvent créer, mais pas modifier
-  const canEditPersonalInfo = false; // Nom/prénom JAMAIS éditables
+  const canEditPersonalInfo = mode === 'add'; // Nom/prénom éditables uniquement lors de la création
   
   // États
   const [isLoading, setIsLoading] = useState(false);
@@ -510,6 +510,16 @@ const ClientAddEditScreen = ({ navigation, route }) => {
   const onSubmit = async (data) => {
     console.log('🎯 onSubmit déclenché avec:', { data, locationData, isLoading });
     
+    // 🚨 VÉRIFICATION COLLECTEUR INACTIF
+    if (!isEditMode && isCollecteur && user?.actif === false) {
+      Alert.alert(
+        'Collecteur inactif',
+        'Seuls les collecteurs actifs peuvent créer de nouveaux clients.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     if (!locationData) {
       console.log('❌ Pas de locationData - blocage soumission');
       Alert.alert(
@@ -628,11 +638,21 @@ const ClientAddEditScreen = ({ navigation, route }) => {
         "Succès",
         `Client ${savedClient.prenom} ${savedClient.nom} créé avec succès.\n${statusMessage}${commissionMessage}${locationMessage}`,
         [
-          { text: "Voir les clients", onPress: () => goToClientList() },
-          { text: "Voir détails", onPress: () => goToClientDetail(savedClient) }
+          { text: "OK", onPress: () => goToClientList() }
         ]
       );
     }
+  };
+
+  // NAVIGATION
+  const goToClientList = () => {
+    console.log('🚀 Navigation vers la liste des clients');
+    navigation.navigate('ClientList');
+  };
+
+  const goToClientDetail = (client) => {
+    console.log('🚀 Navigation vers le détail du client:', client.id);
+    navigation.navigate('ClientDetail', { client });
   };
 
   // UTILITAIRES

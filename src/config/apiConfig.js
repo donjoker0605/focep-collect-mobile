@@ -2,9 +2,30 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-export const API_CONFIG = {
-  baseURL: __DEV__ ? 'http://localhost:8080/api' : 'https://api.votredomaine.com/api', // ✅ CORRECTION: __DEV__ au lieu de **DEV**
+const getBaseUrl = () => {
+  if (!__DEV__) {
+    return 'https://api.votredomaine.com/api';
+  }
+  
+  // En développement, adapter l'URL selon la plateforme
+  switch (Platform.OS) {
+    case 'android':
+      console.log('📱 Android détecté - Utilisation de 10.0.2.2:8080');
+      return 'http://10.0.2.2:8080/api';
+    case 'ios':
+      console.log('📱 iOS détecté - Utilisation de localhost:8080');
+      return 'http://localhost:8080/api';
+    case 'web':
+      console.log('💻 Web détecté - Utilisation de localhost:8080');
+      return 'http://localhost:8080/api';
+    default:
+      console.log('🤔 Plateforme inconnue - Utilisation de localhost:8080 par défaut');
+      return 'http://localhost:8080/api';
+  }
+};
 
+export const API_CONFIG = {
+  baseURL: getBaseUrl(),
   timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,

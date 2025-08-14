@@ -11,13 +11,13 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
-  // ✅ FONCTION DE VALIDATION D'EMAIL
+  // FONCTION DE VALIDATION D'EMAIL
   const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  // ✅ FONCTION HANDLELOGIN COMPLÈTEMENT RÉÉCRITE
+  // FONCTION HANDLELOGIN COMPLÈTEMENT RÉÉCRITE
   const handleLogin = async () => {
     // Validation des champs
     if (!email || !password) {
@@ -35,7 +35,7 @@ export default function LoginScreen({ navigation }) {
     console.log('🔄 LoginScreen: Tentative de connexion avec:', email.trim());
 
     try {
-      // ✅ CORRECTION CRITIQUE: Passer email et password comme chaînes simples
+      // CORRECTION CRITIQUE: Passer email et password comme chaînes simples
       const result = await login(email.trim(), password.trim());
       
       console.log('📊 Résultat de la connexion:', result);
@@ -57,10 +57,10 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <View style={[styles.container, getContainerStyles()]}>
-      {/* ✅ LOGO AJOUTÉ */}
+      {/* LOGO AJOUTÉ */}
       <View style={styles.logoContainer}>
         <Image 
-          source={require('../../../assets/images/logo.png')} 
+          source={require('../../../assets/images/focep.png')} 
           style={styles.logo}
           resizeMode="contain"
         />

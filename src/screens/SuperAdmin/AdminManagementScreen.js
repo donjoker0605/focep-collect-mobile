@@ -16,108 +16,69 @@ import { Ionicons } from '@expo/vector-icons';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
-
-// Données fictives pour la démo
-const mockAdmins = [
-  {
-    id: 1,
-    nom: 'Dupont',
-    prenom: 'Jean',
-    adresseMail: 'jean.dupont@focep.cm',
-    telephone: '+237 655 123 456',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-    status: 'active',
-    totalCollecteurs: 5,
-  },
-  {
-    id: 2,
-    nom: 'Martin',
-    prenom: 'Sophie',
-    adresseMail: 'sophie.martin@focep.cm',
-    telephone: '+237 677 234 567',
-    agence: {
-      id: 1,
-      nomAgence: 'Agence Centrale'
-    },
-    status: 'active',
-    totalCollecteurs: 3,
-  },
-  {
-    id: 3,
-    nom: 'Dubois',
-    prenom: 'Pierre',
-    adresseMail: 'pierre.dubois@focep.cm',
-    telephone: '+237 698 345 678',
-    agence: {
-      id: 2,
-      nomAgence: 'Agence Nord'
-    },
-    status: 'inactive',
-    totalCollecteurs: 0,
-  },
-];
+import { useSuperAdmin } from '../../hooks/useSuperAdmin';
 
 const AdminManagementScreen = ({ navigation }) => {
-  const [admins, setAdmins] = useState(mockAdmins);
-  const [filteredAdmins, setFilteredAdmins] = useState(mockAdmins);
+  const {
+    loading,
+    error,
+    admins,
+    loadAdmins,
+    resetAdminPassword,
+    clearError
+  } = useSuperAdmin();
+
+  const [filteredAdmins, setFilteredAdmins] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('all'); // all, active, inactive
-  const [isLoading, setIsLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
 
   useEffect(() => {
     filterAdmins();
   }, [searchQuery, filter, admins]);
 
   const filterAdmins = () => {
-    let filtered = admins;
+    let filtered = admins || [];
 
     // Filtrer par statut
     if (filter !== 'all') {
-      filtered = filtered.filter(admin => admin.status === filter);
+      filtered = filtered.filter(admin => 
+        filter === 'active' ? admin.active : !admin.active
+      );
     }
 
     // Filtrer par recherche
     if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
       filtered = filtered.filter(admin =>
-        admin.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        admin.prenom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        admin.adresseMail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        admin.telephone.includes(searchQuery)
+        admin.nom.toLowerCase().includes(query) ||
+        admin.prenom.toLowerCase().includes(query) ||
+        admin.email.toLowerCase().includes(query) ||
+        (admin.agenceNom && admin.agenceNom.toLowerCase().includes(query))
       );
     }
 
     setFilteredAdmins(filtered);
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-
-    // Simuler une requête API
-    setTimeout(() => {
-      // Dans une implémentation réelle, vous récupéreriez les données du serveur
-      setRefreshing(false);
-    }, 1500);
+    await loadAdmins();
+    setRefreshing(false);
   };
 
   const handleAddAdmin = () => {
-    navigation.navigate('AdminCreationScreen');
+    navigation.navigate('AdminCreation');
   };
 
-  const handleEditAdmin = (admin) => {
-    navigation.navigate('AdminEditScreen', { admin });
-  };
-
-  const handleToggleStatus = (admin) => {
-    const newStatus = admin.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
-
-    Alert.alert(
-      `Confirmation`,
-      `Êtes-vous sûr de vouloir ${action} le compte de ${admin.prenom} ${admin.nom} ?`,
+  const handleResetPassword = (admin) => {
+    Alert.prompt(
+      'Réinitialisation de mot de passe',
+      `Nouveau mot de passe pour ${admin.displayName}`,
       [
         {
           text: 'Annuler',
@@ -125,70 +86,55 @@ const AdminManagementScreen = ({ navigation }) => {
         },
         {
           text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
-            
-            // Simuler une requête API
-            setTimeout(() => {
-              const updatedAdmins = admins.map(a => {
-                if (a.id === admin.id) {
-                  return { ...a, status: newStatus };
-                }
-                return a;
-              });
-              
-              setAdmins(updatedAdmins);
-              setIsLoading(false);
-              
-              const message = newStatus === 'active'
-                ? `Le compte de ${admin.prenom} ${admin.nom} a été activé avec succès.`
-                : `Le compte de ${admin.prenom} ${admin.nom} a été désactivé avec succès.`;
-              
-              Alert.alert('Succès', message);
-            }, 1000);
+          onPress: async (newPassword) => {
+            if (newPassword && newPassword.length >= 8) {
+              const success = await resetAdminPassword(admin.id, newPassword, 'Reset par SuperAdmin');
+              if (success) {
+                Alert.alert('Succès', 'Mot de passe réinitialisé avec succès');
+              }
+            } else {
+              Alert.alert('Erreur', 'Le mot de passe doit faire au moins 8 caractères');
+            }
           },
         },
-      ]
+      ],
+      'secure-text',
+      '',
+      'default'
     );
   };
 
   const handleViewAdmin = (admin) => {
-    navigation.navigate('AdminDetail', { admin });
+    navigation.navigate('AdminDetail', { adminId: admin.id });
   };
 
   const renderAdminItem = ({ item }) => (
     <Card style={styles.adminCard}>
       <View style={styles.adminHeader}>
         <View style={styles.adminInfo}>
-          <Text style={styles.adminName}>{item.prenom} {item.nom}</Text>
-          <Text style={styles.adminEmail}>{item.adresseMail}</Text>
+          <Text style={styles.adminName}>{item.displayName}</Text>
+          <Text style={styles.adminEmail}>{item.email}</Text>
         </View>
         <View style={[
           styles.statusBadge, 
-          item.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+          item.active ? styles.activeBadge : styles.inactiveBadge
         ]}>
           <Text style={styles.statusText}>
-            {item.status === 'active' ? 'Actif' : 'Inactif'}
+            {item.statusText}
           </Text>
         </View>
       </View>
       
       <View style={styles.adminDetails}>
         <View style={styles.detailItem}>
-          <Ionicons name="call-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.telephone}</Text>
+          <Ionicons name="business-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.detailText}>{item.agenceNom || 'Aucune agence'}</Text>
         </View>
         <View style={styles.detailItem}>
-          <Ionicons name="business-outline" size={16} color={theme.colors.textLight} />
-          <Text style={styles.detailText}>{item.agence.nomAgence}</Text>
-        </View>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Ionicons name="person-outline" size={16} color={theme.colors.primary} />
-            <Text style={styles.statText}>
-              {item.totalCollecteurs} collecteur{item.totalCollecteurs !== 1 ? 's' : ''}
-            </Text>
-          </View>
+          <Ionicons name="calendar-outline" size={16} color={theme.colors.textSecondary} />
+          <Text style={styles.detailText}>
+            Créé le {item.dateCreation ? new Date(item.dateCreation).toLocaleDateString() : 'N/A'}
+          </Text>
         </View>
       </View>
       
@@ -198,33 +144,17 @@ const AdminManagementScreen = ({ navigation }) => {
           onPress={() => handleViewAdmin(item)}
         >
           <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Voir</Text>
+          <Text style={styles.actionButtonText}>Détails</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={styles.actionButton}
-          onPress={() => handleEditAdmin(item)}
+          onPress={() => handleResetPassword(item)}
+          disabled={loading}
         >
-          <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonText}>Modifier</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleToggleStatus(item)}
-        >
-          <Ionicons 
-            name={item.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"} 
-            size={18} 
-            color={item.status === 'active' ? theme.colors.error : theme.colors.success} 
-          />
-          <Text 
-            style={[
-              styles.actionButtonText, 
-              { color: item.status === 'active' ? theme.colors.error : theme.colors.success }
-            ]}
-          >
-            {item.status === 'active' ? 'Désactiver' : 'Activer'}
+          <Ionicons name="key-outline" size={18} color={theme.colors.warning} />
+          <Text style={[styles.actionButtonText, { color: theme.colors.warning }]}>
+            Mot de passe
           </Text>
         </TouchableOpacity>
       </View>
@@ -289,11 +219,24 @@ const AdminManagementScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         
+        {/* Gestion des erreurs */}
+        {error && (
+          <Card style={styles.errorCard}>
+            <View style={styles.errorContent}>
+              <Ionicons name="alert-circle" size={24} color={theme.colors.error} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={clearError} style={styles.errorButton}>
+                <Text style={styles.errorButtonText}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        )}
+
         {/* Liste des administrateurs */}
-        {isLoading ? (
+        {loading && !refreshing && filteredAdmins.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Chargement...</Text>
+            <Text style={styles.loadingText}>Chargement des administrateurs...</Text>
           </View>
         ) : (
           <FlatList
@@ -309,20 +252,24 @@ const AdminManagementScreen = ({ navigation }) => {
               />
             }
             ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Ionicons name="people" size={64} color={theme.colors.gray} />
-                <Text style={styles.emptyText}>
-                  {searchQuery.trim() !== '' 
-                    ? 'Aucun administrateur ne correspond à votre recherche' 
-                    : 'Aucun administrateur disponible'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyButton}
-                  onPress={handleAddAdmin}
-                >
-                  <Text style={styles.emptyButtonText}>Ajouter un administrateur</Text>
-                </TouchableOpacity>
-              </View>
+              !loading && (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="people" size={64} color={theme.colors.textSecondary} />
+                  <Text style={styles.emptyText}>
+                    {searchQuery.trim() !== '' 
+                      ? 'Aucun administrateur ne correspond à votre recherche' 
+                      : 'Aucun administrateur trouvé'}
+                  </Text>
+                  {searchQuery.trim() === '' && (
+                    <TouchableOpacity
+                      style={styles.emptyButton}
+                      onPress={handleAddAdmin}
+                    >
+                      <Text style={styles.emptyButtonText}>Ajouter un administrateur</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )
             }
           />
         )}
@@ -511,6 +458,30 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: theme.colors.white,
     fontWeight: '500',
+  },
+  errorCard: {
+    backgroundColor: theme.colors.errorLight || 'rgba(255, 59, 48, 0.1)',
+    borderColor: theme.colors.error,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  errorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+  },
+  errorText: {
+    flex: 1,
+    marginLeft: 8,
+    color: theme.colors.error,
+    fontSize: 14,
+  },
+  errorButton: {
+    padding: 8,
+  },
+  errorButtonText: {
+    color: theme.colors.error,
+    fontWeight: '600',
   },
 });
 

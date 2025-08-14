@@ -18,9 +18,27 @@ class JournalActiviteService extends BaseApiService {
       console.log(`📋 API: GET /journal-activite/user/${userId}`);
       
       // Formater la date correctement - CORRECTION CRITIQUE
-      const formattedDate = date instanceof Date 
+      let formattedDate = date instanceof Date 
         ? format(date, 'yyyy-MM-dd')  // Format simple sans heure
         : date.split('T')[0];  // Si c'est déjà une string, prendre juste la date
+      
+      let fromDate = null;
+      
+      // Pour les collecteurs, utiliser la logique de réinitialisation après clôture
+      if (!options.ignoreClosureLogic && date instanceof Date && date.toDateString() === new Date().toDateString()) {
+        try {
+          // Import dynamique pour éviter les dépendances circulaires
+          const { default: collecteurService } = await import('./collecteurService');
+          const lastClosureDate = await collecteurService.getLastClosureDate(userId);
+          
+          if (lastClosureDate) {
+            fromDate = lastClosureDate;
+            console.log('📅 Journal activité filtré depuis dernière clôture:', lastClosureDate);
+          }
+        } catch (error) {
+          console.warn('⚠️ Impossible de récupérer date clôture pour journal activité:', error.message);
+        }
+      }
       
       console.log('📅 Date formatée pour l\'API:', formattedDate);
       
@@ -32,16 +50,54 @@ class JournalActiviteService extends BaseApiService {
         sortDir: options.sortDir || 'desc'
       });
 
+      // Ajouter le paramètre fromDate si disponible
+      if (fromDate) {
+        params.set('fromDate', fromDate);
+      }
+
       console.log('🌐 URL finale:', `/journal-activite/user/${userId}?${params.toString()}`);
 
       const response = await this.axios.get(
         `/journal-activite/user/${userId}?${params.toString()}`
       );
       
-      return this.formatResponse(response, 'Activités récupérées');
+      const result = this.formatResponse(response, 'Activités récupérées');
+      
+      // Ajouter les informations de période
+      if (result.success && result.data) {
+        result.data.periodInfo = {
+          hasLastClosure: !!fromDate,
+          fromDate: fromDate,
+          isFiltered: !!fromDate,
+          currentDate: formattedDate
+        };
+      }
+      
+      return result;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des activités', error);
       throw this.handleError(error, 'Erreur lors de la récupération des activités');
+    }
+  }
+
+  /**
+   * Forcer le rafraîchissement du journal après une clôture
+   * @param {number} userId - ID de l'utilisateur
+   */
+  async refreshAfterClosure(userId) {
+    try {
+      console.log('🔄 Rafraîchissement du journal après clôture pour utilisateur:', userId);
+      
+      // Forcer le rechargement sans cache en ignorant la logique de clôture
+      const today = new Date();
+      return await this.getUserActivities(userId, today, { 
+        ignoreClosureLogic: false, // Utiliser la logique de clôture
+        page: 0, 
+        size: 20 
+      });
+    } catch (error) {
+      console.error('❌ Erreur rafraîchissement après clôture:', error);
+      throw this.handleError(error, 'Erreur lors du rafraîchissement du journal');
     }
   }
   

@@ -51,6 +51,13 @@ const ClientInput = ({
       setAccountNumber(selectedClient.numeroCompte || '');
       setSuggestions([]);
       setShowSuggestions(false);
+    } else {
+      // Reset complet quand pas de client sélectionné
+      setClientName('');
+      setAccountNumber('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setError(null);
     }
   }, [selectedClient]);
 
@@ -62,7 +69,8 @@ const ClientInput = ({
       setDropdownLoading(true);
       setError(null);
       
-      const response = await clientService.getClientsByCollecteur(collecteurId, { 
+      const response = await clientService.getAllClients({ 
+        collecteurId: collecteurId,
         size: 1000 // Récupérer tous les clients
       });
 
@@ -75,6 +83,7 @@ const ClientInput = ({
           numeroCompte: client.numeroCompte,
           numeroCni: client.numeroCni,
           telephone: client.telephone,
+          valide: client.valide, // 🔥 AJOUT : Statut d'activation du client
           displayName: `${client.prenom} ${client.nom}`,
           hasPhone: !!(client.telephone && client.telephone.trim() !== '')
         }));
@@ -120,7 +129,8 @@ const ClientInput = ({
       setLoading(true);
       setError(null);
       
-      const response = await clientService.getClientsByCollecteur(collecteurId, { 
+      const response = await clientService.getAllClients({ 
+        collecteurId: collecteurId,
         size: 20, 
         search: query 
       });
@@ -134,6 +144,7 @@ const ClientInput = ({
           numeroCompte: client.numeroCompte,
           numeroCni: client.numeroCni,
           telephone: client.telephone,
+          valide: client.valide, // 🔥 AJOUT : Statut d'activation du client
           displayName: `${client.prenom} ${client.nom}`,
           hasPhone: !!(client.telephone && client.telephone.trim() !== '')
         }));
@@ -166,7 +177,10 @@ const ClientInput = ({
       setLoading(true);
       setError(null);
 
-      const response = await clientService.getClientsByCollecteur(collecteurId, { size: 1000 });
+      const response = await clientService.getAllClients({ 
+        collecteurId: collecteurId,
+        size: 1000 
+      });
       
       if (response.success && response.data) {
         const clients = Array.isArray(response.data) ? response.data : [];
@@ -180,6 +194,7 @@ const ClientInput = ({
             numeroCompte: matchingClient.numeroCompte,
             numeroCni: matchingClient.numeroCni,
             telephone: matchingClient.telephone,
+            valide: matchingClient.valide, // 🔥 AJOUT : Statut d'activation du client
             displayName: `${matchingClient.prenom} ${matchingClient.nom}`,
             hasPhone: !!(matchingClient.telephone && matchingClient.telephone.trim() !== '')
           };
@@ -383,6 +398,21 @@ const ClientInput = ({
               {selectedClient.hasPhone ? "Téléphone OK" : "Pas de téléphone"}
             </Text>
           </View>
+          
+          {/* 🔥 NOUVEAU : Indicateur statut activation */}
+          <View style={styles.statusIndicator}>
+            <Ionicons 
+              name={selectedClient.valide ? "checkmark-circle" : "alert-circle"} 
+              size={16} 
+              color={selectedClient.valide ? theme.colors.success : theme.colors.error} 
+            />
+            <Text style={[
+              styles.statusText,
+              { color: selectedClient.valide ? theme.colors.success : theme.colors.error }
+            ]}>
+              {selectedClient.valide ? "Client activé" : "Client non activé"}
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -392,9 +422,10 @@ const ClientInput = ({
     <View style={[styles.container, style]}>
       {/* Champ nom client */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.fieldLabel}>
-          Nom du client <Text style={styles.required}>*</Text>
-        </Text>
+        <View style={styles.labelContainer}>
+          <Text style={styles.fieldLabel}>Nom du client </Text>
+          <Text style={styles.required}>*</Text>
+        </View>
         <View style={styles.inputWithSuggestions}>
           <View style={styles.inputContainer}>
             <Input
@@ -434,9 +465,10 @@ const ClientInput = ({
 
       {/* Champ numéro de compte */}
       <View style={styles.fieldContainer}>
-        <Text style={styles.fieldLabel}>
-          Numéro de compte <Text style={styles.required}>*</Text>
-        </Text>
+        <View style={styles.labelContainer}>
+          <Text style={styles.fieldLabel}>Numéro de compte </Text>
+          <Text style={styles.required}>*</Text>
+        </View>
         <Input
           placeholder="Numéro de compte du client"
           value={accountNumber}
@@ -480,11 +512,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     position: 'relative',
   },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   fieldLabel: {
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
-    marginBottom: 8,
   },
   required: {
     color: theme.colors.error,
@@ -675,10 +711,12 @@ const styles = StyleSheet.create({
   statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: 8,
-    marginTop: 8,
+    marginTop: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '500',
   },
   statusText: {
     fontSize: 14,
