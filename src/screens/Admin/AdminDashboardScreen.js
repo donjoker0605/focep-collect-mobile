@@ -71,7 +71,7 @@ const AdminDashboardScreen = ({ navigation }) => {
   };
 
   const navigateToClientManagement = () => {
-    // 🔥 Navigation vers le NOUVEAU écran admin clients
+    // Navigation vers le NOUVEAU écran admin clients
     navigation.navigate('AdminClientManagement');
   };
 
@@ -83,7 +83,7 @@ const AdminDashboardScreen = ({ navigation }) => {
     navigation.navigate('CommissionCalculationV2Screen');
   };
 
-  // 🔥 FONCTION DE DÉCONNEXION - VERSION WEB-COMPATIBLE
+  // FONCTION DE DÉCONNEXION - VERSION WEB-COMPATIBLE
   const handleLogout = async () => {
     console.log('🚨 BOUTON DE DÉCONNEXION CLIQUÉ !');
     
@@ -187,13 +187,6 @@ const AdminDashboardScreen = ({ navigation }) => {
       icon: 'bar-chart',
       color: theme.colors.warning,
       onPress: navigateToReports,
-    },
-    {
-      id: 'commissions',
-      title: 'Paramètres de commissions',
-      icon: 'calculator',
-      color: theme.colors.info,
-      onPress: () => navigation.navigate('CommissionParametersScreen'),
     }
   ];
 
@@ -221,27 +214,11 @@ const AdminDashboardScreen = ({ navigation }) => {
       onPress: navigateToCommissions,
     },
     {
-      id: 'commission-v2',
-      title: 'Commission FOCEP v2',
-      icon: 'trending-up',
-      color: theme.colors.success,
-      badge: 'NOUVEAU',
-      onPress: () => navigation.navigate('CommissionCalculationV2Screen'),
-    },
-    {
       id: 'rubriques',
       title: 'Rubriques Rémunération',
       icon: 'list-outline',
       color: theme.colors.info,
       onPress: () => navigation.navigate('RubriqueRemunerationScreen'),
-    },
-    {
-      id: 'processus-complet',
-      title: 'Processus Complet',
-      icon: 'construct',
-      color: theme.colors.success,
-      badge: 'NOUVEAU',
-      onPress: () => navigation.navigate('CommissionProcessusCompletScreen'),
     },
     {
       id: 'remuneration-process',
@@ -329,7 +306,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           
           <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
             <Text style={styles.welcomeText}>Bienvenue,</Text>
-            <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
+            <Text style={styles.userName}>{user?.nom || 'Administrateur'} {user?.prenom || ''}</Text>
             <Text style={styles.agenceName}>
               {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
             </Text>
@@ -361,7 +338,7 @@ const AdminDashboardScreen = ({ navigation }) => {
           
           <View style={[styles.userInfo, { paddingTop: insets.top + 56 }]}>
             <Text style={styles.welcomeText}>Bienvenue,</Text>
-            <Text style={styles.userName}>{user?.nom || 'Administrateur'}</Text>
+            <Text style={styles.userName}>{user?.nom || 'Administrateur'} {user?.prenom || ''}</Text>
             <Text style={styles.agenceName}>
               {user?.agenceName || `Agence ${user?.agenceId || 'principale'}`}
             </Text>
@@ -380,29 +357,43 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
         }
       >
-        {/* Vue d'ensemble financière */}
+        {/* Vue d'ensemble financière quotidienne */}
         <View style={styles.overviewSection}>
-          <Text style={styles.sectionTitle}>Vue d'ensemble financière</Text>
+          <Text style={styles.sectionTitle}>
+            Vue d'ensemble - {format(new Date(), 'dd MMMM yyyy', { locale: fr })}
+          </Text>
           <Card style={styles.financeCard}>
             <View style={styles.financeRow}>
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Total Épargne</Text>
+                <Text style={styles.financeLabel}>Épargne Aujourd'hui</Text>
                 <Text style={[styles.financeValue, { color: theme.colors.success }]}>
-                  {formatCurrency(stats?.totalEpargne)}
+                  {formatCurrency(stats?.epargneDuJour || stats?.totalEpargne)}
                 </Text>
               </View>
               <View style={styles.financeDivider} />
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Total Retraits</Text>
+                <Text style={styles.financeLabel}>Retraits Aujourd'hui</Text>
                 <Text style={[styles.financeValue, { color: theme.colors.error }]}>
-                  {formatCurrency(stats?.totalRetrait)}
+                  {formatCurrency(stats?.retraitsDuJour || stats?.totalRetrait)}
                 </Text>
               </View>
             </View>
+            
+            {/* 🔥 NOUVEAU: Commissions simulées mensuelles */}
+            <View style={styles.commissionsSection}>
+              <Text style={styles.commissionsLabel}>Commissions Simulées (Mois)</Text>
+              <Text style={[styles.commissionsValue, { color: theme.colors.warning }]}>
+                {formatCurrency((stats?.totalEpargne || 0) * 0.025 * 1.5)} {/* Simulation 2.5% * facteur saisonnalité */}
+              </Text>
+              <Text style={styles.commissionsNote}>
+                Projection basée sur l'activité actuelle
+              </Text>
+            </View>
+            
             <View style={styles.netBalanceContainer}>
-              <Text style={styles.netBalanceLabel}>Solde Net</Text>
+              <Text style={styles.netBalanceLabel}>Solde Net du Jour</Text>
               <Text style={styles.netBalanceValue}>
-                {formatCurrency(stats?.soldeNet)}
+                {formatCurrency((stats?.epargneDuJour || 0) - (stats?.retraitsDuJour || 0))}
               </Text>
             </View>
           </Card>
@@ -430,20 +421,7 @@ const AdminDashboardScreen = ({ navigation }) => {
               theme.colors.secondary,
               `${stats?.clientsActifs || 0} actifs`
             )}
-            {renderStatCard(
-              'Commissions',
-              stats?.commissionsEnAttente || 0,
-              'cash',
-              theme.colors.warning,
-              'En attente'
-            )}
-            {renderStatCard(
-              'Mes Relations',
-              stats?.adminCollecteurRelations || 0,
-              'link',
-              theme.colors.info,
-              'Admin-Collecteur'
-            )}
+            {/* 🔥 SUPPRESSION: Stats "Commissions en attente" et "Relations admin-collecteur" selon requirements */}
           </ScrollView>
         </View>
 
@@ -761,13 +739,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   logoutButtonContent: {
@@ -779,6 +751,30 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // 🔥 NOUVEAUX STYLES: Section commissions simulées
+  commissionsSection: {
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    padding: 15,
+    marginVertical: 10,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: theme.colors.warning,
+  },
+  commissionsLabel: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginBottom: 4,
+  },
+  commissionsValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  commissionsNote: {
+    fontSize: 11,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
   },
 });
 

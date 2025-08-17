@@ -11,9 +11,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 import Card from '../Card/Card';
-import Input from '../Input/Input';
+import SimpleInput from '../SimpleInput/SimpleInput';
 import Button from '../Button/Button';
-import DatePicker from '../DatePicker/DatePicker';
+import SimpleDateSelector from '../SimpleDateSelector/SimpleDateSelector';
 import SelectInput from '../SelectInput/SelectInput';
 
 import colors from '../../theme/colors';
@@ -66,8 +66,14 @@ export default function RubriqueRemunerationForm({
         active: rubrique.active !== false
       });
       setHasDelai(!!rubrique.delaiJours);
+    } else if (collecteurs.length > 0) {
+      // 🔥 FIX: Pour nouvelle rubrique, pré-sélectionner tous les collecteurs disponibles
+      setFormData(prev => ({
+        ...prev,
+        collecteurIds: collecteurs.map(c => c.id)
+      }));
     }
-  }, [rubrique]);
+  }, [rubrique, collecteurs]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -166,13 +172,14 @@ export default function RubriqueRemunerationForm({
 
         {/* Nom de la rubrique */}
         <View style={styles.inputGroup}>
-          <Input
+          <SimpleInput
             label="Nom de la Rubrique"
             value={formData.nom}
             onChangeText={(value) => handleFieldChange('nom', value)}
             placeholder="Salaire Base, Prime Performance..."
             error={errors.nom}
             maxLength={100}
+            required
           />
         </View>
 
@@ -182,21 +189,23 @@ export default function RubriqueRemunerationForm({
             label="Type de Rubrique"
             value={formData.type}
             options={typeOptions}
-            onValueChange={(value) => handleFieldChange('type', value)}
+            onChange={(value) => handleFieldChange('type', value)}
             error={errors.type}
+            modalTitle="Sélectionner le type de rubrique"
           />
         </View>
 
         {/* Valeur */}
         <View style={styles.inputGroup}>
-          <Input
+          <SimpleInput
             label={getValeurLabel()}
             value={formData.valeur}
             onChangeText={(value) => handleFieldChange('valeur', value)}
             placeholder={getValeurPlaceholder()}
             keyboardType="numeric"
             error={errors.valeur}
-            rightIcon={formData.type === 'PERCENTAGE' ? 'percent' : 'cash-outline'}
+            suffix={formData.type === 'PERCENTAGE' ? '%' : 'FCFA'}
+            required
           />
           {formData.type === 'PERCENTAGE' && (
             <Text style={styles.helpText}>
@@ -207,16 +216,14 @@ export default function RubriqueRemunerationForm({
 
         {/* Date d'application */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Date d'Application</Text>
-          <DatePicker
+          <SimpleDateSelector
+            label="Date d'Application"
             date={formData.dateApplication ? new Date(formData.dateApplication) : new Date()}
             onDateChange={(date) => handleFieldChange('dateApplication', date.toISOString().split('T')[0])}
-            onClose={() => {}}
             minimumDate={new Date()}
+            placeholder="Sélectionner la date d'application"
+            error={errors.dateApplication}
           />
-          {errors.dateApplication && (
-            <Text style={styles.errorText}>{errors.dateApplication}</Text>
-          )}
         </View>
 
         {/* Délai en jours */}
@@ -232,13 +239,13 @@ export default function RubriqueRemunerationForm({
           </View>
           {hasDelai && (
             <View style={styles.delaiInput}>
-              <Input
+              <SimpleInput
                 value={formData.delaiJours}
                 onChangeText={(value) => handleFieldChange('delaiJours', value)}
                 placeholder="30"
                 keyboardType="numeric"
                 error={errors.delaiJours}
-                rightText="jours"
+                suffix="jours"
               />
               <Text style={styles.helpText}>
                 La rubrique sera active pendant ce nombre de jours

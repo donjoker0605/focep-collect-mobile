@@ -23,13 +23,13 @@ class AdminCollecteurService extends BaseApiService {
    */
   async getAssignedCollecteurs({ page = 0, size = 20, search = '' } = {}) {
     try {
-      console.log('👥 API Admin: GET /admin/mes-collecteurs');
+      console.log('👥 API Admin: GET /admin/collecteurs/mes-collecteurs');
       const params = { page, size };
       if (search?.trim()) params.search = search.trim();
       
       // Essayer l'endpoint spécialisé d'abord
       try {
-        const response = await this.axios.get('/admin/mes-collecteurs', { params });
+        const response = await this.axios.get('/admin/collecteurs/mes-collecteurs', { params });
         return this.formatResponse(response, 'Collecteurs assignés récupérés');
       } catch (notFoundError) {
         if (notFoundError.response?.status === 404) {

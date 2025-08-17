@@ -17,8 +17,13 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { collecteurService } from '../../services';
+import { useAuth } from '../../hooks/useAuth';
 
 const CollecteurManagementScreen = ({ navigation }) => {
+  // 🔥 DÉTECTION DU RÔLE POUR PERMISSIONS DIFFÉRENCIÉES
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  
   // États pour les données - INITIALISATION SÉCURISÉE
   const [collecteurs, setCollecteurs] = useState([]);
   const [filteredCollecteurs, setFilteredCollecteurs] = useState([]);
@@ -112,7 +117,13 @@ const CollecteurManagementScreen = ({ navigation }) => {
     });
   };
 
+  // 🔥 FONCTION CONDITIONNELLE - Seuls les SuperAdmin peuvent modifier les collecteurs
   const handleEditCollecteur = (collecteur) => {
+    if (!isSuperAdmin) {
+      Alert.alert('Accès refusé', 'Seuls les Super Administrateurs peuvent modifier les collecteurs');
+      return;
+    }
+    
     navigation.navigate('CollecteurCreationScreen', { 
       mode: 'edit', 
       collecteur,
@@ -202,13 +213,16 @@ const CollecteurManagementScreen = ({ navigation }) => {
             <Text style={styles.actionButtonText}>Détails</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleEditCollecteur(item)}
-          >
-            <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
-            <Text style={styles.actionButtonText}>Modifier</Text>
-          </TouchableOpacity>
+          {/* 🔥 BOUTON MODIFIER CONDITIONNEL - Visible uniquement pour SuperAdmin */}
+          {isSuperAdmin && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleEditCollecteur(item)}
+            >
+              <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
+              <Text style={styles.actionButtonText}>Modifier</Text>
+            </TouchableOpacity>
+          )}
           
           <TouchableOpacity
             style={styles.actionButton}

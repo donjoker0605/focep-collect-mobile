@@ -148,24 +148,48 @@ const ClientDetailScreen = ({ navigation, route }) => {
 
   const renderInfoTab = () => (
     <>
-      {/* Informations personnelles */}
+      {/* Informations personnelles COMPLÈTES */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Informations personnelles</Text>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Nom complet</Text>
-          <Text style={styles.infoValue}>
-            {client.prenom} {client.nom}
-          </Text>
+          <Text style={styles.infoLabel}>Nom</Text>
+          <Text style={styles.infoValue}>{client.nom || 'Non renseigné'}</Text>
         </View>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Téléphone</Text>
-          <Text style={styles.infoValue}>{client.telephone}</Text>
+          <Text style={styles.infoLabel}>Prénom</Text>
+          <Text style={styles.infoValue}>{client.prenom || 'Non renseigné'}</Text>
         </View>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Collecteur</Text>
+          <Text style={styles.infoLabel}>Numéro CNI</Text>
+          <Text style={styles.infoValue}>{client.numeroCni || 'Non renseigné'}</Text>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Numéro de téléphone</Text>
+          <TouchableOpacity 
+            onPress={() => client.telephone ? Alert.alert('Téléphone', client.telephone) : null}
+          >
+            <Text style={[styles.infoValue, client.telephone ? styles.linkText : null]}>
+              {client.telephone || 'Non renseigné'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Ville</Text>
+          <Text style={styles.infoValue}>{client.ville || 'Non renseigné'}</Text>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Quartier</Text>
+          <Text style={styles.infoValue}>{client.quartier || 'Non renseigné'}</Text>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Nom de son collecteur</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('CollecteurDetailScreen', {
               collecteur: { id: client.collecteurId, nom: client.collecteurNom }
@@ -175,6 +199,16 @@ const ClientDetailScreen = ({ navigation, route }) => {
               {client.collecteurNom || 'Non assigné'}
             </Text>
           </TouchableOpacity>
+        </View>
+        
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Date d'inscription</Text>
+          <Text style={styles.infoValue}>
+            {client.dateCreation ? 
+              format(new Date(client.dateCreation), 'dd MMMM yyyy à HH:mm', { locale: fr }) :
+              'Non disponible'
+            }
+          </Text>
         </View>
         
         <View style={styles.infoRow}>
@@ -188,22 +222,119 @@ const ClientDetailScreen = ({ navigation, route }) => {
             </Text>
           </View>
         </View>
-        
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Date d'inscription</Text>
-          <Text style={styles.infoValue}>
-            {client.dateInscription ? 
-              format(new Date(client.dateInscription), 'dd MMMM yyyy', { locale: fr }) :
-              'Non disponible'
-            }
-          </Text>
-        </View>
       </Card>
 
-      {/* Solde et actions */}
+      {/* Paramètres de commission */}
+      <Card style={styles.card}>
+        <Text style={styles.sectionTitle}>Paramètres de commission</Text>
+        
+        {client.commissionParameter ? (
+          <>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Type de commission</Text>
+              <Text style={styles.infoValue}>
+                {client.commissionParameter.type === 'PERCENTAGE' ? 'Pourcentage' : 
+                 client.commissionParameter.type === 'FIXED' ? 'Montant fixe' : 
+                 client.commissionParameter.type === 'TIER' ? 'Par palier' : 'Non défini'}
+              </Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Valeur</Text>
+              <Text style={styles.infoValue}>
+                {client.commissionParameter.type === 'PERCENTAGE' 
+                  ? `${client.commissionParameter.valeur}%`
+                  : `${formatCurrency(client.commissionParameter.valeur)}`
+                }
+              </Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Statut commission</Text>
+              <View style={[
+                styles.statusBadge,
+                client.commissionParameter.active ? styles.activeBadge : styles.inactiveBadge
+              ]}>
+                <Text style={styles.statusText}>
+                  {client.commissionParameter.active ? 'Active' : 'Inactive'}
+                </Text>
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="calculator-outline" size={32} color={theme.colors.textLight} />
+            <Text style={styles.emptyText}>Aucun paramètre de commission configuré</Text>
+          </View>
+        )}
+      </Card>
+
+      {/* Localisation GPS */}
+      <Card style={styles.card}>
+        <Text style={styles.sectionTitle}>Localisation GPS</Text>
+        
+        {client.latitude && client.longitude ? (
+          <>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Latitude</Text>
+              <Text style={styles.infoValue}>{client.latitude}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Longitude</Text>
+              <Text style={styles.infoValue}>{client.longitude}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Saisie manuelle</Text>
+              <Text style={styles.infoValue}>
+                {client.coordonneesSaisieManuelle ? 'Oui' : 'Non'}
+              </Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Adresse complète</Text>
+              <Text style={styles.infoValue}>
+                {client.adresseComplete || 'Non renseignée'}
+              </Text>
+            </View>
+            
+            {client.dateMajCoordonnees && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>MAJ coordonnées</Text>
+                <Text style={styles.infoValue}>
+                  {format(new Date(client.dateMajCoordonnees), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                </Text>
+              </View>
+            )}
+          </>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="location-outline" size={32} color={theme.colors.textLight} />
+            <Text style={styles.emptyText}>Localisation GPS non configurée</Text>
+          </View>
+        )}
+      </Card>
+
+      {/* Solde complet et actions */}
       <Card style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>Solde actuel</Text>
-        <Text style={styles.balanceValue}>{formatCurrency(balance)}</Text>
+        <Text style={styles.sectionTitle}>Informations financières</Text>
+        
+        <View style={styles.balanceGrid}>
+          <View style={styles.balanceItem}>
+            <Text style={styles.balanceLabel}>Solde total</Text>
+            <Text style={[styles.balanceValue, { color: theme.colors.primary }]}>
+              {formatCurrency(statistics?.soldeTotal || balance)}
+            </Text>
+          </View>
+          
+          <View style={styles.balanceItem}>
+            <Text style={styles.balanceLabel}>Solde disponible</Text>
+            <Text style={[styles.balanceValue, { color: theme.colors.success }]}>
+              {formatCurrency(statistics?.soldeDisponible || balance)}
+            </Text>
+          </View>
+        </View>
         
         <View style={styles.transactionButtons}>
           <Button
@@ -264,6 +395,28 @@ const ClientDetailScreen = ({ navigation, route }) => {
     </>
   );
 
+  const handleTransactionDetail = (transaction) => {
+    Alert.alert(
+      'Détails de la transaction',
+      `Type: ${transaction.sens?.toUpperCase() === 'EPARGNE' ? 'Épargne' : 'Retrait'}\n` +
+      `Montant: ${formatCurrency(transaction.montant)}\n` +
+      `Date: ${transaction.dateOperation ? 
+        format(new Date(transaction.dateOperation), 'dd/MM/yyyy à HH:mm', { locale: fr }) : 
+        'Date inconnue'}\n` +
+      `Libellé: ${transaction.libelle || 'Aucun libellé'}\n` +
+      `Journal: ${transaction.journalReference || 'Non assigné'}\n` +
+      `Compte source: ${transaction.compteSourceNom || 'Non spécifié'}\n` +
+      `Compte destination: ${transaction.compteDestinationNom || 'Non spécifié'}`,
+      [
+        { text: 'Fermer', style: 'cancel' },
+        { 
+          text: 'Plus de détails', 
+          onPress: () => navigation.navigate('TransactionDetailScreen', { transaction })
+        }
+      ]
+    );
+  };
+
   const renderTransactionItem = ({ item }) => {
     if (!item) return null;
     
@@ -272,7 +425,7 @@ const ClientDetailScreen = ({ navigation, route }) => {
     return (
       <TouchableOpacity
         style={styles.transactionItem}
-        onPress={() => navigation.navigate('TransactionDetailScreen', { transaction: item })}
+        onPress={() => handleTransactionDetail(item)}
       >
         <View style={styles.transactionIcon}>
           <Ionicons 
@@ -292,14 +445,22 @@ const ClientDetailScreen = ({ navigation, route }) => {
               'Date inconnue'
             }
           </Text>
+          {item.libelle && (
+            <Text style={styles.transactionLabel} numberOfLines={1}>
+              {item.libelle}
+            </Text>
+          )}
         </View>
         
-        <Text style={[
-          styles.transactionAmount,
-          { color: isEpargne ? theme.colors.success : theme.colors.error }
-        ]}>
-          {isEpargne ? '+' : '-'}{formatCurrency(item.montant)}
-        </Text>
+        <View style={styles.transactionRight}>
+          <Text style={[
+            styles.transactionAmount,
+            { color: isEpargne ? theme.colors.success : theme.colors.error }
+          ]}>
+            {isEpargne ? '+' : '-'}{formatCurrency(item.montant)}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.textLight} />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -337,72 +498,40 @@ const ClientDetailScreen = ({ navigation, route }) => {
 
   const renderStatsTab = () => (
     <>
-      {/* Statistiques générales */}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Statistiques générales</Text>
-        
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {statistics?.nombreOperations || 0}
-            </Text>
-            <Text style={styles.statLabel}>Opérations</Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {statistics?.anciennete || 0}
-            </Text>
-            <Text style={styles.statLabel}>Mois d'ancienneté</Text>
-          </View>
-          
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>
-              {statistics?.frequenceOperations || 0}
-            </Text>
-            <Text style={styles.statLabel}>Opér./mois</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Statistiques financières */}
+      {/* Statistiques financières COMPLÈTES */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Statistiques financières</Text>
         
-        <View style={styles.financeRow}>
+        <View style={styles.financeGrid}>
           <View style={styles.financeItem}>
-            <Text style={styles.financeLabel}>Total épargné</Text>
+            <Text style={styles.financeLabel}>Total épargne</Text>
             <Text style={[styles.financeValue, { color: theme.colors.success }]}>
-              {formatCurrency(statistics?.totalEpargne)}
+              {formatCurrency(statistics?.totalEpargne || 0)}
             </Text>
           </View>
-        </View>
-        
-        <View style={styles.financeRow}>
+          
           <View style={styles.financeItem}>
-            <Text style={styles.financeLabel}>Total retiré</Text>
+            <Text style={styles.financeLabel}>Total retrait</Text>
             <Text style={[styles.financeValue, { color: theme.colors.error }]}>
-              {formatCurrency(statistics?.totalRetrait)}
+              {formatCurrency(statistics?.totalRetraits || statistics?.totalRetrait || 0)}
             </Text>
           </View>
         </View>
         
         <View style={styles.separator} />
         
-        <View style={styles.financeRow}>
+        <View style={styles.financeGrid}>
           <View style={styles.financeItem}>
-            <Text style={styles.financeLabel}>Solde net</Text>
+            <Text style={styles.financeLabel}>Solde total</Text>
             <Text style={[styles.financeValue, styles.netBalance]}>
-              {formatCurrency(balance)}
+              {formatCurrency(statistics?.soldeTotal || balance)}
             </Text>
           </View>
-        </View>
-        
-        <View style={styles.financeRow}>
+          
           <View style={styles.financeItem}>
-            <Text style={styles.financeLabel}>Épargne moyenne/mois</Text>
-            <Text style={styles.financeValue}>
-              {formatCurrency(statistics?.moyenneEpargneMensuelle)}
+            <Text style={styles.financeLabel}>Solde disponible</Text>
+            <Text style={[styles.financeValue, { color: theme.colors.primary }]}>
+              {formatCurrency(statistics?.soldeDisponible || balance)}
             </Text>
           </View>
         </View>
@@ -412,29 +541,95 @@ const ClientDetailScreen = ({ navigation, route }) => {
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Activité récente</Text>
         
-        <View style={styles.activityInfo}>
+        <View style={styles.activityContainer}>
           <View style={styles.activityRow}>
-            <Text style={styles.activityLabel}>Dernière opération</Text>
-            <Text style={styles.activityValue}>
-              {statistics?.derniereOperation ? 
-                format(new Date(statistics.derniereOperation), 'dd/MM/yyyy', { locale: fr }) :
-                'Aucune'
+            <View style={styles.activityIcon}>
+              <Ionicons name="time-outline" size={24} color={theme.colors.primary} />
+            </View>
+            <View style={styles.activityInfo}>
+              <Text style={styles.activityLabel}>Dernière opération</Text>
+              <Text style={styles.activityValue}>
+                {statistics?.dateDerniereOperation 
+                  ? format(new Date(statistics.dateDerniereOperation), 'dd MMMM yyyy à HH:mm', { locale: fr })
+                  : transactions.length > 0 && transactions[0].dateOperation
+                    ? format(new Date(transactions[0].dateOperation), 'dd MMMM yyyy à HH:mm', { locale: fr })
+                    : 'Aucune opération'
+                }
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.activityRow}>
+            <View style={styles.activityIcon}>
+              <Ionicons name="trending-up-outline" size={24} color={theme.colors.success} />
+            </View>
+            <View style={styles.activityInfo}>
+              <Text style={styles.activityLabel}>Nombre d'opérations</Text>
+              <Text style={styles.activityValue}>
+                {statistics?.nombreOperations || transactions.length} opérations
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.activityRow}>
+            <View style={styles.activityIcon}>
+              <Ionicons name="calendar-outline" size={24} color={theme.colors.warning} />
+            </View>
+            <View style={styles.activityInfo}>
+              <Text style={styles.activityLabel}>Ancienneté client</Text>
+              <Text style={styles.activityValue}>
+                {client.dateCreation 
+                  ? `${Math.floor((new Date() - new Date(client.dateCreation)) / (1000 * 60 * 60 * 24))} jours`
+                  : 'Non calculée'
+                }
+              </Text>
+            </View>
+          </View>
+          
+          <View style={styles.activityRow}>
+            <View style={styles.activityIcon}>
+              <Ionicons name="pulse-outline" size={24} color={theme.colors.error} />
+            </View>
+            <View style={styles.activityInfo}>
+              <Text style={styles.activityLabel}>Fréquence moyenne</Text>
+              <Text style={styles.activityValue}>
+                {statistics?.frequenceOperations 
+                  ? `${statistics.frequenceOperations.toFixed(1)} op/mois`
+                  : 'Non calculée'
+                }
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Card>
+
+      {/* Statistiques supplémentaires */}
+      <Card style={styles.card}>
+        <Text style={styles.sectionTitle}>Informations complémentaires</Text>
+        
+        <View style={styles.statsGrid}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {statistics?.nombreEpargnes || transactions.filter(t => t.sens?.toUpperCase() === 'EPARGNE').length}
+            </Text>
+            <Text style={styles.statLabel}>Épargnes</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {statistics?.nombreRetraits || transactions.filter(t => t.sens?.toUpperCase() !== 'EPARGNE').length}
+            </Text>
+            <Text style={styles.statLabel}>Retraits</Text>
+          </View>
+          
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {statistics?.montantMoyenEpargne 
+                ? formatCurrency(statistics.montantMoyenEpargne).replace(' FCFA', '')
+                : '0'
               }
             </Text>
-          </View>
-          
-          <View style={styles.activityRow}>
-            <Text style={styles.activityLabel}>Opérations ce mois</Text>
-            <Text style={styles.activityValue}>
-              {statistics?.operationsMoisEnCours || 0}
-            </Text>
-          </View>
-          
-          <View style={styles.activityRow}>
-            <Text style={styles.activityLabel}>Épargne ce mois</Text>
-            <Text style={styles.activityValue}>
-              {formatCurrency(statistics?.epargneMoisEnCours)}
-            </Text>
+            <Text style={styles.statLabel}>Moy. épargne</Text>
           </View>
         </View>
       </Card>
@@ -765,6 +960,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: theme.colors.text,
+  },
+  // NOUVEAUX STYLES AJOUTÉS
+  balanceGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  financeGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  activityContainer: {
+    paddingVertical: 8,
+  },
+  activityIcon: {
+    width: 40,
+    alignItems: 'center',
+  },
+  activityInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  transactionLabel: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 2,
+  },
+  transactionRight: {
+    alignItems: 'flex-end',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 

@@ -102,19 +102,27 @@ export default function RubriqueRemunerationScreen({ navigation }) {
     try {
       let result;
       
+      console.log('🔄 Soumission formulaire:', selectedRubrique ? 'Modification' : 'Création', formData);
+      
       if (selectedRubrique) {
         result = await updateRubrique(selectedRubrique.id, formData);
       } else {
         result = await createRubrique(formData);
       }
 
+      console.log('📡 Résultat API:', result);
+
       if (result.success) {
         setShowForm(false);
+        setSelectedRubrique(null);
         Alert.alert('Succès', result.message);
-        // Recharger les rubriques
-        loadRubriques(selectedCollecteur.id);
+        
+        // 🔥 FIX: Ne PAS recharger depuis le serveur, le hook s'en occupe déjà
+        // Le hook useCommissionV2 met à jour automatiquement l'état local avec les nouvelles données
+        console.log('✅ Modification réussie, état local déjà mis à jour par le hook');
       }
     } catch (err) {
+      console.error('❌ Erreur soumission formulaire:', err);
       Alert.alert('Erreur', err.message);
     }
   };

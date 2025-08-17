@@ -35,7 +35,6 @@ import ClientAddEditScreen from '../screens/Collecteur/ClientAddEditScreen'; // 
 // Écrans de rapports et commissions
 import ReportsScreen from '../screens/Admin/ReportsScreen';
 import CommissionCalculationV2Screen from '../screens/Admin/CommissionCalculationV2Screen';
-import CommissionParametersScreen from '../screens/Admin/CommissionParametersScreen';
 import CommissionReportScreen from '../screens/Admin/CommissionReportScreen';
 import RubriqueRemunerationScreen from '../screens/Admin/RubriqueRemunerationScreen';
 import CommissionProcessusCompletScreen from '../screens/Admin/CommissionProcessusCompletScreen';
@@ -316,13 +315,6 @@ const AdminStack = () => {
         }}
       />
 
-      <Stack.Screen
-        name="CommissionParametersScreen"
-        component={CommissionParametersScreen}
-        options={{
-          headerShown: false,
-        }}
-      />
 
 
       <Stack.Screen

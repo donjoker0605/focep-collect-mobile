@@ -250,12 +250,36 @@ export const useCommissionV2 = () => {
       setLoading(true);
       setError(null);
       
+      console.log('🔄 Hook updateRubrique - ID:', rubriqueId, 'Données:', rubriqueData);
+      
       const result = await adminCommissionService.updateRubrique(rubriqueId, rubriqueData);
       
-      // Met à jour la liste locale
-      setRubriques(prev => prev.map(r => 
-        r.id === rubriqueId ? result.data : r
-      ));
+      console.log('📡 Réponse API updateRubrique:', result);
+      
+      // Met à jour la liste locale - Merge avec les données existantes
+      setRubriques(prev => {
+        const updatedRubriques = prev.map(r => {
+          if (r.id === rubriqueId) {
+            // Préserver la structure existante et fusionner avec les nouvelles données
+            const updated = { 
+              ...r, 
+              ...result.data,
+              // S'assurer que les champs critiques sont présents
+              id: rubriqueId,
+              nom: result.data.nom || r.nom,
+              type: result.data.type || r.type,
+              valeur: result.data.valeur || r.valeur,
+              active: result.data.active !== undefined ? result.data.active : r.active
+            };
+            console.log('🔄 Rubrique mise à jour localement:', updated);
+            return updated;
+          }
+          return r;
+        });
+        
+        console.log('✅ État rubriques mis à jour:', updatedRubriques);
+        return updatedRubriques;
+      });
       
       return {
         success: true,
@@ -263,6 +287,7 @@ export const useCommissionV2 = () => {
         message: result.message
       };
     } catch (err) {
+      console.error('❌ Erreur hook updateRubrique:', err);
       const errorMessage = err.message || 'Erreur lors de la modification de la rubrique';
       setError(errorMessage);
       return {

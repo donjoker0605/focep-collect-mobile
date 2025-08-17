@@ -39,7 +39,7 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
     newPassword: '', // 🔥 NOUVEAU: Pour la modification
     confirmNewPassword: '', // 🔥 NOUVEAU: Pour la modification
     montantMaxRetrait: '100000',
-    active: true,
+    active: false,
   });
 
   // États des paramètres de commission
@@ -568,17 +568,40 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
                       </View>
                       <Text style={styles.radioText}>Montant fixe</Text>
                     </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={styles.radioButton}
+                      onPress={() => handleCommissionParamChange('typeCalcul', 'palier')}
+                    >
+                      <View style={[styles.radio, commissionParams.typeCalcul === 'palier' && styles.radioActive]}>
+                        {commissionParams.typeCalcul === 'palier' && (
+                          <View style={styles.radioInner} />
+                        )}
+                      </View>
+                      <Text style={styles.radioText}>Par palier</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
                 
-                <Input
-                  label={commissionParams.typeCalcul === 'pourcentage' ? "Taux (%)" : "Montant (FCFA)"}
-                  value={commissionParams.tauxCommission}
-                  onChangeText={(value) => handleCommissionParamChange('tauxCommission', value)}
-                  error={errors.tauxCommission}
-                  placeholder={commissionParams.typeCalcul === 'pourcentage' ? "Ex: 2.5" : "Ex: 5000"}
-                  keyboardType="numeric"
-                />
+                {commissionParams.typeCalcul !== 'palier' && (
+                  <Input
+                    label={commissionParams.typeCalcul === 'pourcentage' ? "Taux (%)" : "Montant (FCFA)"}
+                    value={commissionParams.tauxCommission}
+                    onChangeText={(value) => handleCommissionParamChange('tauxCommission', value)}
+                    error={errors.tauxCommission}
+                    placeholder={commissionParams.typeCalcul === 'pourcentage' ? "Ex: 2.5" : "Ex: 5000"}
+                    keyboardType="numeric"
+                  />
+                )}
+                
+                {commissionParams.typeCalcul === 'palier' && (
+                  <View style={styles.palierSection}>
+                    <Text style={styles.label}>Configuration des paliers</Text>
+                    <Text style={styles.palierNote}>
+                      Les paliers seront configurés après création du collecteur
+                    </Text>
+                  </View>
+                )}
                 
                 {commissionParams.typeCalcul === 'pourcentage' && (
                   <>
@@ -767,6 +790,18 @@ const styles = StyleSheet.create({
   radioText: {
     fontSize: 14,
     color: theme.colors.text,
+  },
+  palierSection: {
+    backgroundColor: theme.colors.lightGray,
+    padding: 15,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  palierNote: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
+    marginTop: 5,
   },
   submitButton: {
     marginHorizontal: 20,

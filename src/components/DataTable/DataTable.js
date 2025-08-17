@@ -14,7 +14,7 @@ import EmptyState from '../EmptyState/EmptyState';
 import theme from '../../theme';
 
 /**
- * Composant de tableau de données avec pagination et tri
+ * Composant de tableau de données avec pagination, tri et sélection
  * 
  * @param {Object} props Les propriétés du composant
  * @param {Array} props.data Données à afficher
@@ -31,6 +31,8 @@ import theme from '../../theme';
  * @param {string} props.emptyTitle Titre affiché lorsqu'il n'y a pas de données
  * @param {string} props.emptyMessage Message affiché lorsqu'il n'y a pas de données
  * @param {Object} props.style Styles supplémentaires
+ * @param {boolean} props.highlightSelected Active la mise en surbrillance des lignes sélectionnées
+ * @param {Array} props.selectedRows IDs des lignes sélectionnées
  */
 const DataTable = ({
   data = [],
@@ -47,6 +49,8 @@ const DataTable = ({
   emptyTitle = 'Aucune donnée',
   emptyMessage = 'Il n\'y a aucune donnée à afficher.',
   style,
+  highlightSelected = false,
+  selectedRows = [],
 }) => {
   // État interne pour le tri si onSort n'est pas fourni
   const [localSortField, setLocalSortField] = useState(sortField);
@@ -98,13 +102,13 @@ const DataTable = ({
   };
   
   // Rendu d'un en-tête de colonne
-  const renderColumnHeader = (column) => {
+  const renderColumnHeader = (column, index) => {
     const isCurrentSortField = column.field === (onSort ? sortField : localSortField);
     const currentSortOrder = onSort ? sortOrder : localSortOrder;
     
     return (
       <TouchableOpacity
-        key={column.field}
+        key={`header-${column.field}-${index}`}
         style={[
           styles.headerCell,
           { flex: column.flex || 1, width: column.width },
@@ -139,6 +143,18 @@ const DataTable = ({
     if (column.render) {
       // Utiliser le rendu personnalisé
       cellContent = column.render(item, index);
+    } else if (column.field === 'selected' && highlightSelected) {
+      // Rendu spécial pour la colonne de sélection
+      const isSelected = selectedRows.includes(item.id);
+      cellContent = (
+        <View style={styles.checkboxContainer}>
+          <Ionicons
+            name={isSelected ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={isSelected ? theme.colors.primary : theme.colors.textLight}
+          />
+        </View>
+      );
     } else {
       // Afficher la valeur brute
       const value = item[column.field];
@@ -169,12 +185,15 @@ const DataTable = ({
   
   // Rendu d'une ligne de données
   const renderRow = ({ item, index }) => {
+    const isSelected = highlightSelected && selectedRows.includes(item.id);
+    
     return (
       <TouchableOpacity
         style={[
           styles.row,
           index % 2 === 1 && styles.rowAlternate,
           onRowPress && styles.rowClickable,
+          isSelected && styles.rowSelected,
         ]}
         onPress={() => onRowPress && onRowPress(item, index)}
         activeOpacity={onRowPress ? 0.7 : 1}
@@ -202,7 +221,7 @@ const DataTable = ({
     <View style={[styles.container, style]}>
       {/* En-tête du tableau */}
       <View style={styles.header}>
-        {columns.map((column) => renderColumnHeader(column))}
+        {columns.map((column, index) => renderColumnHeader(column, index))}
       </View>
       
       {/* Corps du tableau */}
@@ -282,8 +301,17 @@ const styles = StyleSheet.create({
   rowClickable: {
     cursor: 'pointer',
   },
+  rowSelected: {
+    backgroundColor: `${theme.colors.primary}10`,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary,
+  },
   cell: {
     padding: 12,
+    justifyContent: 'center',
+  },
+  checkboxContainer: {
+    alignItems: 'center',
     justifyContent: 'center',
   },
   cellText: {

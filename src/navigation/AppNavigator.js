@@ -59,7 +59,7 @@ export default function AppNavigator() {
             animationTypeForReplace: 'push',
             gestureEnabled: false,
             cardStyle: {
-              pointerEvents: 'auto'
+              userSelect: 'auto'
             }
           })
         }}

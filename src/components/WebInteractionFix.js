@@ -74,7 +74,6 @@ const WebInteractionFix = ({ children }) => {
 
   // Styles inline critiques pour le conteneur
   const webStyles = Platform.OS === 'web' ? {
-    pointerEvents: 'auto',
     touchAction: 'auto',
     userSelect: 'auto',
     height: '100%',
@@ -86,7 +85,7 @@ const WebInteractionFix = ({ children }) => {
     style: [
       children.props.style, 
       webStyles, 
-      Platform.OS === 'web' ? { pointerEvents: 'auto' } : {}
+      Platform.OS === 'web' ? { userSelect: 'auto' } : {}
     ]
   });
 };

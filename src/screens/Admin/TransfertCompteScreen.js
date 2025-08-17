@@ -81,7 +81,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
     }
   }, [route.params]);
   
-  // ✅ CHARGER LA LISTE DES COLLECTEURS AVEC LE SERVICE UNIFIÉ
+  // ✅ CHARGER LA LISTE DES COLLECTEURS AVEC LE SERVICE UNIFIÉ (MÊME AGENCE UNIQUEMENT)
   const loadCollecteurs = useCallback(async () => {
     try {
       setLoadingCollecteurs(true);
@@ -90,8 +90,14 @@ const TransfertCompteScreen = ({ navigation, route }) => {
       const response = await collecteurService.getCollecteurs();
       
       if (response.success) {
+        // 🔥 RESTRICTION: Filtrer les collecteurs de la même agence que l'utilisateur
+        const userAgenceId = user?.agenceId;
+        const sameAgencyCollecteurs = response.data.filter(collecteur => 
+          collecteur.agenceId === userAgenceId
+        );
+        
         // Formater les options des collecteurs pour le sélecteur
-        const collecteurOptions = response.data.map(collecteur => ({
+        const collecteurOptions = sameAgencyCollecteurs.map(collecteur => ({
           label: `${collecteur.prenom} ${collecteur.nom}`,
           value: collecteur.id,
           data: collecteur
@@ -194,7 +200,7 @@ const TransfertCompteScreen = ({ navigation, route }) => {
   const handleExecuteTransfer = async (forceConfirm = false) => {
     const transferData = {
       sourceCollecteurId: selectedSourceCollecteur,
-      destinationCollecteurId: selectedDestCollecteur,
+      targetCollecteurId: selectedDestCollecteur,
       clientIds: selectedClients
     };
     
@@ -242,11 +248,24 @@ const TransfertCompteScreen = ({ navigation, route }) => {
         onBackPress={() => navigation.goBack()}
       />
       
-      <View style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* En-tête avec formulaire */}
         <View style={styles.formContainer}>
           <Card style={styles.formCard}>
             <Text style={styles.cardTitle}>Sélection des collecteurs</Text>
+            
+            {/* 🔥 MESSAGE INFORMATIF SUR LA RESTRICTION AGENCE */}
+            <View style={styles.infoContainer}>
+              <Ionicons name="information-circle" size={16} color={theme.colors.info} />
+              <Text style={styles.infoText}>
+                Transferts autorisés uniquement entre collecteurs de la même agence
+              </Text>
+            </View>
             
             <SelectInput
               label="Collecteur source"
@@ -329,32 +348,39 @@ const TransfertCompteScreen = ({ navigation, route }) => {
                 </Text>
               </View>
               
-              {/* Liste des clients */}
-              <FlatList
-                data={filteredClients}
-                renderItem={renderClientItem}
-                keyExtractor={item => item.id.toString()}
-                contentContainerStyle={styles.clientList}
-                showsVerticalScrollIndicator={false}
-              />
+              {/* Liste des clients avec hauteur fixe */}
+              <View style={styles.clientListWrapper}>
+                <FlatList
+                  data={filteredClients}
+                  renderItem={renderClientItem}
+                  keyExtractor={item => item.id.toString()}
+                  contentContainerStyle={styles.clientList}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                />
+              </View>
               
-              {/* Bouton de transfert */}
-              <Button
-                title="Transférer les clients sélectionnés"
-                onPress={handleTransfer}
-                disabled={
-                  transferring || 
-                  !selectedSourceCollecteur || 
-                  !selectedDestCollecteur || 
-                  stats.selectedCount === 0
-                }
-                loading={transferring}
-                style={styles.transferButton}
-              />
+              {/* Bouton de transfert fixe */}
+              {stats.selectedCount > 0 && (
+                <View style={styles.transferButtonContainer}>
+                  <Button
+                    title={`Transférer ${stats.selectedCount} client(s) sélectionné(s)`}
+                    onPress={handleTransfer}
+                    disabled={
+                      transferring || 
+                      !selectedSourceCollecteur || 
+                      !selectedDestCollecteur || 
+                      stats.selectedCount === 0
+                    }
+                    loading={transferring}
+                    style={styles.transferButton}
+                  />
+                </View>
+              )}
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
       
       {/* Aperçu du transfert */}
       {showPreview && (
@@ -382,9 +408,13 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
+  scrollContentContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   formContainer: {
     padding: 16,
-    paddingBottom: 0,
+    paddingBottom: 8,
   },
   formCard: {
     padding: 16,
@@ -410,12 +440,14 @@ const styles = StyleSheet.create({
   },
   clientsContainer: {
     flex: 1,
-    padding: 16,
+    minHeight: 400,
+    paddingHorizontal: 16,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: 200,
   },
   loadingText: {
     marginTop: 16,
@@ -424,16 +456,16 @@ const styles = StyleSheet.create({
   },
   clientListContainer: {
     flex: 1,
+    minHeight: 350,
   },
   selectionActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 8,
+    marginBottom: 8,
   },
   selectAllButton: {
-    marginLeft: 12,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
@@ -447,9 +479,16 @@ const styles = StyleSheet.create({
   selectionInfoText: {
     fontSize: 14,
     color: theme.colors.textLight,
+    fontWeight: '500',
+  },
+  clientListWrapper: {
+    flex: 1,
+    minHeight: 200,
+    maxHeight: 300,
+    marginBottom: 16,
   },
   clientList: {
-    paddingBottom: 80,
+    paddingBottom: 10,
   },
   clientItem: {
     flexDirection: 'row',
@@ -479,11 +518,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.colors.textLight,
   },
+  transferButtonContainer: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
   transferButton: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
+    marginHorizontal: 0,
+  },
+  // 🔥 NOUVEAUX STYLES POUR MESSAGE INFORMATIF
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${theme.colors.info}15`,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  infoText: {
+    marginLeft: 8,
+    color: theme.colors.info,
+    fontSize: 14,
+    flex: 1,
+    fontStyle: 'italic',
   },
 });
 

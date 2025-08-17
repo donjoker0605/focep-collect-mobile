@@ -136,7 +136,17 @@ const JournalClotureScreen = ({ navigation }) => {
     };
   };
 
-  // ✅ FONCTION CORRIGÉE : Validation du formulaire
+  // ✅ FONCTION : Validation silencieuse du formulaire (pour disabled)
+  const isFormValid = () => {
+    if (!selectedCollecteur) return false;
+    if (!montantVerse || isNaN(parseFloat(montantVerse))) return false;
+    if (parseFloat(montantVerse) < 0) return false;
+    if (!preview?.journalExiste) return false;
+    if (preview?.dejaClôture) return false;
+    return true;
+  };
+
+  // ✅ FONCTION : Validation avec messages d'erreur (pour handleClotureCorrigee)
   const validateFormCorrige = () => {
     if (!selectedCollecteur) {
       Alert.alert('Erreur', 'Veuillez sélectionner un collecteur');
@@ -168,7 +178,12 @@ const JournalClotureScreen = ({ navigation }) => {
 
   // ✅ FONCTION CORRIGÉE : Gestion de la clôture avec calcul corrigé
   const handleClotureCorrigee = async () => {
-    if (!validateFormCorrige()) return;
+    console.log('🔄 Clic sur bouton clôture - Démarrage validation...');
+    if (!validateFormCorrige()) {
+      console.log('❌ Validation échouée - Arrêt du processus');
+      return;
+    }
+    console.log('✅ Validation réussie - Affichage confirmation...');
     
     const differenceCorrigee = calculerDifferenceCorrigee();
     
@@ -191,23 +206,39 @@ const JournalClotureScreen = ({ navigation }) => {
       confirmMessage += `\n✅ Montant équilibré - Versement normal`;
     }
     
-    Alert.alert(
-      'Clôture du journal',
-      confirmMessage,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { 
-          text: 'Confirmer', 
-          style: 'destructive',
-          onPress: executeClotureJournalCorrige
-        }
-      ]
-    );
+    console.log('🎯 Tentative d\'affichage Alert.alert...');
+    
+    // ✅ SOLUTION CROSS-PLATFORM : Gestion web + mobile
+    if (typeof window !== 'undefined') {
+      // Mode web : utiliser window.confirm
+      console.log('🌐 Mode Web détecté - Utilisation window.confirm');
+      const userConfirmed = window.confirm(confirmMessage);
+      console.log('🤔 Utilisateur a confirmé:', userConfirmed);
+      if (userConfirmed) {
+        executeClotureJournalCorrige();
+      }
+    } else {
+      // Mode mobile : utiliser Alert.alert
+      console.log('📱 Mode Mobile - Utilisation Alert.alert');
+      Alert.alert(
+        'Clôture du journal',
+        confirmMessage,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Confirmer', 
+            style: 'destructive',
+            onPress: executeClotureJournalCorrige
+          }
+        ]
+      );
+    }
   };
 
   // ✅ FONCTION CORRIGÉE : Exécution de la clôture
   const executeClotureJournalCorrige = async () => {
     try {
+      console.log('🚀 DÉMARRAGE executeClotureJournalCorrige...');
       setLoading(true);
       
       const versementData = {
@@ -218,36 +249,50 @@ const JournalClotureScreen = ({ navigation }) => {
       };
       
       console.log('🔄 Exécution clôture avec logique corrigée:', versementData);
+      console.log('📡 Appel API versementService.effectuerVersementEtCloture...');
       
       const response = await versementService.effectuerVersementEtCloture(versementData);
       
+      console.log('✅ Réponse API reçue:', response);
+      
       if (response.success) {
-        Alert.alert(
-          'Succès',
-          'Journal clôturé avec succès !',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Reset du formulaire
-                setSelectedCollecteur(null);
-                setSelectedDate(new Date());
-                setMontantVerse('');
-                setCommentaire('');
-                setPreview(null);
-                
-                // Retour ou navigation
-                navigation.goBack();
-              }
-            }
-          ]
-        );
+        console.log('🎉 Clôture réussie !');
+        
+        // ✅ SOLUTION CROSS-PLATFORM : Message de succès
+        if (typeof window !== 'undefined') {
+          window.alert('Journal clôturé avec succès !');
+        } else {
+          Alert.alert('Succès', 'Journal clôturé avec succès !');
+        }
+        
+        // Reset du formulaire
+        setSelectedCollecteur(null);
+        setSelectedDate(new Date());
+        setMontantVerse('');
+        setCommentaire('');
+        setPreview(null);
+        
+        // Retour ou navigation
+        navigation.goBack();
       } else {
-        Alert.alert('Erreur', response.error || 'Erreur lors de la clôture');
+        console.log('❌ Erreur clôture:', response.error);
+        
+        // ✅ SOLUTION CROSS-PLATFORM : Message d'erreur
+        if (typeof window !== 'undefined') {
+          window.alert('Erreur: ' + (response.error || 'Erreur lors de la clôture'));
+        } else {
+          Alert.alert('Erreur', response.error || 'Erreur lors de la clôture');
+        }
       }
     } catch (err) {
       console.error('❌ Erreur clôture avec logique corrigée:', err);
-      Alert.alert('Erreur', 'Impossible de clôturer le journal');
+      
+      // ✅ SOLUTION CROSS-PLATFORM : Message d'erreur catch
+      if (typeof window !== 'undefined') {
+        window.alert('Erreur: Impossible de clôturer le journal');
+      } else {
+        Alert.alert('Erreur', 'Impossible de clôturer le journal');
+      }
     } finally {
       setLoading(false);
     }
@@ -511,11 +556,11 @@ const JournalClotureScreen = ({ navigation }) => {
         )}
 
         {/* Bouton de clôture - Affiché seulement si pas clôturé */}
-        {preview && !preview.dejaClôture && montantVerse && (
+        {preview && !preview.dejaClôture && (
           <Button
             title={loading ? "Clôture en cours..." : "Clôturer le journal"}
             onPress={handleClotureCorrigee}
-            disabled={loading || !validateFormCorrige()}
+            disabled={loading || !isFormValid()}
             loading={loading}
             style={styles.clotureButton}
           />

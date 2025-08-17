@@ -1,5 +1,5 @@
 // src/screens/Admin/CommissionCalculationV2Screen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import CollecteurSelector from '../../components/CollecteurSelector/CollecteurSe
 import StatsCard from '../../components/StatsCard/StatsCard';
 import DataTable from '../../components/DataTable/DataTable';
 import Modal from '../../components/Modal/Modal';
+import HistoriqueCommissions from '../../components/HistoriqueCommissions/HistoriqueCommissions';
 
 import { useCommissionV2 } from '../../hooks/useCommissionV2';
 import { useCollecteurs } from '../../hooks/useCollecteurs';
@@ -27,6 +28,7 @@ import colors from '../../theme/colors';
 import { formatters } from '../../utils/formatters';
 import { testCommissionV2Integration } from '../../utils/testCommissionV2';
 import V2IntegrationTest from '../../components/V2IntegrationTest/V2IntegrationTest';
+import { useAutoRefresh } from '../../hooks/useAutoRefresh';
 
 /**
  * Écran de calcul de commission selon la nouvelle spécification FOCEP
@@ -60,9 +62,41 @@ export default function CommissionCalculationV2Screen({ navigation }) {
 
   const { collecteurs, loading: collecteursLoading } = useCollecteurs();
 
+  // 🔥 NOUVEAU: Hook pour rechargement automatique après calcul
+  const triggerAutoRefresh = useAutoRefresh(() => {
+    // Le rechargement sera géré par l'historique qui s'affiche automatiquement
+    console.log('🔄 Rechargement après calcul de commission');
+  });
+
+  // 🔥 NOUVEAU: Validation période déjà calculée
+  const [historique, setHistorique] = useState([]);
+  const [periodeDejaCalculee, setPeriodeDejaCalculee] = useState(false);
+
   // Fonction helper pour convertir Date en string pour l'API
   const formatDateForAPI = (date) => {
     return date.toISOString().split('T')[0];
+  };
+
+  // 🔥 NOUVEAU: Helper pour alertes cross-platform
+  const showAlert = (title, message, buttons = []) => {
+    if (Platform.OS === 'web') {
+      // Pour le web, utiliser window.confirm/alert
+      if (buttons.length === 2) {
+        const result = window.confirm(`${title}\n\n${message}`);
+        if (result && buttons[1].onPress) {
+          buttons[1].onPress();
+        } else if (!result && buttons[0].onPress) {
+          buttons[0].onPress();
+        }
+      } else {
+        window.alert(`${title}\n\n${message}`);
+        if (buttons[0] && buttons[0].onPress) {
+          buttons[0].onPress();
+        }
+      }
+    } else {
+      Alert.alert(title, message, buttons);
+    }
   };
 
   useEffect(() => {
@@ -72,35 +106,158 @@ export default function CommissionCalculationV2Screen({ navigation }) {
     }
   }, [error]);
 
+  // 🔥 FONCTION: Vérifier si deux périodes se chevauchent
+  const periodesSeChevauchet = useCallback((debut1, fin1, debut2, fin2) => {
+    const d1 = new Date(debut1);
+    const f1 = new Date(fin1);
+    const d2 = new Date(debut2);
+    const f2 = new Date(fin2);
+    
+    // Une période chevauche avec une autre si :
+    // - La date de début est avant ou égale à la date de fin de l'autre ET
+    // - La date de fin est après ou égale à la date de début de l'autre
+    return d1 <= f2 && f1 >= d2;
+  }, []);
+
+  // 🔥 NOUVEAU: Vérifier si la période sélectionnée chevauche avec des périodes déjà calculées
+  const verifierPeriodeCalculee = useCallback(() => {
+    console.log('🔍 Vérification période avec détection de chevauchement:', {
+      selectedCollecteur: selectedCollecteur?.id,
+      historiqueLength: historique.length,
+      dateDebut: formatDateForAPI(dateDebut),
+      dateFin: formatDateForAPI(dateFin)
+    });
+
+    if (!selectedCollecteur || !historique.length) {
+      console.log('❌ Pas de collecteur ou historique vide');
+      setPeriodeDejaCalculee(false);
+      return;
+    }
+
+    const debutStr = formatDateForAPI(dateDebut);
+    const finStr = formatDateForAPI(dateFin);
+
+    console.log('🔍 Recherche dans historique:', historique.map(h => ({
+      id: h.id,
+      dateDebut: h.dateDebut,
+      dateFin: h.dateFin,
+      statut: h.statut
+    })));
+
+    console.log('🔍 Recherche pour période:', { debutStr, finStr });
+
+    // 🔥 NOUVEAU: Chercher toute période calculée qui chevauche avec la période sélectionnée
+    const periodeChevauche = historique.find(h => {
+      if (h.statut !== 'CALCULE') {
+        return false; // Ignorer les périodes non calculées
+      }
+
+      const chevauche = periodesSeChevauchet(debutStr, finStr, h.dateDebut, h.dateFin);
+      
+      console.log('🔍 Test chevauchement:', {
+        periode_selectionnee: { debut: debutStr, fin: finStr },
+        periode_historique: { debut: h.dateDebut, fin: h.dateFin, statut: h.statut },
+        chevauche: chevauche
+      });
+      
+      return chevauche;
+    });
+
+    console.log('🔍 Période qui chevauche trouvée:', periodeChevauche);
+    setPeriodeDejaCalculee(!!periodeChevauche);
+  }, [selectedCollecteur, historique, dateDebut, dateFin, periodesSeChevauchet]);
+
+  useEffect(() => {
+    verifierPeriodeCalculee();
+  }, [verifierPeriodeCalculee]);
+
   /**
    * Lance le calcul de commission uniquement
    */
   const handleCalculateCommissions = async () => {
+    console.log('🔥 Bouton Calculer Commission cliqué !');
+    console.log('📊 État actuel:', {
+      selectedCollecteur: selectedCollecteur?.id,
+      periodeDejaCalculee,
+      loading,
+      dateDebut: formatDateForAPI(dateDebut),
+      dateFin: formatDateForAPI(dateFin)
+    });
+
     if (!selectedCollecteur) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un collecteur');
+      console.log('❌ Pas de collecteur sélectionné');
+      showAlert('Erreur', 'Veuillez sélectionner un collecteur', [{ text: 'OK' }]);
       return;
     }
 
-    const result = await calculateCommissions(
-      selectedCollecteur.id, 
-      formatDateForAPI(dateDebut), 
-      formatDateForAPI(dateFin)
-    );
+    // 🔥 NOUVEAU: Vérification période qui chevauche
+    if (periodeDejaCalculee) {
+      console.log('❌ Période qui chevauche avec une période déjà calculée');
+      showAlert(
+        'Période en conflit',
+        `La période sélectionnée (${formatPeriode(dateDebut, dateFin)}) chevauche avec une période déjà calculée pour ce collecteur.\n\nVeuillez choisir une période qui ne chevauche pas avec les calculs existants ou consulter l'historique des calculs.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
-    if (result.success) {
-      setShowResults(true);
-      Alert.alert('Succès', result.message || 'Commission calculée avec succès', [
+    console.log('✅ Validation OK, affichage confirmation...');
+
+    // 🔥 CONFIRMATION OBLIGATOIRE avant calcul
+    showAlert(
+      'Confirmer le calcul',
+      `Voulez-vous vraiment calculer les commissions pour ${selectedCollecteur.nom} ?\n\nPériode : ${formatPeriode(dateDebut, dateFin)}`,
+      [
         {
-          text: 'Voir les résultats',
-          onPress: () => {
-            navigation.navigate('CommissionResultsScreen', {
-              commissionResult: result,
-              collecteur: selectedCollecteur
-            });
+          text: 'Annuler',
+          style: 'cancel'
+        },
+        {
+          text: 'Calculer',
+          style: 'default',
+          onPress: async () => {
+            console.log('🚀 Début calcul commission...');
+            const result = await calculateCommissions(
+              selectedCollecteur.id, 
+              formatDateForAPI(dateDebut), 
+              formatDateForAPI(dateFin)
+            );
+
+            console.log('📊 Résultat calcul:', result);
+
+            if (result.success) {
+              setShowResults(true);
+              
+              // 🔥 NOUVEAU: Déclencher le rechargement automatique de l'historique
+              console.log('🔄 Déclenchement du rechargement de l\'historique après calcul');
+              triggerAutoRefresh();
+              
+              // 🔥 NOUVEAU: Forcer la re-vérification de la période après rechargement
+              setTimeout(() => {
+                verifierPeriodeCalculee();
+              }, 1000);
+              
+              showAlert('Succès', result.message || 'Commission calculée avec succès', [
+                {
+                  text: 'Voir les résultats',
+                  onPress: () => {
+                    navigation.navigate('CommissionResultsScreen', {
+                      commissionResult: result,
+                      collecteur: selectedCollecteur
+                    });
+                  }
+                },
+                {
+                  text: 'OK'
+                }
+              ]);
+            } else {
+              showAlert('Erreur', result.error || 'Erreur lors du calcul', [{ text: 'OK' }]);
+            }
           }
         }
-      ]);
-    }
+      ]
+    );
   };
 
   /**
@@ -112,17 +269,34 @@ export default function CommissionCalculationV2Screen({ navigation }) {
       return;
     }
 
-    const result = await processusComplet(
-      selectedCollecteur.id, 
-      formatDateForAPI(dateDebut), 
-      formatDateForAPI(dateFin)
-    );
+    // 🔥 CONFIRMATION OBLIGATOIRE avant processus complet
+    Alert.alert(
+      'Confirmer le processus complet',
+      `Voulez-vous vraiment lancer le processus complet (Commission + Rémunération) pour ${selectedCollecteur.nom} ?\n\nPériode : ${formatPeriode(dateDebut, dateFin)}\n\n⚠️ Cette action est irréversible !`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel'
+        },
+        {
+          text: 'Lancer',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await processusComplet(
+              selectedCollecteur.id, 
+              formatDateForAPI(dateDebut), 
+              formatDateForAPI(dateFin)
+            );
 
-    if (result.success) {
-      setShowResults(true);
-      setShowProcessusComplet(true);
-      Alert.alert('Succès', 'Processus complet terminé avec succès');
-    }
+            if (result.success) {
+              setShowResults(true);
+              setShowProcessusComplet(true);
+              Alert.alert('Succès', 'Processus complet terminé avec succès');
+            }
+          }
+        }
+      ]
+    );
   };
 
   /**
@@ -266,32 +440,66 @@ export default function CommissionCalculationV2Screen({ navigation }) {
               <Text style={styles.periodeText}>
                 Période : {formatPeriode(dateDebut, dateFin)}
               </Text>
+              {periodeDejaCalculee && (
+                <View style={styles.warningPeriode}>
+                  <Icon name="warning" size={16} color={colors.warning} />
+                  <Text style={styles.warningText}>
+                    Cette période chevauche avec une période déjà calculée
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </Card>
+
+        {/* 🔥 NOUVEAU: Historique des commissions du collecteur sélectionné */}
+        {selectedCollecteur && (
+          <HistoriqueCommissions
+            collecteurId={selectedCollecteur.id}
+            collecteurNom={`${selectedCollecteur.prenom} ${selectedCollecteur.nom}`}
+            onHistoriqueLoaded={setHistorique}
+          />
+        )}
 
         {/* Actions */}
         <Card style={styles.actionsCard}>
           <Text style={styles.sectionTitle}>Actions</Text>
           
           <Button
-            title="Calculer Commission Uniquement"
-            onPress={handleCalculateCommissions}
+            title="Calculer les Commissions"
+            onPress={() => {
+              console.log('🔥 BUTTON PRESSED - onPress called directly');
+              handleCalculateCommissions();
+            }}
             loading={loading}
-            disabled={!selectedCollecteur}
-            style={styles.actionButton}
+            disabled={!selectedCollecteur || periodeDejaCalculee}
+            style={[
+              styles.actionButton, 
+              styles.primaryButton,
+              periodeDejaCalculee && styles.disabledButton
+            ]}
             icon="calculate"
-          />
-
-          <Button
-            title="Processus Complet (Commission + Rémunération)"
-            onPress={handleProcessusComplet}
-            loading={loading}
-            disabled={!selectedCollecteur}
-            style={[styles.actionButton, styles.primaryButton]}
-            icon="auto-fix-high"
             variant="primary"
           />
+          
+          {/* 🔥 DEBUG: Informations état bouton */}
+          <View style={{ padding: 8, backgroundColor: '#f0f0f0', marginTop: 8 }}>
+            <Text style={{ fontSize: 12 }}>
+              DEBUG Bouton: selectedCollecteur={selectedCollecteur?.id}, 
+              periodeDejaCalculee={periodeDejaCalculee.toString()}, 
+              loading={loading.toString()}, 
+              disabled={(!selectedCollecteur || periodeDejaCalculee).toString()}
+            </Text>
+          </View>
+          
+          {periodeDejaCalculee && (
+            <View style={styles.disabledInfo}>
+              <Icon name="info" size={16} color={colors.textSecondary} />
+              <Text style={styles.disabledText}>
+                Impossible de calculer - période en conflit avec l'historique
+              </Text>
+            </View>
+          )}
         </Card>
 
         {/* Statistiques */}
@@ -438,7 +646,13 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: 16
+    padding: Platform.OS === 'web' ? 20 : 16,
+    // Responsive padding pour web
+    ...(Platform.OS === 'web' && {
+      maxWidth: 1200,
+      alignSelf: 'center',
+      width: '100%'
+    })
   },
   header: {
     flexDirection: 'row',
@@ -496,12 +710,13 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   dateRow: {
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     justifyContent: 'space-between',
-    marginBottom: 12
+    marginBottom: 12,
+    gap: Platform.OS === 'web' ? 16 : 8
   },
   dateInput: {
-    flex: 0.48
+    flex: Platform.OS === 'web' ? 0.48 : 1
   },
   periodeInfo: {
     backgroundColor: colors.background,
@@ -524,9 +739,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary
   },
   statsRow: {
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     justifyContent: 'space-between',
-    marginBottom: 16
+    marginBottom: 16,
+    gap: Platform.OS === 'web' ? 16 : 8
   },
   resultsCard: {
     marginBottom: 16
@@ -567,9 +783,10 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   summaryRow: {
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     justifyContent: 'space-between',
-    marginBottom: 16
+    marginBottom: 16,
+    gap: Platform.OS === 'web' ? 16 : 8
   },
   summaryItem: {
     alignItems: 'center'
@@ -615,5 +832,37 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: 'white',
     fontSize: 16
+  },
+  // 🔥 NOUVEAUX STYLES pour validation période
+  warningPeriode: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: colors.warning + '10',
+    borderRadius: 6
+  },
+  warningText: {
+    marginLeft: 6,
+    color: colors.warning,
+    fontSize: 12,
+    fontWeight: '500'
+  },
+  disabledButton: {
+    opacity: 0.6
+  },
+  disabledInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: colors.textSecondary + '10',
+    borderRadius: 6
+  },
+  disabledText: {
+    marginLeft: 6,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontStyle: 'italic'
   }
 });

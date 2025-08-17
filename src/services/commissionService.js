@@ -53,7 +53,15 @@ class CommissionService extends BaseApiService {
   async updateCollecteurCommissionParams(collecteurId, params) {
     try {
       console.log('📱 API: PUT /commission-params/collecteur/', collecteurId);
-      const response = await this.axios.put(`/commission-params/collecteur/${collecteurId}`, params);
+      
+      // 🔥 SYNCHRONISATION FRONTEND/BACKEND: Conversion type commission "palier" → "TIER"
+      const dataToSend = { ...params };
+      if (dataToSend.typeCalcul === 'palier') {
+        console.log('🔄 Conversion type commission: palier → TIER');
+        dataToSend.typeCalcul = 'TIER';
+      }
+      
+      const response = await this.axios.put(`/commission-params/collecteur/${collecteurId}`, dataToSend);
       return this.formatResponse(response, 'Paramètres collecteur mis à jour');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la mise à jour');
@@ -136,7 +144,7 @@ class CommissionService extends BaseApiService {
   // HISTORIQUE ET RAPPORTS
 
   /**
-   * Récupérer l'historique des commissions
+   * Récupérer l'historique des commissions (ancienne API)
    */
   async getCommissionsHistory(params = {}) {
     try {
@@ -145,6 +153,46 @@ class CommissionService extends BaseApiService {
       return this.formatResponse(response, 'Historique récupéré');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération');
+    }
+  }
+
+  /**
+   * 🔥 NOUVEAU: Récupérer l'historique des calculs de commission pour un collecteur
+   */
+  async getHistoriqueCalculCommissions(collecteurId, page = -1, size = 10) {
+    try {
+      console.log('📱 API V2: GET /v2/historique-commissions/collecteur/', collecteurId);
+      const params = page >= 0 ? { page, size } : {};
+      const response = await this.axios.get(`/v2/historique-commissions/collecteur/${collecteurId}`, { params });
+      return this.formatResponse(response, 'Historique des calculs récupéré');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération de l\'historique');
+    }
+  }
+
+  /**
+   * 🔥 NOUVEAU: Récupérer les calculs non rémunérés pour un collecteur
+   */
+  async getCalculsNonRemuneres(collecteurId) {
+    try {
+      console.log('📱 API V2: GET /v2/historique-commissions/collecteur/', collecteurId, '/non-remuneres');
+      const response = await this.axios.get(`/v2/historique-commissions/collecteur/${collecteurId}/non-remuneres`);
+      return this.formatResponse(response, 'Calculs non rémunérés récupérés');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des calculs non rémunérés');
+    }
+  }
+
+  /**
+   * 🔥 NOUVEAU: Récupérer les statistiques de commission pour un collecteur
+   */
+  async getStatsCommissions(collecteurId) {
+    try {
+      console.log('📱 API V2: GET /v2/historique-commissions/stats/collecteur/', collecteurId);
+      const response = await this.axios.get(`/v2/historique-commissions/stats/collecteur/${collecteurId}`);
+      return this.formatResponse(response, 'Statistiques de commission récupérées');
+    } catch (error) {
+      throw this.handleError(error, 'Erreur lors de la récupération des statistiques');
     }
   }
 

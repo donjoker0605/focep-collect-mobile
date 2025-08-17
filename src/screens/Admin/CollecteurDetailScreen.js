@@ -20,6 +20,19 @@ import Button from '../../components/Button/Button';
 import theme from '../../theme';
 import { collecteurService, clientService } from '../../services';
 
+// Fonction utilitaire pour calculer l'ancienneté
+const calculerAnciennete = (dateCreation) => {
+  if (!dateCreation) return 0;
+  
+  const creation = new Date(dateCreation);
+  const maintenant = new Date();
+  
+  const annees = maintenant.getFullYear() - creation.getFullYear();
+  const mois = maintenant.getMonth() - creation.getMonth();
+  
+  return Math.max(0, annees * 12 + mois);
+};
+
 const CollecteurDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { collecteur: initialCollecteur } = route.params;
@@ -84,12 +97,35 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
     loadCollecteurDetails(false);
   };
 
-  const handleEditCollecteur = () => {
-    navigation.navigate('CollecteurCreationScreen', {
-      mode: 'edit',
-      collecteur,
-      onRefresh: () => loadCollecteurDetails(false)
-    });
+  const handleToggleStatus = async () => {
+    if (!collecteur) return;
+    
+    const newStatus = !collecteur.active;
+    const action = newStatus ? 'activer' : 'désactiver';
+    
+    Alert.alert(
+      'Confirmation',
+      `Voulez-vous ${action} ${collecteur.prenom} ${collecteur.nom} ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            try {
+              const response = await collecteurService.toggleStatus(collecteur.id, newStatus);
+              if (response.success) {
+                setCollecteur(prev => ({ ...prev, active: newStatus }));
+                Alert.alert('Succès', `Collecteur ${action} avec succès`);
+              } else {
+                Alert.alert('Erreur', response.error || `Erreur lors de l'${action}ion`);
+              }
+            } catch (err) {
+              Alert.alert('Erreur', err.message || `Erreur lors de l'${action}ion`);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleViewCommissions = () => {
@@ -184,7 +220,10 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Ancienneté</Text>
           <Text style={styles.infoValue}>
-            {collecteur.ancienneteEnMois || 0} mois
+            {collecteur.active 
+              ? `${calculerAnciennete(collecteur.dateCreation)} mois (depuis création)`
+              : `${calculerAnciennete(collecteur.dateCreation)} mois (inactif)`
+            }
           </Text>
         </View>
       </Card>
@@ -196,10 +235,18 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
         <View style={styles.actionButtons}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={handleEditCollecteur}
+            onPress={handleToggleStatus}
           >
-            <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
-            <Text style={styles.actionButtonText}>Modifier</Text>
+            <Ionicons 
+              name={collecteur.active ? "pause-outline" : "play-outline"} 
+              size={20} 
+              color={collecteur.active ? theme.colors.warning : theme.colors.success} 
+            />
+            <Text style={[styles.actionButtonText, { 
+              color: collecteur.active ? theme.colors.warning : theme.colors.success 
+            }]}>
+              {collecteur.active ? 'Désactiver' : 'Activer'}
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -429,11 +476,6 @@ const CollecteurDetailScreen = ({ navigation, route }) => {
       <Header
         title="Détails collecteur"
         onBackPress={() => navigation.goBack()}
-        rightComponent={
-          <TouchableOpacity onPress={handleEditCollecteur}>
-            <Ionicons name="create-outline" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-        }
       />
       
       <View style={styles.content}>

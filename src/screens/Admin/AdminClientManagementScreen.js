@@ -50,6 +50,8 @@ const AdminClientManagementScreen = ({ navigation }) => {
   const [loadingCollecteurs, setLoadingCollecteurs] = useState(true);
   const [selectedCollecteur, setSelectedCollecteur] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'by-collecteur'
   const [stats, setStats] = useState({
     totalClients: 0,
@@ -58,8 +60,21 @@ const AdminClientManagementScreen = ({ navigation }) => {
     totalCollecteurs: 0
   });
 
-  // Clients filtrés selon la recherche et les critères
+  // Clients filtrés selon la recherche et les critères AVEC RECHERCHE SEMI-AUTOMATIQUE
   const filteredClients = useMemo(() => {
+    // Si une recherche est en cours, utiliser les résultats de recherche
+    if (searchQuery.trim().length >= 2) {
+      let filtered = searchResults;
+      
+      // Appliquer le filtre collecteur sur les résultats de recherche
+      if (selectedCollecteur) {
+        filtered = filtered.filter(c => c.collecteurId === selectedCollecteur.id);
+      }
+      
+      return filtered;
+    }
+    
+    // Sinon, utiliser la logique normale
     let filtered = allAssignedClients;
     
     // Filtrer par collecteur sélectionné
@@ -67,19 +82,8 @@ const AdminClientManagementScreen = ({ navigation }) => {
       filtered = filtered.filter(c => c.collecteurId === selectedCollecteur.id);
     }
     
-    // Filtrer par recherche
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(client => 
-        `${client.prenom} ${client.nom}`.toLowerCase().includes(query) ||
-        client.telephone?.includes(searchQuery) ||
-        client.numeroCni?.toLowerCase().includes(query) ||
-        client.collecteurNom?.toLowerCase().includes(query)
-      );
-    }
-    
     return filtered;
-  }, [allAssignedClients, selectedCollecteur, searchQuery]);
+  }, [allAssignedClients, selectedCollecteur, searchQuery, searchResults]);
 
   // 🔥 CHARGEMENT DES COLLECTEURS ASSIGNÉS
   const loadCollecteurs = useCallback(async () => {
@@ -171,11 +175,74 @@ const AdminClientManagementScreen = ({ navigation }) => {
     console.log('📊 Stats calculées:', newStats);
   }, [allAssignedClients, collecteurs.length]);
 
-  // 🔍 GESTION DE LA RECHERCHE (recherche locale dans les clients assignés)
+  // 🔍 GESTION DE LA RECHERCHE SEMI-AUTOMATIQUE AMÉLIORÉE
+  const [searchTimeout, setSearchTimeout] = useState(null);
+  
   const handleSearch = useCallback((text) => {
     setSearchQuery(text);
-    // La recherche se fait maintenant côté frontend dans les clients déjà chargés
-  }, []);
+    
+    // Debouncing pour éviter trop de calculs
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    if (text.trim().length === 0) {
+      setIsSearching(false);
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    
+    const newTimeout = setTimeout(() => {
+      performSearch(text.trim());
+    }, 300); // Délai de 300ms pour la recherche semi-automatique
+    
+    setSearchTimeout(newTimeout);
+  }, [searchTimeout]);
+  
+  const performSearch = useCallback((query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    
+    const searchLower = query.toLowerCase();
+    const results = allAssignedClients.filter(client => {
+      if (!client) return false;
+      
+      // Recherche dans nom complet
+      const fullName = `${client.prenom || ''} ${client.nom || ''}`.toLowerCase();
+      if (fullName.includes(searchLower)) return true;
+      
+      // Recherche dans téléphone
+      const phone = (client.telephone || '').toLowerCase();
+      if (phone.includes(searchLower)) return true;
+      
+      // Recherche dans CNI
+      const cni = (client.numeroCni || '').toLowerCase();
+      if (cni.includes(searchLower)) return true;
+      
+      // Recherche dans collecteur
+      const collecteur = (client.collecteurNom || '').toLowerCase();
+      if (collecteur.includes(searchLower)) return true;
+      
+      // Recherche dans ville
+      const ville = (client.ville || '').toLowerCase();
+      if (ville.includes(searchLower)) return true;
+      
+      // Recherche dans quartier
+      const quartier = (client.quartier || '').toLowerCase();
+      if (quartier.includes(searchLower)) return true;
+      
+      return false;
+    });
+    
+    setSearchResults(results);
+    setIsSearching(false);
+    console.log(`🔍 Recherche "${query}" : ${results.length} résultats trouvés`);
+  }, [allAssignedClients]);
 
   // 📋 CHANGEMENT D'ONGLET
   const handleTabChange = useCallback((tab) => {
@@ -240,6 +307,15 @@ const AdminClientManagementScreen = ({ navigation }) => {
       loadCollecteurs();
     }, [loadCollecteurs])
   );
+  
+  // 🧹 NETTOYAGE DES TIMEOUTS
+  useEffect(() => {
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchTimeout]);
 
   // Calcul des stats quand les données changent
   useEffect(() => {
@@ -356,20 +432,43 @@ const AdminClientManagementScreen = ({ navigation }) => {
         {renderStatsCard()}
 
         {/* Barre de recherche */}
+        {/* 🔍 BARRE DE RECHERCHE SEMI-AUTOMATIQUE AMÉLIORÉE */}
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={theme.colors.textLight} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher dans tous les clients..."
+            placeholder="Rechercher clients (nom, téléphone, CNI, ville...)" 
             value={searchQuery}
             onChangeText={handleSearch}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-          {searchQuery.length > 0 && (
+          {isSearching && (
+            <ActivityIndicator size="small" color={theme.colors.primary} style={styles.searchSpinner} />
+          )}
+          {searchQuery.length > 0 && !isSearching && (
             <TouchableOpacity onPress={() => handleSearch('')}>
               <Ionicons name="close-circle" size={20} color={theme.colors.textLight} />
             </TouchableOpacity>
           )}
         </View>
+        
+        {/* 🔍 INDICATEUR RÉSULTATS DE RECHERCHE */}
+        {searchQuery.trim().length >= 2 && (
+          <View style={styles.searchResultsIndicator}>
+            <Text style={styles.searchResultsText}>
+              {isSearching 
+                ? 'Recherche en cours...'
+                : `${searchResults.length} résultat${searchResults.length > 1 ? 's' : ''} pour "${searchQuery}"`
+              }
+            </Text>
+            {searchResults.length > 0 && !isSearching && (
+              <Text style={styles.searchHint}>
+                Tapez pour affiner ou effacez pour voir tous les clients
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* 🔍 SECTION DEBUG */}
         {!canAccess ? (
@@ -651,6 +750,29 @@ const styles = StyleSheet.create({
     color: theme.colors.textLight,
     textAlign: 'center',
     marginTop: 8,
+    fontStyle: 'italic',
+  },
+  // NOUVEAUX STYLES POUR RECHERCHE SEMI-AUTOMATIQUE
+  searchSpinner: {
+    marginRight: 8,
+  },
+  searchResultsIndicator: {
+    backgroundColor: theme.colors.lightGray,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchResultsText: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  searchHint: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    marginTop: 4,
     fontStyle: 'italic',
   },
 });

@@ -56,6 +56,12 @@ class CollecteurService extends BaseApiService {
       // Ne pas envoyer l'agenceId depuis le frontend - elle sera assignée automatiquement côté backend
       const { agenceId, ...dataToSend } = collecteurData;
       
+      // 🔥 SYNCHRONISATION FRONTEND/BACKEND: Conversion type commission "palier" → "TIER"
+      if (dataToSend.commissionParams && dataToSend.commissionParams.typeCalcul === 'palier') {
+        console.log('🔄 Conversion type commission: palier → TIER');
+        dataToSend.commissionParams.typeCalcul = 'TIER';
+      }
+      
       const response = await this.axios.post('/collecteurs', dataToSend);
       return this.formatResponse(response, 'Collecteur créé avec succès');
     } catch (error) {

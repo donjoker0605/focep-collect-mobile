@@ -186,6 +186,20 @@ export const formatFileSize = (sizeInBytes) => {
   return `${size.toFixed(1)} ${units[unitIndex]}`;
 };
 
+export const formatPercentage = (value, decimals = 1) => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0%';
+  }
+  
+  const numericValue = typeof value === 'string' ? parseFloat(value) : value;
+  
+  if (isNaN(numericValue)) {
+    return '0%';
+  }
+  
+  return `${numericValue.toFixed(decimals)}%`;
+};
+
 // Default export object with all formatters
 export const formatters = {
   formatCurrency,
@@ -196,5 +210,6 @@ export const formatters = {
   formatNotificationTime,
   formatRelativeTime,
   formatMoney,
-  formatFileSize
+  formatFileSize,
+  formatPercentage
 };

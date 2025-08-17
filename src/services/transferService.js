@@ -11,8 +11,9 @@ class TransferService extends BaseApiService {
     try {
       console.log('🔄 API: POST /transfers (transfert réel)', transferData);
       
-      // Validation côté client
-      if (!transferData.sourceCollecteurId || !transferData.targetCollecteurId) {
+      // Validation côté client - supporter les deux formats
+      const targetId = transferData.targetCollecteurId || transferData.destinationCollecteurId;
+      if (!transferData.sourceCollecteurId || !targetId) {
         throw new Error('Collecteur source et destination requis');
       }
       
@@ -20,14 +21,14 @@ class TransferService extends BaseApiService {
         throw new Error('Au moins un client doit être sélectionné');
       }
       
-      if (transferData.sourceCollecteurId === transferData.targetCollecteurId) {
+      if (transferData.sourceCollecteurId === targetId) {
         throw new Error('Les collecteurs source et destination ne peuvent pas être identiques');
       }
 
       // ✅ UTILISER LE NOUVEL ENDPOINT UNIFIÉ  
       const requestData = {
         sourceCollecteurId: transferData.sourceCollecteurId,
-        targetCollecteurId: transferData.targetCollecteurId,
+        targetCollecteurId: targetId,
         clientIds: transferData.clientIds,
         justification: transferData.justification || 'Transfert administratif'
       };
@@ -223,11 +224,12 @@ class TransferService extends BaseApiService {
       errors.sourceCollecteur = 'Collecteur source requis';
     }
 
-    if (!transferData.destinationCollecteurId) {
+    const targetId = transferData.targetCollecteurId || transferData.destinationCollecteurId;
+    if (!targetId) {
       errors.destinationCollecteur = 'Collecteur destination requis';
     }
 
-    if (transferData.sourceCollecteurId === transferData.destinationCollecteurId) {
+    if (transferData.sourceCollecteurId === targetId) {
       errors.collecteurs = 'Les collecteurs source et destination ne peuvent pas être identiques';
     }
 
