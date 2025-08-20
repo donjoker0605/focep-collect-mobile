@@ -19,6 +19,7 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { useSuperAdmin } from '../../hooks/useSuperAdmin';
+import superAdminService from '../../services/superAdminService';
 
 const ClientConsultationScreen = ({ navigation }) => {
   const {
@@ -80,11 +81,24 @@ const ClientConsultationScreen = ({ navigation }) => {
 
   useEffect(() => {
     // Charger les admins de l'agence sélectionnée
-    if (filters.agenceId) {
-      loadAdminsByAgence(filters.agenceId);
-    } else {
-      setFilters(prev => ({ ...prev, adminId: '', collecteurId: '' }));
-    }
+    const loadAdminsForAgence = async () => {
+      if (filters.agenceId) {
+        const agenceAdmins = await loadAdminsByAgence(filters.agenceId);
+        // Mettre à jour la liste des admins locaux
+        setAdmins(prevAdmins => {
+          const mergedAdmins = [...prevAdmins];
+          agenceAdmins.forEach(newAdmin => {
+            if (!mergedAdmins.find(admin => admin.id === newAdmin.id)) {
+              mergedAdmins.push(newAdmin);
+            }
+          });
+          return mergedAdmins;
+        });
+      } else {
+        setFilters(prev => ({ ...prev, adminId: '', collecteurId: '' }));
+      }
+    };
+    loadAdminsForAgence();
   }, [filters.agenceId]);
 
   useEffect(() => {
@@ -99,228 +113,75 @@ const ClientConsultationScreen = ({ navigation }) => {
   const loadAllClients = async () => {
     setLoadingClients(true);
     try {
-      // Simuler l'appel API pour récupérer tous les clients
-      setTimeout(() => {
-        const mockClients = [
-          {
-            id: 1,
-            nom: 'Ndour',
-            prenom: 'Awa',
-            telephone: '77 111 11 11',
-            cni: '1234567890123',
-            adresse: 'Dakar, Plateau',
-            status: 'active',
-            typeCompte: 'standard',
-            soldeCompte: 75000,
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            admin: {
-              id: 1,
-              nom: 'Dupont',
-              prenom: 'Jean'
-            },
-            collecteur: {
-              id: 1,
-              nom: 'Diop',
-              prenom: 'Moussa'
-            },
-            dateCreation: '2024-01-15T10:00:00',
-            derniereTransaction: '2024-12-10T14:30:00',
-            nombreTransactions: 45,
-            activiteRecente: {
-              derniereConnexion: '2024-12-11T16:20:00',
-              transactionsMois: 12,
-              montantMoyenTransaction: 15000
-            },
-            limites: {
-              quotidienne: 200000,
-              mensuelle: 2000000,
-              utiliseQuotidienne: 45000,
-              utiliseMensuelle: 320000
-            }
+      const result = await superAdminService.getAllClientsEnriched();
+      if (result.success) {
+        // Les données sont maintenant enrichies avec toutes les informations financières
+        const adaptedClients = result.data.map(client => ({
+          id: client.id,
+          nom: client.nom,
+          prenom: client.prenom,
+          telephone: client.telephone,
+          cni: client.numeroCni,
+          adresse: client.adresseComplete || client.ville || 'N/A',
+          status: client.valide ? 'active' : 'inactive',
+          typeCompte: 'standard', // Valeur par défaut
+          soldeCompte: client.soldeCompte || 0,
+          agence: client.agence || { id: null, nomAgence: 'N/A', codeAgence: 'N/A' },
+          admin: { id: null, nom: 'N/A', prenom: 'N/A' }, // À améliorer avec la hiérarchie
+          collecteur: client.collecteur || { id: null, nom: 'N/A', prenom: 'N/A' },
+          dateCreation: client.dateCreation,
+          derniereTransaction: client.dateModification,
+          nombreTransactions: 0, // À calculer côté backend
+          activiteRecente: {
+            derniereConnexion: client.dateModification,
+            transactionsMois: 0,
+            montantMoyenTransaction: 0
           },
-          {
-            id: 2,
-            nom: 'Gueye',
-            prenom: 'Modou',
-            telephone: '77 222 22 22',
-            cni: '2345678901234',
-            adresse: 'Dakar, Medina',
-            status: 'active',
-            typeCompte: 'premium',
-            soldeCompte: 450000,
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            admin: {
-              id: 1,
-              nom: 'Dupont',
-              prenom: 'Jean'
-            },
-            collecteur: {
-              id: 1,
-              nom: 'Diop',
-              prenom: 'Moussa'
-            },
-            dateCreation: '2024-02-20T09:15:00',
-            derniereTransaction: '2024-12-11T11:45:00',
-            nombreTransactions: 89,
-            activiteRecente: {
-              derniereConnexion: '2024-12-11T18:10:00',
-              transactionsMois: 28,
-              montantMoyenTransaction: 32000
-            },
-            limites: {
-              quotidienne: 500000,
-              mensuelle: 5000000,
-              utiliseQuotidienne: 125000,
-              utiliseMensuelle: 890000
-            }
+          limites: {
+            quotidienne: 200000, // Valeurs par défaut
+            mensuelle: 2000000,
+            utiliseQuotidienne: 0,
+            utiliseMensuelle: 0
           },
-          {
-            id: 3,
-            nom: 'Kane',
-            prenom: 'Mariama',
-            telephone: '77 333 33 33',
-            cni: '3456789012345',
-            adresse: 'Thiès, Centre',
-            status: 'inactive',
-            typeCompte: 'standard',
-            soldeCompte: 12000,
-            agence: {
-              id: 2,
-              nomAgence: 'Agence Thiès',
-              codeAgence: 'THI001'
-            },
-            admin: {
-              id: 3,
-              nom: 'Diallo',
-              prenom: 'Amadou'
-            },
-            collecteur: {
-              id: 3,
-              nom: 'Fall',
-              prenom: 'Ibrahima'
-            },
-            dateCreation: '2024-03-10T11:30:00',
-            derniereTransaction: '2024-11-25T09:20:00',
-            nombreTransactions: 23,
-            activiteRecente: {
-              derniereConnexion: '2024-11-30T14:55:00',
-              transactionsMois: 3,
-              montantMoyenTransaction: 8500
-            },
-            limites: {
-              quotidienne: 200000,
-              mensuelle: 2000000,
-              utiliseQuotidienne: 0,
-              utiliseMensuelle: 25500
-            }
+          // 🌍 Nouvelles données de géolocalisation
+          localisation: {
+            latitude: client.latitude,
+            longitude: client.longitude,
+            adresseComplete: client.adresseComplete,
+            coordonneesSaisieManuelle: client.coordonneesSaisieManuelle,
+            dateMajCoordonnees: client.dateMajCoordonnees
           },
-          {
-            id: 4,
-            nom: 'Diagne',
-            prenom: 'Cheikh',
-            telephone: '77 444 44 44',
-            cni: '4567890123456',
-            adresse: 'Saint-Louis, Nord',
-            status: 'active',
-            typeCompte: 'vip',
-            soldeCompte: 1250000,
-            agence: {
-              id: 3,
-              nomAgence: 'Agence Saint-Louis',
-              codeAgence: 'STL001'
-            },
-            admin: {
-              id: 4,
-              nom: 'Ba',
-              prenom: 'Fatou'
-            },
-            collecteur: {
-              id: 4,
-              nom: 'Ndiaye',
-              prenom: 'Fatima'
-            },
-            dateCreation: '2024-01-08T13:45:00',
-            derniereTransaction: '2024-12-11T17:50:00',
-            nombreTransactions: 156,
-            activiteRecente: {
-              derniereConnexion: '2024-12-11T18:30:00',
-              transactionsMois: 42,
-              montantMoyenTransaction: 65000
-            },
-            limites: {
-              quotidienne: 1000000,
-              mensuelle: 10000000,
-              utiliseQuotidienne: 250000,
-              utiliseMensuelle: 2750000
-            }
-          },
-          {
-            id: 5,
-            nom: 'Sow',
-            prenom: 'Bineta',
-            telephone: '77 555 55 55',
-            cni: '5678901234567',
-            adresse: 'Saint-Louis, Sud',
-            status: 'suspended',
-            typeCompte: 'standard',
-            soldeCompte: 85000,
-            agence: {
-              id: 3,
-              nomAgence: 'Agence Saint-Louis',
-              codeAgence: 'STL001'
-            },
-            admin: {
-              id: 4,
-              nom: 'Ba',
-              prenom: 'Fatou'
-            },
-            collecteur: {
-              id: 5,
-              nom: 'Sarr',
-              prenom: 'Ousmane'
-            },
-            dateCreation: '2024-04-12T09:30:00',
-            derniereTransaction: '2024-12-05T15:30:00',
-            nombreTransactions: 34,
-            activiteRecente: {
-              derniereConnexion: '2024-12-08T10:15:00',
-              transactionsMois: 8,
-              montantMoyenTransaction: 12000
-            },
-            limites: {
-              quotidienne: 200000,
-              mensuelle: 2000000,
-              utiliseQuotidienne: 0,
-              utiliseMensuelle: 96000
-            }
-          },
-        ];
-        setClients(mockClients);
-        setLoadingClients(false);
-      }, 1000);
+          // 💰 Nouvelles données de commission
+          commission: client.commissionParameter || null
+        }));
+        setClients(adaptedClients);
+      } else {
+        console.error('Erreur API clients enrichis:', result.error);
+        setClients([]);
+      }
     } catch (error) {
-      console.error('Erreur lors du chargement des clients:', error);
+      console.error('Erreur lors du chargement des clients enrichis:', error);
+      setClients([]);
+    } finally {
       setLoadingClients(false);
     }
   };
 
   const loadAllAdmins = async () => {
     try {
-      const mockAdmins = [
-        { id: 1, nom: 'Dupont', prenom: 'Jean', agenceId: 1 },
-        { id: 2, nom: 'Martin', prenom: 'Sophie', agenceId: 1 },
-        { id: 3, nom: 'Diallo', prenom: 'Amadou', agenceId: 2 },
-        { id: 4, nom: 'Ba', prenom: 'Fatou', agenceId: 3 },
-      ];
-      setAdmins(mockAdmins);
+      const result = await superAdminService.getAllAdmins();
+      if (result.success) {
+        const adaptedAdmins = result.data.map(admin => ({
+          id: admin.id,
+          nom: admin.nom,
+          prenom: admin.prenom,
+          agenceId: admin.agence?.id || null
+        }));
+        setAdmins(adaptedAdmins);
+      } else {
+        console.error('Erreur API admins:', result.error);
+        setAdmins([]);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des admins:', error);
     }
@@ -328,21 +189,43 @@ const ClientConsultationScreen = ({ navigation }) => {
 
   const loadAllCollecteurs = async () => {
     try {
-      const mockCollecteurs = [
-        { id: 1, nom: 'Diop', prenom: 'Moussa', adminId: 1, agenceId: 1 },
-        { id: 2, nom: 'Seck', prenom: 'Aminata', adminId: 1, agenceId: 1 },
-        { id: 3, nom: 'Fall', prenom: 'Ibrahima', adminId: 3, agenceId: 2 },
-        { id: 4, nom: 'Ndiaye', prenom: 'Fatima', adminId: 4, agenceId: 3 },
-        { id: 5, nom: 'Sarr', prenom: 'Ousmane', adminId: 4, agenceId: 3 },
-      ];
-      setCollecteurs(mockCollecteurs);
+      const result = await superAdminService.getAllCollecteurs();
+      if (result.success) {
+        const adaptedCollecteurs = result.data.map(collecteur => ({
+          id: collecteur.id,
+          nom: collecteur.nom,
+          prenom: collecteur.prenom,
+          adminId: collecteur.adminId || null,
+          agenceId: collecteur.agence?.id || null
+        }));
+        setCollecteurs(adaptedCollecteurs);
+      } else {
+        console.error('Erreur API collecteurs:', result.error);
+        setCollecteurs([]);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des collecteurs:', error);
     }
   };
 
-  const loadAdminsByAgence = (agenceId) => {
-    return admins.filter(admin => admin.agenceId === parseInt(agenceId));
+  const loadAdminsByAgence = async (agenceId) => {
+    try {
+      const result = await superAdminService.getAdminsByAgence(agenceId);
+      if (result.success) {
+        return result.data.map(admin => ({
+          id: admin.id,
+          nom: admin.nom,
+          prenom: admin.prenom,
+          agenceId: admin.agence?.id || null
+        }));
+      } else {
+        console.error('Erreur API admins par agence:', result.error);
+        return [];
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des admins par agence:', error);
+      return [];
+    }
   };
 
   const loadCollecteursByAdmin = (adminId) => {
@@ -594,7 +477,7 @@ const ClientConsultationScreen = ({ navigation }) => {
               ]} 
             />
           </View>
-        </div>
+        </View>
 
         <View style={styles.activiteContainer}>
           <View style={styles.activiteRow}>
@@ -620,7 +503,7 @@ const ClientConsultationScreen = ({ navigation }) => {
 
   const getFilteredAdmins = () => {
     if (!filters.agenceId) return [];
-    return loadAdminsByAgence(filters.agenceId);
+    return admins.filter(admin => admin.agenceId === parseInt(filters.agenceId));
   };
 
   const getFilteredCollecteurs = () => {

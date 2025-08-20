@@ -39,11 +39,33 @@ const AdminCollecteurSupervisionScreen = ({ navigation }) => {
       const response = await adminCollecteurService.getAssignedCollecteurs();
       
       if (response && response.data) {
-        const result = Array.isArray(response.data) 
-          ? response.data 
-          : Object.values(response.data).filter(item => 
-              item && typeof item === 'object' && item.id
-            );
+        // 🔥 CORRECTION: Gérer la structure Page<CollecteurDTO> du backend
+        let result = [];
+        
+        if (response.data.content && Array.isArray(response.data.content)) {
+          // Cas 1: response.data est une Page Spring Boot avec .content (CAS PRINCIPAL)
+          result = response.data.content;
+          console.log(`✅ Extraction depuis response.data.content: ${result.length} collecteurs`);
+        } else if (Array.isArray(response.data)) {
+          // Cas 2: response.data est directement un array (fallback)
+          result = response.data;
+          console.log(`✅ Extraction depuis response.data directement: ${result.length} collecteurs`);
+        } else if (response.data.data && Array.isArray(response.data.data)) {
+          // Cas 3: response.data contient .data qui est un array (fallback)
+          result = response.data.data;
+          console.log(`✅ Extraction depuis response.data.data: ${result.length} collecteurs`);
+        } else {
+          console.warn('⚠️ Structure de données inattendue:', response.data);
+          console.warn('⚠️ Keys disponibles:', Object.keys(response.data || {}));
+          result = [];
+        }
+
+        console.log(`🔍 ${result.length} collecteurs extraits de la structure:`, {
+          isArray: Array.isArray(response.data),
+          hasContent: !!response.data.content,
+          hasData: !!response.data.data,
+          resultLength: result.length
+        });
 
         const enrichedData = result.map(collecteur => ({
           ...collecteur,
@@ -326,10 +348,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
   searchIcon: {
@@ -375,10 +394,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
   summaryValue: {
@@ -400,10 +416,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
     elevation: 2,
   },
   cardHeader: {

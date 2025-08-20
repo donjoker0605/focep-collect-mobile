@@ -323,12 +323,16 @@ export const useClients = (overrideCollecteurId = null) => {
     initializeUserInfo();
   }, [initializeUserInfo]);
 
+  // 🔥 FIX: État pour éviter les appels doublons
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // Charger les clients automatiquement si l'accès est autorisé
   useEffect(() => {
-    if (canAccess && userRole) {
+    if (canAccess && userRole && !isInitialized) {
+      setIsInitialized(true);
       fetchClients();
     }
-  }, [canAccess, userRole, overrideCollecteurId]); // Note: fetchClients n'est pas dans les deps pour éviter les boucles
+  }, [canAccess, userRole, overrideCollecteurId, isInitialized]); // Note: fetchClients n'est pas dans les deps pour éviter les boucles
 
   // 🔧 MÉTHODES UTILITAIRES
   const clearError = useCallback(() => setError(null), []);
@@ -340,6 +344,7 @@ export const useClients = (overrideCollecteurId = null) => {
     setError(null);
     setLoading(false);
     setRefreshing(false);
+    setIsInitialized(false); // 🔥 Reset de l'état d'initialisation
   }, []);
 
   return {

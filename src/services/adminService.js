@@ -6,11 +6,13 @@ class AdminService extends BaseApiService {
     super();
   }
 
-  // ✅ DASHBOARD ADMIN - ENDPOINT CORRIGÉ
-  async getDashboardStats() {
+  // ✅ DASHBOARD ADMIN - ENDPOINT CORRIGÉ avec paramètre période
+  async getDashboardStats(period = 'today') {
     try {
-      console.log('📊 API: GET /admin/dashboard');
-      const response = await this.axios.get('/admin/dashboard');
+      console.log('📊 API: GET /admin/dashboard?period=', period);
+      const response = await this.axios.get('/admin/dashboard', { 
+        params: { period } 
+      });
       return this.formatResponse(response, 'Dashboard admin récupéré');
     } catch (error) {
       throw this.handleError(error, 'Erreur lors de la récupération du dashboard admin');

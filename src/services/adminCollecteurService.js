@@ -30,6 +30,20 @@ class AdminCollecteurService extends BaseApiService {
       // Essayer l'endpoint spécialisé d'abord
       try {
         const response = await this.axios.get('/admin/collecteurs/mes-collecteurs', { params });
+        
+        // 🔍 DEBUG: Afficher la structure réelle des données
+        console.log('🔍 Structure réponse /mes-collecteurs:');
+        console.log('  - response.data type:', typeof response.data);
+        console.log('  - response.data keys:', Object.keys(response.data || {}));
+        if (response.data?.data) {
+          console.log('  - response.data.data type:', typeof response.data.data);
+          console.log('  - response.data.data keys:', Object.keys(response.data.data || {}));
+          console.log('  - response.data.data.content exists:', !!response.data.data.content);
+          if (response.data.data.content) {
+            console.log('  - content length:', response.data.data.content.length);
+          }
+        }
+        
         return this.formatResponse(response, 'Collecteurs assignés récupérés');
       } catch (notFoundError) {
         if (notFoundError.response?.status === 404) {

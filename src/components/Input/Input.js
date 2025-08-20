@@ -47,12 +47,10 @@ const Input = ({
       {label && (
         <View style={styles.labelContainer}>
           <Text style={[styles.label, labelStyle]}>
-            {label}
-            {required && <Text style={styles.requiredAsterisk}>*</Text>}
+            {label}{required && <Text style={styles.requiredAsterisk}>*</Text>}
           </Text>
         </View>
       )}
-      
       <View style={[
         styles.inputContainer,
         isFocused && styles.inputContainerFocused,
@@ -68,13 +66,11 @@ const Input = ({
             )}
           </View>
         )}
-        
         {prefix && (
           <View style={styles.prefixContainer}>
             <Text style={styles.prefix}>{prefix}</Text>
           </View>
         )}
-        
         <TextInput
           style={[
             styles.input,
@@ -95,13 +91,11 @@ const Input = ({
           maxLength={maxLength}
           {...props}
         />
-        
         {suffix && (
           <View style={styles.suffixContainer}>
             <Text style={styles.suffix}>{suffix}</Text>
           </View>
         )}
-        
         {secureTextEntry && (
           <TouchableOpacity
             style={styles.iconContainer}
@@ -114,7 +108,6 @@ const Input = ({
             />
           </TouchableOpacity>
         )}
-        
         {rightIcon && !secureTextEntry && (
           <TouchableOpacity
             style={styles.iconContainer}
@@ -129,15 +122,12 @@ const Input = ({
           </TouchableOpacity>
         )}
       </View>
-      
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}
-      
       {helper && !error && (
         <Text style={styles.helperText}>{helper}</Text>
       )}
-      
       {maxLength && value && (
         <Text style={styles.charCountText}>
           {value.length}/{maxLength}

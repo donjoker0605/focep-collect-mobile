@@ -22,6 +22,7 @@ import { useAuth } from '../../hooks/useAuth';
 import useClients from '../../hooks/useClients';
 import adminService from '../../services/adminService';
 import { adminCollecteurService } from '../../services';
+import balanceCalculationService from '../../services/balanceCalculationService';
 
 const AdminClientManagementScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -137,7 +138,16 @@ const AdminClientManagementScreen = ({ navigation }) => {
               ...client,
               collecteurNom: `${collecteur.prenom} ${collecteur.nom}`,
               collecteurId: collecteur.id,
-              valide: client.active !== false
+              // 🔥 CORRECTION : Utiliser le bon champ de statut (valide, pas active)
+              valide: client.valide !== false,
+              // DEBUG: Afficher les champs de statut disponibles
+              _debug_statusFields: {
+                valide: client.valide,
+                active: client.active,
+                // Autres champs possibles
+                isActive: client.isActive,
+                statut: client.statut
+              }
             }));
             
             allClients.push(...enrichedClients);
@@ -147,8 +157,47 @@ const AdminClientManagementScreen = ({ navigation }) => {
         }
       }
       
-      setAllAssignedClients(allClients);
-      console.log(`✅ ${allClients.length} clients accessibles chargés`);
+      // 🔥 NOUVEAU: Calcul des soldes disponibles (solde total - commission)
+      console.log('💰 Calcul des soldes disponibles pour tous les clients...');
+      const clientsWithBalances = await Promise.all(
+        allClients.map(async (client) => {
+          try {
+            const balances = await balanceCalculationService.calculateClientAvailableBalance(client);
+            return {
+              ...client,
+              soldeTotal: balances.soldeTotal || 0,
+              soldeDisponible: balances.soldeDisponible || 0,
+              commissionSimulee: balances.commissionSimulee || 0
+            };
+          } catch (error) {
+            console.warn(`⚠️ Erreur calcul solde client ${client.id}:`, error.message);
+            return {
+              ...client,
+              soldeTotal: client.soldeTotal || 0,
+              soldeDisponible: 0,
+              commissionSimulee: 0
+            };
+          }
+        })
+      );
+
+      setAllAssignedClients(clientsWithBalances);
+      console.log(`✅ ${clientsWithBalances.length} clients avec soldes calculés chargés`);
+      
+      // 🔍 DEBUG: Afficher les premiers clients avec leurs statuts et soldes
+      if (clientsWithBalances.length > 0) {
+        console.log('🔍 DEBUG - Exemples de statuts et soldes clients:');
+        clientsWithBalances.slice(0, 3).forEach((client, index) => {
+          console.log(`  ${index + 1}. ${client.prenom} ${client.nom}:`, {
+            statut: client._debug_statusFields,
+            soldes: {
+              total: client.soldeTotal,
+              disponible: client.soldeDisponible,
+              commission: client.commissionSimulee
+            }
+          });
+        });
+      }
     } catch (error) {
       console.error('❌ Erreur chargement clients assignés:', error);
       setClientsError(error.message);

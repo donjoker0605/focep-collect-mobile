@@ -16,6 +16,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { format, parseISO, isToday, isYesterday } from 'date-fns';
 import { fr } from 'date-fns/locale';
 // ❌ RETIRÉ : import Header from '../../components/Header/Header';
+import ActivityLogItem from '../../components/ActivityLogItem/ActivityLogItem';
 import journalActiviteService from '../../services/journalActiviteService';
 import collecteurService from '../../services/collecteurService';
 
@@ -82,19 +83,14 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
           activitiesData = response.data.data;
         }
 
-        // Enrichir les données
-        const enrichedActivities = activitiesData.map(activity => ({
-          ...activity,
-          formattedTime: formatActivityTime(activity.timestamp || activity.dateCreation),
-          icon: getActivityIcon(activity.action || activity.type),
-          color: getActivityColor(activity.action || activity.type),
-          displayTitle: getActivityTitle(activity.action || activity.type),
-        }));
+        // 🔥 CORRECTION : Pas besoin d'enrichir les données, ActivityLogItem s'en charge
+        const enrichedActivities = activitiesData;
 
         setActivities(enrichedActivities);
         calculateStats(enrichedActivities);
         
-        console.log(`✅ ${enrichedActivities.length} activités chargées`);
+        console.log(`✅ ${enrichedActivities.length} activités chargées pour ActivityLogItem`);
+        console.log('🔍 Première activité (debug):', enrichedActivities[0]);
       } else {
         setActivities([]);
         calculateStats([]);
@@ -134,66 +130,7 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
     setStats(stats);
   };
 
-  // Formatter le temps de l'activité
-  const formatActivityTime = (timestamp) => {
-    if (!timestamp) return '';
-    
-    try {
-      const date = parseISO(timestamp);
-      if (isToday(date)) {
-        return `Aujourd'hui à ${format(date, 'HH:mm')}`;
-      } else if (isYesterday(date)) {
-        return `Hier à ${format(date, 'HH:mm')}`;
-      } else {
-        return format(date, 'dd MMM à HH:mm', { locale: fr });
-      }
-    } catch (error) {
-      return format(new Date(timestamp), 'HH:mm');
-    }
-  };
-
-  // Obtenir l'icône selon le type d'activité
-  const getActivityIcon = (action) => {
-    const iconMap = {
-      'CREATE_CLIENT': 'person-add',
-      'MODIFY_CLIENT': 'person',
-      'CREATE_TRANSACTION': 'cash',
-      'DELETE_CLIENT': 'person-remove',
-      'LOGIN': 'log-in',
-      'LOGOUT': 'log-out',
-      'VIEW_CLIENT': 'eye',
-      'EXPORT_DATA': 'download',
-    };
-    return iconMap[action] || 'document-text';
-  };
-
-  // Obtenir la couleur selon le type d'activité
-  const getActivityColor = (action) => {
-    const colorMap = {
-      'CREATE_CLIENT': '#10B981',
-      'MODIFY_CLIENT': '#F59E0B',
-      'CREATE_TRANSACTION': '#3B82F6',
-      'DELETE_CLIENT': '#EF4444',
-      'LOGIN': '#6B7280',
-      'LOGOUT': '#6B7280',
-    };
-    return colorMap[action] || '#6B7280';
-  };
-
-  // Obtenir le titre de l'activité
-  const getActivityTitle = (action) => {
-    const titleMap = {
-      'CREATE_CLIENT': 'Nouveau client créé',
-      'MODIFY_CLIENT': 'Client modifié',
-      'CREATE_TRANSACTION': 'Transaction effectuée',
-      'DELETE_CLIENT': 'Client supprimé',
-      'LOGIN': 'Connexion',
-      'LOGOUT': 'Déconnexion',
-      'VIEW_CLIENT': 'Consultation client',
-      'EXPORT_DATA': 'Export de données',
-    };
-    return titleMap[action] || action;
-  };
+  // 🔥 SUPPRIMÉ : Fonctions de formatage déplacées vers ActivityLogItem + activityFormatter
 
   // Charger les données au focus
   useFocusEffect(
@@ -216,35 +153,17 @@ const AdminJournalActiviteScreen = ({ navigation, route }) => {
     loadActivities(false);
   }, [loadActivities]);
 
-  // Render activity item
+  // 🔥 CORRECTION : Utiliser le composant ActivityLogItem qui gère l'activityFormatter
   const renderActivityItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.activityCard}
-      onPress={() => {
-        if (item.entityId && item.entityType === 'CLIENT') {
-          navigation.navigate('ClientDetailScreen', { clientId: item.entityId });
+    <ActivityLogItem
+      activity={item}
+      isAdmin={true}
+      onPress={(activity) => {
+        if (activity.entityId && activity.entityType === 'CLIENT') {
+          navigation.navigate('ClientDetailScreen', { clientId: activity.entityId });
         }
       }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.activityHeader}>
-        <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
-          <Ionicons name={item.icon} size={24} color={item.color} />
-        </View>
-        <View style={styles.activityContent}>
-          <Text style={styles.activityTitle}>{item.displayTitle}</Text>
-          {item.details && (
-            <Text style={styles.activityDetails} numberOfLines={2}>
-              {item.details}
-            </Text>
-          )}
-          <Text style={styles.activityTime}>{item.formattedTime}</Text>
-        </View>
-        {item.entityId && (
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        )}
-      </View>
-    </TouchableOpacity>
+    />
   );
 
   // Render empty
@@ -411,50 +330,10 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   listContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 12,
   },
-  activityCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  activityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  activityDetails: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
+  // 🔥 SUPPRIMÉ : Styles spécifiques aux activités, gérés par ActivityLogItem
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

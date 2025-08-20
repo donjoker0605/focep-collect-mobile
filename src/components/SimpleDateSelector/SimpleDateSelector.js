@@ -1,11 +1,12 @@
 // src/components/SimpleDateSelector/SimpleDateSelector.js
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Platform,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -31,69 +32,86 @@ export default function SimpleDateSelector({
     return date.toLocaleDateString('fr-FR');
   };
 
+  const [showInput, setShowInput] = useState(false);
+  const [tempValue, setTempValue] = useState('');
+  const inputRef = useRef();
+
+  const handleDateChange = (value) => {
+    if (value) {
+      const selectedDate = new Date(value);
+      if (!isNaN(selectedDate.getTime())) {
+        onDateChange(selectedDate);
+      }
+    }
+    setShowInput(false);
+  };
+
   const handlePress = () => {
     if (Platform.OS === 'web') {
-      // Sur le web, utiliser input type="date"
-      const input = document.createElement('input');
-      input.type = 'date';
-      input.value = date ? date.toISOString().split('T')[0] : '';
-      input.min = minimumDate ? minimumDate.toISOString().split('T')[0] : '';
-      input.max = maximumDate ? maximumDate.toISOString().split('T')[0] : '';
-      
-      input.onchange = (e) => {
-        if (e.target.value) {
-          const selectedDate = new Date(e.target.value);
-          onDateChange(selectedDate);
+      setShowInput(true);
+      setTempValue(date ? date.toISOString().split('T')[0] : '');
+      // Focus sur l'input après un court délai
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
         }
-      };
-      
-      input.click();
+      }, 100);
     } else {
-      // Pour mobile, on peut utiliser un prompt simple ou une modal
-      const dateString = prompt('Entrez la date (YYYY-MM-DD):', 
-        date ? date.toISOString().split('T')[0] : '');
-      
-      if (dateString) {
-        const selectedDate = new Date(dateString);
-        if (!isNaN(selectedDate.getTime())) {
-          onDateChange(selectedDate);
-        }
-      }
+      // Pour mobile, utiliser un simple input
+      setShowInput(true);
+      setTempValue(date ? date.toISOString().split('T')[0] : '');
     }
   };
 
+  if (showInput) {
+    return (
+      <View style={[styles.container, style]}>
+        {label && <Text style={styles.label}>{label}</Text>}
+        
+        <View style={styles.inputContainer}>
+          <TextInput
+            ref={inputRef}
+            style={[styles.dateInput, error && styles.dateInputError]}
+            value={tempValue}
+            onChangeText={setTempValue}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={colors.textSecondary}
+            onSubmitEditing={() => handleDateChange(tempValue)}
+            onBlur={() => setShowInput(false)}
+            autoFocus={Platform.OS !== 'web'}
+            {...(Platform.OS === 'web' && { type: 'date' })}
+          />
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={() => handleDateChange(tempValue)}
+          >
+            <Icon name="check" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+        
+        {error && <Text style={styles.errorText}>{error}</Text>}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, style]}>
-      {label && (
-        <Text style={styles.label}>{label}</Text>
-      )}
+      {label && <Text style={styles.label}>{label}</Text>}
       
       <TouchableOpacity
-        style={[
-          styles.dateButton,
-          error && styles.dateButtonError
-        ]}
+        style={[styles.dateButton, error && styles.dateButtonError]}
         onPress={handlePress}
         activeOpacity={0.7}
       >
         <View style={styles.dateContent}>
-          <Text style={[
-            styles.dateText,
-            !date && styles.placeholderText
-          ]}>
+          <Text style={[styles.dateText, !date && styles.placeholderText]}>
             {date ? formatDate(date) : placeholder}
           </Text>
-          <Icon 
-            name="calendar-today" 
-            size={20} 
-            color={colors.textSecondary} 
-          />
+          <Icon name="calendar-today" size={20} color={colors.textSecondary} />
         </View>
       </TouchableOpacity>
 
-      {error && (
-        <Text style={styles.errorText}>{error}</Text>
-      )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
 }
@@ -131,6 +149,30 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     color: colors.textSecondary
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: colors.background,
+    minHeight: 48
+  },
+  dateInput: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: colors.text
+  },
+  dateInputError: {
+    borderColor: colors.error
+  },
+  confirmButton: {
+    padding: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border
   },
   errorText: {
     fontSize: 12,

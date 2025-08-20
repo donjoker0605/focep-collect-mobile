@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Modal as RNModal,
   TouchableOpacity,
-  TouchableWithoutFeedback,
+  Pressable,
   ScrollView,
   Dimensions,
   Platform,
@@ -100,9 +100,11 @@ const Modal = ({
         { backgroundColor: `rgba(0, 0, 0, ${backdropOpacity})` },
         modalPosition,
       ]}>
-        <TouchableWithoutFeedback onPress={handleBackdropPress}>
-          <View style={styles.backdropTouchable} />
-        </TouchableWithoutFeedback>
+        <Pressable 
+          style={styles.backdropTouchable} 
+          onPress={handleBackdropPress}
+          android_ripple={false}
+        />
         
         <View style={[
           styles.modalContainer,

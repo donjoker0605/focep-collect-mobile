@@ -97,6 +97,215 @@ class SuperAdminService {
   }
 
   /**
+   * 🏢 Récupère les admins d'une agence spécifique
+   */
+  async getAdminsByAgence(agenceId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/agences/${agenceId}/admins`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getAdminsByAgence:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des admins de l\'agence'
+      };
+    }
+  }
+
+  /**
+   * 👨‍💼 GESTION DES COLLECTEURS
+   */
+  async getAllCollecteurs() {
+    try {
+      const response = await axiosConfig.get('/super-admin/collecteurs');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getAllCollecteurs:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des collecteurs'
+      };
+    }
+  }
+
+  async getCollecteurDetails(collecteurId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/collecteurs/${collecteurId}`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getCollecteurDetails:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des détails collecteur'
+      };
+    }
+  }
+
+  async createCollecteur(collecteurData) {
+    try {
+      const response = await axiosConfig.post('/super-admin/collecteurs', collecteurData);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur createCollecteur:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la création du collecteur'
+      };
+    }
+  }
+
+  async updateCollecteur(collecteurId, collecteurData) {
+    try {
+      const response = await axiosConfig.put(`/super-admin/collecteurs/${collecteurId}`, collecteurData);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur updateCollecteur:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la modification du collecteur'
+      };
+    }
+  }
+
+  async toggleCollecteurStatus(collecteurId) {
+    try {
+      const response = await axiosConfig.patch(`/super-admin/collecteurs/${collecteurId}/toggle-status`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur toggleCollecteurStatus:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la modification du statut collecteur'
+      };
+    }
+  }
+
+  async getClientsByCollecteur(collecteurId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/collecteurs/${collecteurId}/clients`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getClientsByCollecteur:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des clients'
+      };
+    }
+  }
+
+  /**
+   * 📊 EXPORTS EXCEL
+   */
+  async exportExcelComplete(filters = {}) {
+    try {
+      const response = await axiosConfig.post('/super-admin/export/excel', filters, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      });
+      
+      return {
+        success: true,
+        data: response.data,
+        fileName: this.extractFileNameFromResponse(response) || 'FOCEP_Export_Complet.xlsx'
+      };
+    } catch (error) {
+      console.error('Erreur exportExcelComplete:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de l\'export Excel complet'
+      };
+    }
+  }
+
+  async exportExcelAgence(agenceId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/export/excel/agence/${agenceId}`, {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      });
+      
+      return {
+        success: true,
+        data: response.data,
+        fileName: this.extractFileNameFromResponse(response) || `FOCEP_Export_Agence_${agenceId}.xlsx`
+      };
+    } catch (error) {
+      console.error('Erreur exportExcelAgence:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de l\'export Excel agence'
+      };
+    }
+  }
+
+  async exportExcelSummary() {
+    try {
+      const response = await axiosConfig.get('/super-admin/export/excel/summary', {
+        responseType: 'blob',
+        headers: {
+          'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      });
+      
+      return {
+        success: true,
+        data: response.data,
+        fileName: this.extractFileNameFromResponse(response) || 'FOCEP_Export_Resume.xlsx'
+      };
+    } catch (error) {
+      console.error('Erreur exportExcelSummary:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de l\'export Excel résumé'
+      };
+    }
+  }
+
+  // Utilitaire pour extraire le nom de fichier depuis les headers
+  extractFileNameFromResponse(response) {
+    const contentDisposition = response.headers['content-disposition'];
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (fileNameMatch && fileNameMatch[1]) {
+        return fileNameMatch[1].replace(/['"]/g, '');
+      }
+    }
+    return null;
+  }
+
+  /**
    * 🏢 GESTION COMPLÈTE DES AGENCES
    */
   async getAllAgences(params = {}) {
@@ -735,6 +944,211 @@ class SuperAdminService {
       return {
         success: false,
         error: error.response?.data?.message || 'Erreur lors de la récupération des clients'
+      };
+    }
+  }
+
+  // ================================
+  // 📊 MONITORING COLLECTEURS INACTIFS
+  // ================================
+
+  /**
+   * 🔍 Récupère les collecteurs inactifs
+   */
+  async getCollecteursInactifs() {
+    try {
+      const response = await axiosConfig.get('/super-admin/monitoring/collecteurs/inactifs');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getCollecteursInactifs:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des collecteurs inactifs'
+      };
+    }
+  }
+
+  /**
+   * 📈 Récupère les statistiques de monitoring
+   */
+  async getMonitoringStatistics() {
+    try {
+      const response = await axiosConfig.get('/super-admin/monitoring/collecteurs/statistiques');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getMonitoringStatistics:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des statistiques de monitoring'
+      };
+    }
+  }
+
+  /**
+   * 🏢 Récupère les collecteurs inactifs par agence
+   */
+  async getCollecteursInactifsByAgence(agenceId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/monitoring/collecteurs/inactifs/agence/${agenceId}`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getCollecteursInactifsByAgence:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des collecteurs inactifs par agence'
+      };
+    }
+  }
+
+  /**
+   * 🚨 Exécute une action corrective
+   */
+  async executeActionCorrective(collecteurId, typeAction, motif = '') {
+    try {
+      const response = await axiosConfig.post(
+        `/super-admin/monitoring/collecteurs/action-corrective/${collecteurId}`,
+        null,
+        {
+          params: {
+            typeAction,
+            motif
+          }
+        }
+      );
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur executeActionCorrective:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de l\'exécution de l\'action corrective'
+      };
+    }
+  }
+
+  /**
+   * 🔧 Récupère les types d'actions correctives disponibles
+   */
+  async getActionsCorrectivesDisponibles() {
+    try {
+      const response = await axiosConfig.get('/super-admin/monitoring/collecteurs/actions-correctives');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getActionsCorrectivesDisponibles:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des actions correctives'
+      };
+    }
+  }
+
+  /**
+   * 📊 Récupère le dashboard de monitoring complet
+   */
+  async getMonitoringDashboard() {
+    try {
+      const response = await axiosConfig.get('/super-admin/monitoring/collecteurs/dashboard');
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getMonitoringDashboard:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération du dashboard de monitoring'
+      };
+    }
+  }
+
+  // ================================
+  // 💰 MÉTHODES CLIENTS ENRICHIES
+  // ================================
+
+  /**
+   * 💎 Récupère les détails complets d'un client avec données financières
+   */
+  async getClientDetailsComplete(clientId) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/clients/${clientId}`);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getClientDetailsComplete:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des détails du client'
+      };
+    }
+  }
+
+  /**
+   * 💳 Récupère l'historique des transactions d'un client
+   */
+  async getClientTransactions(clientId, page = 0, size = 20) {
+    try {
+      const response = await axiosConfig.get(`/super-admin/clients/${clientId}/transactions`, {
+        params: { page, size }
+      });
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getClientTransactions:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des transactions'
+      };
+    }
+  }
+
+  /**
+   * 🏢 Récupère tous les clients avec données enrichies (utilisé par ClientConsultationScreen)
+   */
+  async getAllClientsEnriched(agenceId = null, collecteurId = null, page = 0, size = 50) {
+    try {
+      const params = {};
+      if (agenceId) params.agenceId = agenceId;
+      if (collecteurId) params.collecteurId = collecteurId;
+      params.page = page;
+      params.size = size;
+
+      const response = await axiosConfig.get('/super-admin/clients', { params });
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur getAllClientsEnriched:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la récupération des clients enrichis'
       };
     }
   }

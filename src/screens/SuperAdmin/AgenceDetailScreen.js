@@ -65,6 +65,36 @@ const AgenceDetailScreen = ({ navigation, route }) => {
     setRefreshing(false);
   };
 
+  const handleEditAgence = () => {
+    console.log('handleEditAgence appelé dans AgenceDetailScreen');
+    if (!agenceDetails) {
+      console.log('Aucun détail d\'agence disponible');
+      return;
+    }
+    
+    console.log('Détails de l\'agence:', agenceDetails);
+    Alert.alert(
+      "Modification d'agence",
+      `Voulez-vous modifier l'agence "${agenceDetails.nomAgence}" ?\n\nVous pourrez modifier :\n• Nom et coordonnées\n• Responsable et téléphone\n• Paramètres de commission\n• Code agence`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Modifier',
+          onPress: () => {
+            console.log('Navigation vers AgenceCreation avec mode edit depuis AgenceDetailScreen');
+            navigation.navigate('AgenceCreation', { 
+              mode: 'edit', 
+              agence: agenceDetails 
+            });
+          },
+        },
+      ]
+    );
+  };
+
   const handleToggleStatus = async () => {
     if (!agenceDetails) return;
     
@@ -194,6 +224,75 @@ const AgenceDetailScreen = ({ navigation, route }) => {
         </View>
       </View>
 
+      {/* Soldes des comptes d'agence */}
+      {agenceDetails?.soldesComptes && (
+        <View style={styles.soldesSection}>
+          <Text style={styles.soldesTitle}>💰 Soldes des comptes</Text>
+          <View style={styles.soldesGrid}>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.A</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_agence || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.P.C</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_produit_collecte || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.C.C</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_charge_collecte || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.P.C.C</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_passage_commission_collecte || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.P.T</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_passage_taxe || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+            <View style={styles.soldeItem}>
+              <Text style={styles.soldeLabel}>C.T</Text>
+              <Text style={styles.soldeValue}>
+                {parseFloat(agenceDetails.soldesComptes.compte_taxe || 0).toLocaleString('fr-FR', {
+                  style: 'currency',
+                  currency: 'XAF',
+                  minimumFractionDigits: 0
+                })}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.toggleButton} onPress={handleToggleStatus}>
         <Text style={styles.toggleButtonText}>
           {agenceDetails?.active ? 'Désactiver l\'agence' : 'Activer l\'agence'}
@@ -256,9 +355,9 @@ const AgenceDetailScreen = ({ navigation, route }) => {
           >
             <View style={styles.userHeader}>
               <Text style={styles.userName}>{item.nom} {item.prenom}</Text>
-              <View style={[styles.statusBadge, item.active ? styles.activeBadge : styles.inactiveBadge]}>
-                <Text style={[styles.statusText, item.active ? styles.activeText : styles.inactiveText]}>
-                  {item.active ? 'Actif' : 'Inactif'}
+              <View style={[styles.statusBadge, item.valide ? styles.activeBadge : styles.inactiveBadge]}>
+                <Text style={[styles.statusText, item.valide ? styles.activeText : styles.inactiveText]}>
+                  {item.valide ? 'Actif' : 'Inactif'}
                 </Text>
               </View>
             </View>
@@ -285,7 +384,18 @@ const AgenceDetailScreen = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Détails de l'agence" onBackPress={() => navigation.goBack()} />
+      <Header 
+        title="Détails de l'agence" 
+        onBackPress={() => navigation.goBack()}
+        rightComponent={
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={handleEditAgence}
+          >
+            <Ionicons name="pencil" size={24} color={theme.colors.white} />
+          </TouchableOpacity>
+        }
+      />
       
       <ScrollView
         style={styles.scrollView}
@@ -505,6 +615,45 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: theme.colors.textSecondary,
+  },
+  // Styles pour les soldes des comptes
+  soldesSection: {
+    marginTop: 20,
+    marginBottom: 16,
+  },
+  soldesTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  soldesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  soldeItem: {
+    width: '48%',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  soldeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: 4,
+  },
+  soldeValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: theme.colors.primary,
+    textAlign: 'center',
+  },
+  editButton: {
+    padding: 8,
   },
 });
 

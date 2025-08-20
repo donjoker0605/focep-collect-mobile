@@ -19,6 +19,7 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { useSuperAdmin } from '../../hooks/useSuperAdmin';
+import superAdminService from '../../services/superAdminService';
 
 const CollecteurConsultationScreen = ({ navigation }) => {
   const {
@@ -73,193 +74,107 @@ const CollecteurConsultationScreen = ({ navigation }) => {
 
   useEffect(() => {
     // Charger les admins de l'agence sélectionnée
-    if (filters.agenceId) {
-      loadAdminsByAgence(filters.agenceId);
-    } else {
-      setFilters(prev => ({ ...prev, adminId: '' }));
-    }
+    const loadAdminsForAgence = async () => {
+      if (filters.agenceId) {
+        const agenceAdmins = await loadAdminsByAgence(filters.agenceId);
+        // Mettre à jour la liste des admins locaux pour le filtrage
+        setAdmins(prevAdmins => {
+          // Fusionner avec les admins existants pour éviter les doublons
+          const mergedAdmins = [...prevAdmins];
+          agenceAdmins.forEach(newAdmin => {
+            if (!mergedAdmins.find(admin => admin.id === newAdmin.id)) {
+              mergedAdmins.push(newAdmin);
+            }
+          });
+          return mergedAdmins;
+        });
+      } else {
+        setFilters(prev => ({ ...prev, adminId: '' }));
+      }
+    };
+    loadAdminsForAgence();
   }, [filters.agenceId]);
 
   const loadAllCollecteurs = async () => {
     setLoadingCollecteurs(true);
     try {
-      // Simuler l'appel API pour récupérer tous les collecteurs
-      setTimeout(() => {
-        const mockCollecteurs = [
-          {
-            id: 1,
-            nom: 'Diop',
-            prenom: 'Moussa',
-            adresseMail: 'moussa.diop@collect.com',
-            telephone: '77 111 22 33',
-            status: 'active',
-            typeCompte: 'principal',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            admin: {
-              id: 1,
-              nom: 'Dupont',
-              prenom: 'Jean'
-            },
-            totalClients: 45,
-            soldeCompte: 850000,
-            nombreTransactions: 156,
-            dateCreation: '2024-01-20T08:00:00',
-            derniereActivite: '2024-12-11T17:30:00',
-            performance: {
-              collectesMois: 25,
-              objectifMois: 30,
-              tauxReussite: 94.5
-            }
-          },
-          {
-            id: 2,
-            nom: 'Seck',
-            prenom: 'Aminata',
-            adresseMail: 'aminata.seck@collect.com',
-            telephone: '77 222 33 44',
-            status: 'active',
-            typeCompte: 'assistant',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            admin: {
-              id: 1,
-              nom: 'Dupont',
-              prenom: 'Jean'
-            },
-            totalClients: 28,
-            soldeCompte: 420000,
-            nombreTransactions: 89,
-            dateCreation: '2024-02-15T10:30:00',
-            derniereActivite: '2024-12-11T16:15:00',
-            performance: {
-              collectesMois: 18,
-              objectifMois: 20,
-              tauxReussite: 91.2
-            }
-          },
-          {
-            id: 3,
-            nom: 'Fall',
-            prenom: 'Ibrahima',
-            adresseMail: 'ibrahima.fall@collect.com',
-            telephone: '77 333 44 55',
-            status: 'inactive',
-            typeCompte: 'principal',
-            agence: {
-              id: 2,
-              nomAgence: 'Agence Thiès',
-              codeAgence: 'THI001'
-            },
-            admin: {
-              id: 3,
-              nom: 'Diallo',
-              prenom: 'Amadou'
-            },
-            totalClients: 15,
-            soldeCompte: 125000,
-            nombreTransactions: 32,
-            dateCreation: '2024-03-05T14:20:00',
-            derniereActivite: '2024-11-20T09:45:00',
-            performance: {
-              collectesMois: 8,
-              objectifMois: 15,
-              tauxReussite: 78.3
-            }
-          },
-          {
-            id: 4,
-            nom: 'Ndiaye',
-            prenom: 'Fatima',
-            adresseMail: 'fatima.ndiaye@collect.com',
-            telephone: '77 444 55 66',
-            status: 'active',
-            typeCompte: 'principal',
-            agence: {
-              id: 3,
-              nomAgence: 'Agence Saint-Louis',
-              codeAgence: 'STL001'
-            },
-            admin: {
-              id: 4,
-              nom: 'Ba',
-              prenom: 'Fatou'
-            },
-            totalClients: 67,
-            soldeCompte: 1250000,
-            nombreTransactions: 234,
-            dateCreation: '2024-01-10T11:15:00',
-            derniereActivite: '2024-12-11T18:45:00',
-            performance: {
-              collectesMois: 42,
-              objectifMois: 40,
-              tauxReussite: 96.8
-            }
-          },
-          {
-            id: 5,
-            nom: 'Sarr',
-            prenom: 'Ousmane',
-            adresseMail: 'ousmane.sarr@collect.com',
-            telephone: '77 555 66 77',
-            status: 'suspended',
-            typeCompte: 'assistant',
-            agence: {
-              id: 3,
-              nomAgence: 'Agence Saint-Louis',
-              codeAgence: 'STL001'
-            },
-            admin: {
-              id: 4,
-              nom: 'Ba',
-              prenom: 'Fatou'
-            },
-            totalClients: 12,
-            soldeCompte: 75000,
-            nombreTransactions: 18,
-            dateCreation: '2024-04-12T09:30:00',
-            derniereActivite: '2024-12-05T12:20:00',
-            performance: {
-              collectesMois: 3,
-              objectifMois: 10,
-              tauxReussite: 65.4
-            }
-          },
-        ];
-        setCollecteurs(mockCollecteurs);
-        setLoadingCollecteurs(false);
-      }, 1000);
+      const result = await superAdminService.getAllCollecteurs();
+      if (result.success) {
+        // Adapter les données du backend au format attendu par l'interface
+        const adaptedCollecteurs = result.data.map(collecteur => ({
+          id: collecteur.id,
+          nom: collecteur.nom,
+          prenom: collecteur.prenom,
+          adresseMail: collecteur.adresseMail,
+          telephone: collecteur.telephone,
+          status: collecteur.active ? 'active' : 'inactive',
+          typeCompte: 'principal', // Valeur par défaut - peut être ajustée selon la logique métier
+          agence: collecteur.agence || { id: null, nomAgence: 'N/A', codeAgence: 'N/A' },
+          admin: { id: null, nom: 'N/A', prenom: 'N/A' }, // Sera mis à jour après chargement des admins
+          totalClients: collecteur.totalClients || 0,
+          soldeCompte: collecteur.soldeCompte || 0,
+          nombreTransactions: collecteur.nombreTransactions || 0,
+          dateCreation: collecteur.dateCreation,
+          derniereActivite: collecteur.derniereActivite || collecteur.dateModification,
+          performance: {
+            collectesMois: 0, // Données à calculer côté backend
+            objectifMois: 30,
+            tauxReussite: 85.0
+          }
+        }));
+        setCollecteurs(adaptedCollecteurs);
+      } else {
+        console.error('Erreur API:', result.error);
+        setCollecteurs([]);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des collecteurs:', error);
+      setCollecteurs([]);
+    } finally {
       setLoadingCollecteurs(false);
     }
   };
 
   const loadAllAdmins = async () => {
     try {
-      // Simuler le chargement des admins
-      const mockAdmins = [
-        { id: 1, nom: 'Dupont', prenom: 'Jean', agenceId: 1 },
-        { id: 2, nom: 'Martin', prenom: 'Sophie', agenceId: 1 },
-        { id: 3, nom: 'Diallo', prenom: 'Amadou', agenceId: 2 },
-        { id: 4, nom: 'Ba', prenom: 'Fatou', agenceId: 3 },
-      ];
-      setAdmins(mockAdmins);
+      const result = await superAdminService.getAllAdmins();
+      if (result.success) {
+        // Adapter les données du backend
+        const adaptedAdmins = result.data.map(admin => ({
+          id: admin.id,
+          nom: admin.nom,
+          prenom: admin.prenom,
+          agenceId: admin.agence?.id || null
+        }));
+        setAdmins(adaptedAdmins);
+      } else {
+        console.error('Erreur API admins:', result.error);
+        setAdmins([]);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des admins:', error);
+      setAdmins([]);
     }
   };
 
-  const loadAdminsByAgence = (agenceId) => {
-    // Filtrer les admins par agence
-    const adminsFiltered = admins.filter(admin => admin.agenceId === parseInt(agenceId));
-    return adminsFiltered;
+  const loadAdminsByAgence = async (agenceId) => {
+    try {
+      const result = await superAdminService.getAdminsByAgence(agenceId);
+      if (result.success) {
+        return result.data.map(admin => ({
+          id: admin.id,
+          nom: admin.nom,
+          prenom: admin.prenom,
+          agenceId: admin.agence?.id || null
+        }));
+      } else {
+        console.error('Erreur API admins par agence:', result.error);
+        return [];
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des admins par agence:', error);
+      return [];
+    }
   };
 
   const applyFilters = () => {
@@ -479,7 +394,7 @@ const CollecteurConsultationScreen = ({ navigation }) => {
 
   const getFilteredAdmins = () => {
     if (!filters.agenceId) return [];
-    return loadAdminsByAgence(filters.agenceId);
+    return admins.filter(admin => admin.agenceId === parseInt(filters.agenceId));
   };
 
   return (

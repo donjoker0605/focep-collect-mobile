@@ -9,7 +9,7 @@
       "env": {
         "EXPO_PUBLIC_ENV": "development",
 
-        "EXPO_PUBLIC_API_URL": "http://192.168.90.134:8080/api",
+        "EXPO_PUBLIC_API_URL": "http://192.168.93.51:8080/api",
 
 		
         "EXPO_PUBLIC_MOCK_API": "true"

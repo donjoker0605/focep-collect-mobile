@@ -15,6 +15,15 @@ import AgenceDetailScreen from '../screens/SuperAdmin/AgenceDetailScreen';
 import AgenceCreationScreen from '../screens/SuperAdmin/AgenceCreationScreen';
 import AdminDetailScreen from '../screens/SuperAdmin/AdminDetailScreen';
 import AdminCreationScreen from '../screens/SuperAdmin/AdminCreationScreen';
+import CollecteurConsultationScreen from '../screens/SuperAdmin/CollecteurConsultationScreen';
+import CollecteurDetailScreen from '../screens/SuperAdmin/CollecteurDetailScreen';
+import CollecteurCreationScreen from '../screens/SuperAdmin/CollecteurCreationScreen';
+import ClientConsultationScreen from '../screens/SuperAdmin/ClientConsultationScreen';
+import ClientDetailScreen from '../screens/SuperAdmin/ClientDetailScreen';
+import CommissionManagementScreen from '../screens/SuperAdmin/CommissionManagementScreen';
+import CommissionTestScreen from '../screens/SuperAdmin/CommissionTestScreen';
+import CollecteurMonitoringScreen from '../screens/SuperAdmin/CollecteurMonitoringScreen';
+import ExportExcelScreen from '../screens/SuperAdmin/ExportExcelScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -38,6 +47,15 @@ function SuperAdminTabs() {
               break;
             case 'UserManagement':
               iconName = focused ? 'people-circle' : 'people-circle-outline';
+              break;
+            case 'CollecteurConsultation':
+              iconName = focused ? 'person' : 'person-outline';
+              break;
+            case 'ExportExcel':
+              iconName = focused ? 'download' : 'download-outline';
+              break;
+            case 'CollecteurMonitoring':
+              iconName = focused ? 'analytics' : 'analytics-outline';
               break;
             default:
               iconName = 'help-outline';
@@ -70,6 +88,21 @@ function SuperAdminTabs() {
         component={UserManagementScreen} 
         options={{ title: 'Utilisateurs' }} 
       />
+      <Tab.Screen 
+        name="CollecteurConsultation" 
+        component={CollecteurConsultationScreen} 
+        options={{ title: 'Collecteurs' }} 
+      />
+      <Tab.Screen 
+        name="ExportExcel" 
+        component={ExportExcelScreen} 
+        options={{ title: 'Export' }} 
+      />
+      <Tab.Screen 
+        name="CollecteurMonitoring" 
+        component={CollecteurMonitoringScreen} 
+        options={{ title: 'Monitoring' }} 
+      />
     </Tab.Navigator>
   );
 }
@@ -84,6 +117,16 @@ export default function SuperAdminStack() {
       <Stack.Screen name="AgenceCreation" component={AgenceCreationScreen} />
       <Stack.Screen name="AdminDetail" component={AdminDetailScreen} />
       <Stack.Screen name="AdminCreation" component={AdminCreationScreen} />
+      
+      {/* Écrans de détails pour navigation depuis AgenceDetail */}
+      <Stack.Screen name="CollecteurDetail" component={CollecteurDetailScreen} />
+      <Stack.Screen name="CollecteurCreation" component={CollecteurCreationScreen} />
+      <Stack.Screen name="ClientDetail" component={ClientDetailScreen} />
+      <Stack.Screen name="CommissionManagement" component={CommissionManagementScreen} />
+      <Stack.Screen name="CommissionTest" component={CommissionTestScreen} />
+      
+      {/* Écrans de gestion collecteurs */}
+      <Stack.Screen name="CollecteurManagementScreen" component={CollecteurConsultationScreen} />
     </Stack.Navigator>
   );
 }

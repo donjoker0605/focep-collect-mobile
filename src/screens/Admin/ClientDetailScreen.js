@@ -316,45 +316,10 @@ const ClientDetailScreen = ({ navigation, route }) => {
         )}
       </Card>
 
-      {/* Solde complet et actions */}
-      <Card style={styles.balanceCard}>
-        <Text style={styles.sectionTitle}>Informations financières</Text>
-        
-        <View style={styles.balanceGrid}>
-          <View style={styles.balanceItem}>
-            <Text style={styles.balanceLabel}>Solde total</Text>
-            <Text style={[styles.balanceValue, { color: theme.colors.primary }]}>
-              {formatCurrency(statistics?.soldeTotal || balance)}
-            </Text>
-          </View>
-          
-          <View style={styles.balanceItem}>
-            <Text style={styles.balanceLabel}>Solde disponible</Text>
-            <Text style={[styles.balanceValue, { color: theme.colors.success }]}>
-              {formatCurrency(statistics?.soldeDisponible || balance)}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.transactionButtons}>
-          <Button
-            title="Nouvelle épargne"
-            onPress={() => handleNewTransaction('epargne')}
-            style={styles.epargneButton}
-            icon="add-circle"
-          />
-          
-          <Button
-            title="Nouveau retrait"
-            onPress={() => handleNewTransaction('retrait')}
-            style={styles.retraitButton}
-            variant="secondary"
-            icon="remove-circle"
-          />
-        </View>
-      </Card>
+      {/* 🔥 SUPPRIMÉ : Section "Informations financières" car redondante avec l'onglet Statistiques 
+           Les soldes (total et disponible) sont déjà affichés dans l'onglet Stats */}
 
-      {/* Actions rapides */}
+      {/* Actions rapides - ENRICHIES avec les actions de transaction */}
       <Card style={styles.card}>
         <Text style={styles.sectionTitle}>Actions rapides</Text>
         
@@ -365,6 +330,23 @@ const ClientDetailScreen = ({ navigation, route }) => {
           >
             <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
             <Text style={styles.actionButtonText}>Modifier</Text>
+          </TouchableOpacity>
+          
+          {/* 🔥 NOUVEAU: Actions de transaction déplacées ici */}
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleNewTransaction('epargne')}
+          >
+            <Ionicons name="add-circle-outline" size={20} color={theme.colors.success} />
+            <Text style={styles.actionButtonText}>Épargne</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleNewTransaction('retrait')}
+          >
+            <Ionicons name="remove-circle-outline" size={20} color={theme.colors.error} />
+            <Text style={styles.actionButtonText}>Retrait</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 

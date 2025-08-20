@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   SafeAreaView,
+  Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,6 +20,7 @@ import Card from '../../components/Card/Card';
 import StatsCard from '../../components/StatsCard/StatsCard';
 import theme from '../../theme';
 import { useSuperAdmin } from '../../hooks/useSuperAdmin';
+import { useAuth } from '../../hooks/useAuth';
 
 const SuperAdminDashboardScreen = ({ navigation }) => {
   const {
@@ -27,8 +30,52 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
     loadDashboardStats,
     clearError
   } = useSuperAdmin();
+  
+  const { logout } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
+
+  const handleLogout = async () => {
+    console.log('🔄 handleLogout appelé');
+    
+    // Pour le web, utiliser window.confirm au lieu d'Alert
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?');
+      if (confirmed) {
+        try {
+          console.log('🔄 Tentative de déconnexion...');
+          await logout();
+          console.log('✅ Déconnexion réussie');
+        } catch (error) {
+          console.error('❌ Erreur de déconnexion:', error);
+          window.alert('Impossible de se déconnecter');
+        }
+      }
+    } else {
+      // Pour mobile, utiliser Alert normal
+      Alert.alert(
+        'Déconnexion',
+        'Êtes-vous sûr de vouloir vous déconnecter ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Déconnexion',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                console.log('🔄 Tentative de déconnexion...');
+                await logout();
+                console.log('✅ Déconnexion réussie');
+              } catch (error) {
+                console.error('❌ Erreur de déconnexion:', error);
+                Alert.alert('Erreur', 'Impossible de se déconnecter');
+              }
+            }
+          }
+        ]
+      );
+    }
+  };
 
   useEffect(() => {
     loadDashboardStats();
@@ -68,7 +115,7 @@ const SuperAdminDashboardScreen = ({ navigation }) => {
         rightComponent={
           <View style={styles.headerActions}>
             <TouchableOpacity 
-              onPress={() => navigation.navigate('Login')} 
+              onPress={handleLogout} 
               style={styles.logoutButton}
             >
               <Ionicons 

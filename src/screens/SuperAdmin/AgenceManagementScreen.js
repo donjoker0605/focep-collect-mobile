@@ -75,7 +75,27 @@ const AgenceManagementScreen = ({ navigation }) => {
   };
 
   const handleEditAgence = (agence) => {
-    navigation.navigate('AgenceDetail', { agenceId: agence.id });
+    console.log('handleEditAgence appelé avec:', agence);
+    Alert.alert(
+      "Modification d'agence",
+      `Voulez-vous modifier l'agence "${agence.nomAgence}" ?\n\nVous pourrez modifier :\n• Nom et coordonnées\n• Responsable et téléphone\n• Paramètres de commission\n• Code agence`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Modifier',
+          onPress: () => {
+            console.log('Navigation vers AgenceCreation avec mode edit');
+            navigation.navigate('AgenceCreation', { 
+              mode: 'edit', 
+              agence: agence 
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleToggleStatus = (agence) => {
@@ -150,6 +170,14 @@ const AgenceManagementScreen = ({ navigation }) => {
         >
           <Ionicons name="eye-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.actionButtonText}>Détails</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleEditAgence(item)}
+        >
+          <Ionicons name="pencil-outline" size={18} color={theme.colors.secondary} />
+          <Text style={[styles.actionButtonText, { color: theme.colors.secondary }]}>Modifier</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 

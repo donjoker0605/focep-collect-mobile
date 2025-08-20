@@ -19,6 +19,7 @@ import * as yup from 'yup';
 import Header from '../../components/Header/Header';
 import Input from '../../components/Input/Input';
 import Button from '../../components/Button/Button';
+import CommissionForm from '../../components/CommissionForm/CommissionForm';
 import superAdminService from '../../services/superAdminService';
 import theme from '../../theme';
 
@@ -58,8 +59,12 @@ const AgenceCreationScreen = ({ navigation, route }) => {
   const isEditMode = route.params?.mode === 'edit';
   const agenceToEdit = route.params?.agence;
   const [loading, setLoading] = useState(false);
-  const [commissionParams, setCommissionParams] = useState([]);
-  const [showCommissionForm, setShowCommissionForm] = useState(false);
+  const [commissionConfig, setCommissionConfig] = useState({
+    type: 'MONTANT_FIXE',
+    valeur: '',
+    valeurMax: '',
+    paliers: []
+  });
 
   const { control, handleSubmit, setValue, formState: { errors } } = useForm({
     resolver: yupResolver(agenceSchema),
@@ -92,9 +97,9 @@ const AgenceCreationScreen = ({ navigation, route }) => {
       setValue('telephone', agenceToEdit.telephone);
       setValue('responsable', agenceToEdit.responsable);
       
-      // Charger les paramètres de commission existants
-      if (agenceToEdit.parametresCommission) {
-        setCommissionParams(agenceToEdit.parametresCommission);
+      // Charger la configuration de commission existante
+      if (agenceToEdit.commissionConfig) {
+        setCommissionConfig(agenceToEdit.commissionConfig);
       }
     }
   }, [isEditMode, agenceToEdit, setValue]);
@@ -107,7 +112,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
       const agenceData = {
         ...data,
         active: true,
-        parametresCommission: commissionParams
+        commissionConfig: commissionConfig
       };
 
       let result;
@@ -144,28 +149,6 @@ const AgenceCreationScreen = ({ navigation, route }) => {
     }
   };
 
-  const addCommissionParam = () => {
-    const newParam = {
-      id: Date.now(), // Temporary ID
-      typeOperation: '',
-      typeCommission: 'POURCENTAGE',
-      valeur: 0,
-      valeurMax: null,
-      paliers: []
-    };
-    setCommissionParams([...commissionParams, newParam]);
-    setShowCommissionForm(true);
-  };
-
-  const removeCommissionParam = (paramId) => {
-    setCommissionParams(commissionParams.filter(param => param.id !== paramId));
-  };
-
-  const updateCommissionParam = (paramId, updates) => {
-    setCommissionParams(commissionParams.map(param => 
-      param.id === paramId ? { ...param, ...updates } : param
-    ));
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -304,41 +287,12 @@ const AgenceCreationScreen = ({ navigation, route }) => {
 
             <Text style={styles.sectionTitle}>💰 Paramètres de commission</Text>
             
-            <View style={styles.commissionSection}>
-              <Text style={styles.commissionDescription}>
-                Les paramètres de commission définissent comment calculer les commissions des collecteurs pour cette agence.
-              </Text>
-              
-              {commissionParams.length > 0 && (
-                <View style={styles.commissionList}>
-                  {commissionParams.map((param, index) => (
-                    <View key={param.id} style={styles.commissionItem}>
-                      <View style={styles.commissionInfo}>
-                        <Text style={styles.commissionType}>
-                          {param.typeOperation || 'Type non défini'}
-                        </Text>
-                        <Text style={styles.commissionValue}>
-                          {param.typeCommission === 'POURCENTAGE' ? `${param.valeur}%` : `${param.valeur} FCFA`}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.removeButton}
-                        onPress={() => removeCommissionParam(param.id)}
-                      >
-                        <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-              
-              <Button
-                title="+ Ajouter un paramètre"
-                onPress={addCommissionParam}
-                variant="outlined"
-                style={styles.addCommissionButton}
-              />
-            </View>
+            <CommissionForm
+              commissionConfig={commissionConfig}
+              onCommissionConfigChange={setCommissionConfig}
+              editable={true}
+              style={styles.commissionForm}
+            />
 
             <View style={styles.infoBox}>
               <Ionicons name="information-circle-outline" size={24} color={theme.colors.primary} />
@@ -399,56 +353,8 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 16,
   },
-  commissionSection: {
+  commissionForm: {
     marginBottom: 20,
-    padding: 16,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  commissionDescription: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  commissionList: {
-    marginBottom: 16,
-  },
-  commissionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: theme.colors.background,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  commissionInfo: {
-    flex: 1,
-  },
-  commissionType: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 4,
-  },
-  commissionValue: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '500',
-  },
-  removeButton: {
-    padding: 8,
-    marginLeft: 12,
-  },
-  addCommissionButton: {
-    borderStyle: 'dashed',
-    borderWidth: 2,
-    borderColor: theme.colors.primary,
   },
   infoBox: {
     flexDirection: 'row',

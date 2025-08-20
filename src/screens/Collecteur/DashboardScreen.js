@@ -365,6 +365,38 @@ const DashboardScreen = ({ navigation }) => {
             color={theme.colors.info}
             onPress={() => navigateToScreen('Journal')}
           />
+
+          <StatCard
+            title="Solde Quotidien"
+            value={`${(dashboard?.soldeQuotidien || 0).toLocaleString()} FCFA`}
+            icon="time"
+            color={theme.colors.accent}
+            onPress={() => navigateToScreen('Journal')}
+          />
+
+          <StatCard
+            title="Épargne Mensuelle"
+            value={`${(dashboard?.epargneMensuelle || 0).toLocaleString()} FCFA`}
+            icon="trending-up"
+            color={theme.colors.success}
+            onPress={() => navigateToScreen('Collecte', { selectedTab: 'epargne' })}
+          />
+
+          <StatCard
+            title="Retraits Mensuels"
+            value={`${(dashboard?.retraitsMensuels || 0).toLocaleString()} FCFA`}
+            icon="trending-down"
+            color={theme.colors.warning}
+            onPress={() => navigateToScreen('Collecte', { selectedTab: 'retrait' })}
+          />
+
+          <StatCard
+            title="Solde Mensuel"
+            value={`${(dashboard?.soldeMensuel || 0).toLocaleString()} FCFA`}
+            icon="calendar"
+            color={theme.colors.primary}
+            onPress={() => navigateToScreen('Journal')}
+          />
         </View>
 
         {/* Actions rapides */}

@@ -26,12 +26,10 @@ export default function SimpleInput({
       {label && (
         <View style={styles.labelContainer}>
           <Text style={styles.label}>
-            {label}
-            {required && <Text style={styles.requiredAsterisk}> *</Text>}
+            {label}{required && <Text style={styles.requiredAsterisk}> *</Text>}
           </Text>
         </View>
       )}
-      
       <View style={styles.inputRow}>
         <TextInput
           style={[
@@ -49,19 +47,11 @@ export default function SimpleInput({
           multiline={multiline}
           {...props}
         />
-        {suffix && (
-          <Text style={styles.suffix}>{suffix}</Text>
-        )}
+        {suffix && <Text style={styles.suffix}>{suffix}</Text>}
       </View>
-      
-      {error && (
-        <Text style={styles.errorText}>{error}</Text>
-      )}
-      
+      {error && <Text style={styles.errorText}>{error}</Text>}
       {maxLength && value && (
-        <Text style={styles.charCountText}>
-          {value.length}/{maxLength}
-        </Text>
+        <Text style={styles.charCountText}>{value.length}/{maxLength}</Text>
       )}
     </View>
   );

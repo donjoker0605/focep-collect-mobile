@@ -1,94 +1,38 @@
 // src/components/ActivityLogItem/ActivityLogItem.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import theme from '../../theme';
 import { formatTimeAgo } from '../../utils/formatters';
+import activityFormatter from '../../utils/activityFormatter';
 
 const ActivityLogItem = ({ activity, isAdmin = false, onPress }) => {
-  // Déterminer l'icône selon le type d'action
-  const getActionIcon = (action) => {
-    const icons = {
-      'CREATE_CLIENT': 'person-add',
-      'MODIFY_CLIENT': 'create',
-      'DELETE_CLIENT': 'person-remove',
-      'TRANSACTION_EPARGNE': 'arrow-up-circle',
-      'TRANSACTION_RETRAIT': 'arrow-down-circle',
-      'LOGIN': 'log-in',
-      'LOGOUT': 'log-out',
-      'JOURNAL_CREATE': 'document-text',
-      'JOURNAL_CLOSE': 'checkmark-circle',
-      'COMMISSION_CALCULATE': 'calculator',
-      'SYNC': 'sync',
-      'SYSTEM': 'settings',
-      'ERROR': 'alert-circle',
-      'WARNING': 'warning',
-      'INFO': 'information-circle'
+  const [formattedDetails, setFormattedDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Charger les détails formatés de manière asynchrone
+  useEffect(() => {
+    const loadFormattedActivity = async () => {
+      try {
+        const formatted = await activityFormatter.formatActivity(activity);
+        setFormattedDetails(formatted);
+      } catch (error) {
+        console.warn('Erreur formatage activité:', error);
+        setFormattedDetails(activityFormatter.getBasicActionName(activity.action));
+      } finally {
+        setLoading(false);
+      }
     };
-    return icons[action] || 'document';
-  };
 
-  // Déterminer la couleur selon le type d'action
-  const getActionColor = (action) => {
-    const colors = {
-      'CREATE_CLIENT': theme.colors.success,
-      'MODIFY_CLIENT': theme.colors.warning,
-      'DELETE_CLIENT': theme.colors.error,
-      'TRANSACTION_EPARGNE': theme.colors.success,
-      'TRANSACTION_RETRAIT': theme.colors.warning,
-      'LOGIN': theme.colors.primary,
-      'LOGOUT': theme.colors.textSecondary,
-      'JOURNAL_CREATE': theme.colors.info,
-      'JOURNAL_CLOSE': theme.colors.success,
-      'COMMISSION_CALCULATE': theme.colors.secondary,
-      'SYNC': theme.colors.info,
-      'SYSTEM': theme.colors.textSecondary,
-      'ERROR': theme.colors.error,
-      'WARNING': theme.colors.warning,
-      'INFO': theme.colors.info
-    };
-    return colors[action] || theme.colors.textSecondary;
-  };
+    loadFormattedActivity();
+  }, [activity]);
 
-  // Obtenir le libellé de l'action
-  const getActionDisplayName = (action) => {
-    const names = {
-      'CREATE_CLIENT': 'Client créé',
-      'MODIFY_CLIENT': 'Client modifié',
-      'DELETE_CLIENT': 'Client supprimé',
-      'TRANSACTION_EPARGNE': 'Épargne',
-      'TRANSACTION_RETRAIT': 'Retrait',
-      'LOGIN': 'Connexion',
-      'LOGOUT': 'Déconnexion',
-      'JOURNAL_CREATE': 'Journal créé',
-      'JOURNAL_CLOSE': 'Journal clôturé',
-      'COMMISSION_CALCULATE': 'Commission calculée',
-      'SYNC': 'Synchronisation',
-      'SYSTEM': 'Système',
-      'ERROR': 'Erreur',
-      'WARNING': 'Avertissement',
-      'INFO': 'Information'
-    };
-    return names[action] || action;
-  };
 
-  // Parser les détails JSON si disponibles
-  const parseDetails = (details) => {
-    if (!details) return null;
-    
-    try {
-      return typeof details === 'string' ? JSON.parse(details) : details;
-    } catch (error) {
-      return details;
-    }
-  };
-
-  const actionIcon = getActionIcon(activity.action);
-  const actionColor = getActionColor(activity.action);
-  const actionName = getActionDisplayName(activity.action);
-  const parsedDetails = parseDetails(activity.details);
+  const actionIcon = activityFormatter.getActionIcon(activity.action);
+  const actionColor = activityFormatter.getActionColor(activity.action, theme);
+  const actionName = activityFormatter.getBasicActionName(activity.action);
   const timestamp = new Date(activity.timestamp);
 
   const component = (
@@ -121,18 +65,16 @@ const ActivityLogItem = ({ activity, isAdmin = false, onPress }) => {
             </Text>
           )}
           
-          {/* Détails JSON parsés */}
-          {parsedDetails && (
+          {/* 🔥 NOUVEAU: Détails formatés intelligemment avec nouveau formatteur */}
+          {!loading && formattedDetails && (
             <View style={styles.detailsContainer}>
-              {typeof parsedDetails === 'object' ? (
-                Object.entries(parsedDetails).map(([key, value]) => (
-                  <Text key={key} style={styles.detailItem}>
-                    {key}: {String(value)}
-                  </Text>
-                ))
-              ) : (
-                <Text style={styles.detailItem}>{String(parsedDetails)}</Text>
-              )}
+              <Text style={styles.formattedDetail}>{formattedDetails}</Text>
+            </View>
+          )}
+          
+          {loading && (
+            <View style={styles.detailsContainer}>
+              <Text style={styles.loadingDetail}>Chargement...</Text>
             </View>
           )}
           
@@ -242,6 +184,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textSecondary,
     marginBottom: 2,
+  },
+  formattedDetail: {
+    fontSize: 14,
+    color: theme.colors.text,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  loadingDetail: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+    fontStyle: 'italic',
   },
   adminInfo: {
     marginTop: theme.spacing.sm,

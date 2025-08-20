@@ -261,14 +261,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     borderRadius: 16,
     overflow: 'hidden',
-    // Remplacer `theme.shadows.small` par les propriétés directes pour éviter l'avertissement
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    // Utiliser boxShadow pour la compatibilité React Native Web
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 2,
   },
   header: {

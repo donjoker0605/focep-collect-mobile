@@ -30,17 +30,23 @@ const AdminDashboardScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState('today'); // 🆕 NOUVEAU
 
   useEffect(() => {
     loadDashboardStats();
   }, []);
+
+  // 🆕 NOUVEAU: Recharger quand la période change
+  useEffect(() => {
+    loadDashboardStats(false);
+  }, [selectedPeriod]);
 
   const loadDashboardStats = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       setError(null);
       
-      const response = await adminService.getDashboardStats();
+      const response = await adminService.getDashboardStats(selectedPeriod); // 🆕 NOUVEAU paramètre
       
       if (response.success) {
         setStats(response.data);
@@ -357,24 +363,78 @@ const AdminDashboardScreen = ({ navigation }) => {
           />
         }
       >
-        {/* Vue d'ensemble financière quotidienne */}
+        {/* 🆕 NOUVEAU: Sélecteur de période */}
+        <View style={styles.periodSelector}>
+          <Text style={styles.periodTitle}>Période d'analyse</Text>
+          <View style={styles.periodButtons}>
+            {[
+              { key: 'today', label: "Aujourd'hui", icon: 'today' },
+              { key: 'week', label: 'Semaine', icon: 'calendar' },
+              { key: 'month', label: 'Mois', icon: 'calendar-outline' },
+              { key: 'all', label: 'Tout', icon: 'infinite' }
+            ].map(period => (
+              <TouchableOpacity
+                key={period.key}
+                style={[
+                  styles.periodButton,
+                  selectedPeriod === period.key && styles.periodButtonActive
+                ]}
+                onPress={() => setSelectedPeriod(period.key)}
+              >
+                <Ionicons
+                  name={period.icon}
+                  size={16}
+                  color={selectedPeriod === period.key ? 'white' : theme.colors.textLight}
+                />
+                <Text style={[
+                  styles.periodButtonText,
+                  selectedPeriod === period.key && styles.periodButtonTextActive
+                ]}>
+                  {period.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Vue d'ensemble financière par période */}
         <View style={styles.overviewSection}>
           <Text style={styles.sectionTitle}>
-            Vue d'ensemble - {format(new Date(), 'dd MMMM yyyy', { locale: fr })}
+            Vue d'ensemble - {selectedPeriod === 'today' ? "Aujourd'hui" : 
+                            selectedPeriod === 'week' ? 'Cette semaine' :
+                            selectedPeriod === 'month' ? 'Ce mois' : 'Toutes périodes'}
           </Text>
           <Card style={styles.financeCard}>
             <View style={styles.financeRow}>
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Épargne Aujourd'hui</Text>
+                <Text style={styles.financeLabel}>
+                  {selectedPeriod === 'today' ? 'Épargne Aujourd\'hui' :
+                   selectedPeriod === 'week' ? 'Épargne Semaine' :
+                   selectedPeriod === 'month' ? 'Épargne Mois' : 'Épargne Totale'}
+                </Text>
                 <Text style={[styles.financeValue, { color: theme.colors.success }]}>
-                  {formatCurrency(stats?.epargneDuJour || stats?.totalEpargne)}
+                  {formatCurrency(
+                    selectedPeriod === 'today' ? (stats?.epargneAujourdhui || 0) :
+                    selectedPeriod === 'week' ? (stats?.epargneSemaine || 0) :
+                    selectedPeriod === 'month' ? (stats?.epargneMois || 0) :
+                    (stats?.totalEpargne || 0)
+                  )}
                 </Text>
               </View>
               <View style={styles.financeDivider} />
               <View style={styles.financeItem}>
-                <Text style={styles.financeLabel}>Retraits Aujourd'hui</Text>
+                <Text style={styles.financeLabel}>
+                  {selectedPeriod === 'today' ? 'Retraits Aujourd\'hui' :
+                   selectedPeriod === 'week' ? 'Retraits Semaine' :
+                   selectedPeriod === 'month' ? 'Retraits Mois' : 'Retraits Totaux'}
+                </Text>
                 <Text style={[styles.financeValue, { color: theme.colors.error }]}>
-                  {formatCurrency(stats?.retraitsDuJour || stats?.totalRetrait)}
+                  {formatCurrency(
+                    selectedPeriod === 'today' ? (stats?.retraitsAujourdhui || 0) :
+                    selectedPeriod === 'week' ? (stats?.retraitsSemaine || 0) :
+                    selectedPeriod === 'month' ? (stats?.retraitsMois || 0) :
+                    (stats?.totalRetrait || 0)
+                  )}
                 </Text>
               </View>
             </View>
@@ -391,9 +451,18 @@ const AdminDashboardScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.netBalanceContainer}>
-              <Text style={styles.netBalanceLabel}>Solde Net du Jour</Text>
+              <Text style={styles.netBalanceLabel}>
+                {selectedPeriod === 'today' ? 'Solde Net du Jour' :
+                 selectedPeriod === 'week' ? 'Solde Net Semaine' :
+                 selectedPeriod === 'month' ? 'Solde Net Mois' : 'Solde Net Total'}
+              </Text>
               <Text style={styles.netBalanceValue}>
-                {formatCurrency((stats?.epargneDuJour || 0) - (stats?.retraitsDuJour || 0))}
+                {formatCurrency(
+                  selectedPeriod === 'today' ? (stats?.soldeAujourdhui || 0) :
+                  selectedPeriod === 'week' ? (stats?.soldeSemaine || 0) :
+                  selectedPeriod === 'month' ? (stats?.soldeMois || 0) :
+                  ((stats?.totalEpargne || 0) - (stats?.totalRetrait || 0))
+                )}
               </Text>
             </View>
           </Card>
@@ -549,8 +618,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: theme.colors.textLight,
   },
+  // 🆕 NOUVEAUX STYLES: Sélecteur de période
+  periodSelector: {
+    padding: 20,
+    paddingBottom: 10,
+  },
+  periodTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  periodButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  periodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    gap: 6,
+  },
+  periodButtonActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  periodButtonText: {
+    fontSize: 14,
+    color: theme.colors.textLight,
+    fontWeight: '500',
+  },
+  periodButtonTextActive: {
+    color: 'white',
+    fontWeight: '600',
+  },
   overviewSection: {
     padding: 20,
+    paddingTop: 10,
   },
   sectionTitle: {
     fontSize: 20,

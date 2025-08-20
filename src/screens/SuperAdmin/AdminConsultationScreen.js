@@ -19,6 +19,7 @@ import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
 import { useSuperAdmin } from '../../hooks/useSuperAdmin';
+import superAdminService from '../../services/superAdminService';
 
 const AdminConsultationScreen = ({ navigation }) => {
   const {
@@ -64,83 +65,31 @@ const AdminConsultationScreen = ({ navigation }) => {
   const loadAllAdmins = async () => {
     setLoadingAdmins(true);
     try {
-      // Simuler l'appel API pour récupérer tous les admins
-      setTimeout(() => {
-        const mockAdmins = [
-          {
-            id: 1,
-            nom: 'Dupont',
-            prenom: 'Jean',
-            adresseMail: 'jean.dupont@agence1.com',
-            telephone: '77 123 45 67',
-            status: 'active',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            totalCollecteurs: 5,
-            totalClients: 150,
-            dateCreation: '2024-01-15T10:00:00',
-            derniereConnexion: '2024-12-10T14:30:00',
-          },
-          {
-            id: 2,
-            nom: 'Martin',
-            prenom: 'Sophie',
-            adresseMail: 'sophie.martin@agence1.com',
-            telephone: '77 234 56 78',
-            status: 'active',
-            agence: {
-              id: 1,
-              nomAgence: 'Agence Dakar Centre',
-              codeAgence: 'DAK001'
-            },
-            totalCollecteurs: 3,
-            totalClients: 89,
-            dateCreation: '2024-02-20T09:15:00',
-            derniereConnexion: '2024-12-11T16:45:00',
-          },
-          {
-            id: 3,
-            nom: 'Diallo',
-            prenom: 'Amadou',
-            adresseMail: 'amadou.diallo@agence2.com',
-            telephone: '77 345 67 89',
-            status: 'inactive',
-            agence: {
-              id: 2,
-              nomAgence: 'Agence Thiès',
-              codeAgence: 'THI001'
-            },
-            totalCollecteurs: 2,
-            totalClients: 45,
-            dateCreation: '2024-03-10T11:30:00',
-            derniereConnexion: '2024-11-28T10:20:00',
-          },
-          {
-            id: 4,
-            nom: 'Ba',
-            prenom: 'Fatou',
-            adresseMail: 'fatou.ba@agence3.com',
-            telephone: '77 456 78 90',
-            status: 'active',
-            agence: {
-              id: 3,
-              nomAgence: 'Agence Saint-Louis',
-              codeAgence: 'STL001'
-            },
-            totalCollecteurs: 7,
-            totalClients: 203,
-            dateCreation: '2024-01-08T13:45:00',
-            derniereConnexion: '2024-12-11T18:10:00',
-          },
-        ];
-        setAdmins(mockAdmins);
-        setLoadingAdmins(false);
-      }, 1000);
+      const result = await superAdminService.getAllAdmins();
+      if (result.success) {
+        // Adapter les données du backend au format attendu par l'interface
+        const adaptedAdmins = result.data.map(admin => ({
+          id: admin.id,
+          nom: admin.nom,
+          prenom: admin.prenom,
+          adresseMail: admin.adresseMail,
+          telephone: admin.telephone,
+          status: admin.active ? 'active' : 'inactive',
+          agence: admin.agence || { id: null, nomAgence: 'N/A', codeAgence: 'N/A' },
+          totalCollecteurs: admin.totalCollecteurs || 0,
+          totalClients: admin.totalClients || 0,
+          dateCreation: admin.dateCreation,
+          derniereConnexion: admin.dateModification || admin.dateCreation,
+        }));
+        setAdmins(adaptedAdmins);
+      } else {
+        console.error('Erreur API admins:', result.error);
+        setAdmins([]);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des admins:', error);
+      setAdmins([]);
+    } finally {
       setLoadingAdmins(false);
     }
   };
