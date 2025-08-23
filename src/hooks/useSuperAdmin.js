@@ -128,6 +128,28 @@ export const useSuperAdmin = () => {
     }
   }, [loadAdmins]);
 
+  const toggleAdminStatus = useCallback(async (adminId) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await superAdminService.toggleAdminStatus(adminId);
+      if (result.success) {
+        // Recharger la liste des admins pour mettre à jour le statut
+        await loadAdmins();
+        return true;
+      } else {
+        setError(result.error);
+        return false;
+      }
+    } catch (err) {
+      setError('Erreur lors du changement de statut de l\'admin');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [loadAdmins]);
+
   /**
    * 🏢 GESTION COMPLÈTE DES AGENCES
    */
@@ -435,6 +457,7 @@ export const useSuperAdmin = () => {
     loadAdminDetails,
     resetAdminPassword,
     createAdmin,
+    toggleAdminStatus,
     
     // Actions Agences
     loadAgences,

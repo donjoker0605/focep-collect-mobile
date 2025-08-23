@@ -45,7 +45,7 @@ const agenceSchema = yup.object().shape({
     .required('Le quartier est requis'),
   telephone: yup
     .string()
-    .matches(/^(\+237|237)?[\s]?[679]\d{8}$/, 'Format de téléphone invalide (exemple: +237XXXXXXXXX)'),
+    .matches(/^(\+237|237)?[0-9]{9}$/, 'Format de téléphone invalide (exemple: +237XXXXXXXXX)'),
   responsable: yup
     .string()
     .max(100, 'Le nom du responsable ne doit pas dépasser 100 caractères'),
@@ -163,7 +163,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
       >
         <ScrollView style={styles.content}>
           <View style={styles.form}>
-            <Text style={styles.sectionTitle}>📋 Informations de base</Text>
+            <Text style={styles.sectionTitle}>Informations de base</Text>
             
             <Controller
               control={control}
@@ -198,7 +198,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
               )}
             />
             
-            <Text style={styles.sectionTitle}>📍 Localisation</Text>
+            <Text style={styles.sectionTitle}>Localisation</Text>
             
             <Controller
               control={control}
@@ -250,7 +250,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
               )}
             />
 
-            <Text style={styles.sectionTitle}>📞 Contact</Text>
+            <Text style={styles.sectionTitle}>Contact</Text>
             
             <Controller
               control={control}
@@ -285,7 +285,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
               )}
             />
 
-            <Text style={styles.sectionTitle}>💰 Paramètres de commission</Text>
+            <Text style={styles.sectionTitle}>Paramètres de commission</Text>
             
             <CommissionForm
               commissionConfig={commissionConfig}
@@ -297,7 +297,7 @@ const AgenceCreationScreen = ({ navigation, route }) => {
             <View style={styles.infoBox}>
               <Ionicons name="information-circle-outline" size={24} color={theme.colors.primary} />
               <Text style={styles.infoText}>
-                🏦 Lors de la création, tous les comptes nécessaires seront automatiquement créés :
+                Lors de la création, tous les comptes nécessaires seront automatiquement créés :
                 {'\n'}• Compte Agence (principal)
                 {'\n'}• Compte Produit Collecte  
                 {'\n'}• Compte Charge Collecte

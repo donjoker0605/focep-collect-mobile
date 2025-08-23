@@ -53,6 +53,21 @@ const collecteurSchema = yup.object().shape({
     .number()
     .positive('Veuillez sélectionner une agence')
     .required('L\'agence est requise'),
+  adminId: yup
+    .number()
+    .transform((value, originalValue) => {
+      // Si c'est une chaîne vide, null ou undefined, retourner null
+      if (originalValue === '' || originalValue === null || originalValue === undefined) {
+        return null;
+      }
+      return value;
+    })
+    .nullable()
+    .when('$isEdit', {
+      is: false, // En mode création, adminId est requis
+      then: (schema) => schema.required('L\'administrateur responsable est requis'),
+      otherwise: (schema) => schema.notRequired() // En mode édition, on accepte null temporairement
+    }),
   montantMaxRetrait: yup
     .number()
     .min(0, 'Le montant doit être positif')
@@ -68,13 +83,24 @@ const collecteurSchema = yup.object().shape({
 const CollecteurCreationScreen = ({ navigation, route }) => {
   const isEditMode = route.params?.mode === 'edit';
   const collecteurToEdit = route.params?.collecteur;
+  
+  // Logs pour debug uniquement au mount initial
+  useEffect(() => {
+    console.log('🔧 CollecteurCreationScreen - Mode:', isEditMode ? 'EDIT' : 'CREATE');
+    console.log('🔧 CollecteurCreationScreen - collecteur:', collecteurToEdit);
+  }, []); // Seulement au premier rendu
   const [loading, setLoading] = useState(false);
   const [agences, setAgences] = useState([]);
   const [loadingAgences, setLoadingAgences] = useState(true);
   const [admins, setAdmins] = useState([]);
+  const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [manualPassword, setManualPassword] = useState('');
 
   const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm({
     resolver: yupResolver(collecteurSchema),
+    context: { isEdit: isEditMode }, // Passer le mode au contexte pour validation
     defaultValues: {
       nom: '',
       prenom: '',
@@ -93,7 +119,7 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
         adresseMail: collecteurToEdit.adresseMail || '',
         telephone: collecteurToEdit.telephone || '',
         agenceId: collecteurToEdit.agenceId || '',
-        adminId: collecteurToEdit.adminId || '',
+        adminId: collecteurToEdit.adminId ? collecteurToEdit.adminId.toString() : '',
         montantMaxRetrait: collecteurToEdit.montantMaxRetrait || 50000,
         ancienneteEnMois: collecteurToEdit.ancienneteEnMois || 0,
         active: collecteurToEdit.active !== false,
@@ -112,6 +138,29 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
       loadAdminsByAgence(selectedAgenceId);
     }
   }, [selectedAgenceId]);
+
+  // Charger les données du collecteur une seule fois
+  useEffect(() => {
+    if (isEditMode && collecteurToEdit && collecteurToEdit.id) {
+      console.log('🔍 Debug collecteur à éditer:', collecteurToEdit);
+      console.log('🔍 agenceId:', collecteurToEdit.agenceId);
+      console.log('🔍 adminId:', collecteurToEdit.adminId);
+      
+      // Pré-sélectionner l'agence si disponible et charger ses admins
+      if (collecteurToEdit.agenceId) {
+        console.log('✅ Pré-sélection agence:', collecteurToEdit.agenceId);
+        setValue('agenceId', collecteurToEdit.agenceId.toString());
+        loadAdminsByAgence(collecteurToEdit.agenceId);
+      }
+      // Pré-sélectionner l'admin responsable si disponible
+      if (collecteurToEdit.adminId) {
+        console.log('✅ Pré-sélection admin:', collecteurToEdit.adminId);
+        setValue('adminId', collecteurToEdit.adminId.toString());
+      } else {
+        console.log('❌ Pas d\'adminId trouvé dans collecteurToEdit');
+      }
+    }
+  }, [isEditMode, collecteurToEdit?.id]); // Dépend seulement de l'ID du collecteur
 
   const loadAgences = async () => {
     setLoadingAgences(true);
@@ -132,10 +181,21 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
   };
 
   const loadAdminsByAgence = async (agenceId) => {
+    console.log('👥 Chargement admins pour agence:', agenceId);
     try {
       const result = await superAdminService.getAdminsByAgence(agenceId);
+      console.log('👥 Résultat admins:', result);
       if (result.success) {
+        console.log('👥 Admins chargés:', result.data?.length || 0, 'admins');
         setAdmins(result.data || []);
+        
+        // Si on est en mode édition et qu'on a un adminId, pré-sélectionner après chargement
+        if (isEditMode && collecteurToEdit?.adminId) {
+          setTimeout(() => {
+            console.log('⏳ Pré-sélection admin différée:', collecteurToEdit.adminId);
+            setValue('adminId', collecteurToEdit.adminId.toString());
+          }, 100);
+        }
       } else {
         console.error('Erreur chargement admins:', result.error);
         setAdmins([]);
@@ -147,6 +207,9 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
   };
 
   const onSubmit = async (data) => {
+    console.log('📝 Soumission formulaire - Mode:', isEditMode ? 'EDIT' : 'CREATE');
+    console.log('📝 Données formulaire:', data);
+    
     setLoading(true);
     try {
       const collecteurData = {
@@ -163,6 +226,8 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
         role: 'COLLECTEUR'
       };
 
+      console.log('📝 Données à envoyer:', collecteurData);
+
       // Génération d'un mot de passe temporaire pour les nouveaux collecteurs
       if (!isEditMode) {
         collecteurData.password = generateTemporaryPassword();
@@ -170,9 +235,13 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
 
       let result;
       if (isEditMode) {
+        console.log('🔄 Appel updateCollecteur avec ID:', collecteurToEdit.id);
         result = await superAdminService.updateCollecteur(collecteurToEdit.id, collecteurData);
+        console.log('🔄 Résultat updateCollecteur:', result);
       } else {
+        console.log('➕ Appel createCollecteur');
         result = await superAdminService.createCollecteur(collecteurData);
+        console.log('➕ Résultat createCollecteur:', result);
       }
 
       if (result.success) {
@@ -212,6 +281,97 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
+  };
+
+  const handleResetPassword = async () => {
+    if (!isEditMode || !collecteurToEdit) return;
+    
+    Alert.alert(
+      "Confirmation",
+      "Êtes-vous sûr de vouloir réinitialiser le mot de passe de ce collecteur?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Confirmer",
+          onPress: async () => {
+            setResetPasswordLoading(true);
+            try {
+              const temporaryPassword = generateTemporaryPassword();
+              const result = await superAdminService.resetCollecteurPassword(
+                collecteurToEdit.id,
+                { newPassword: temporaryPassword }
+              );
+              
+              if (result.success) {
+                setNewPassword(temporaryPassword);
+                setManualPassword(temporaryPassword);
+                Alert.alert(
+                  "Succès",
+                  `Le mot de passe a été réinitialisé avec succès.\n\nNouveau mot de passe temporaire: ${temporaryPassword}\n\nLe collecteur devra changer son mot de passe lors de sa prochaine connexion.`,
+                  [{ text: "OK" }]
+                );
+              } else {
+                Alert.alert("Erreur", result.error || "Erreur lors de la réinitialisation");
+              }
+            } catch (error) {
+              console.error('Erreur reset password:', error);
+              Alert.alert("Erreur", "Une erreur inattendue est survenue");
+            } finally {
+              setResetPasswordLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleManualPasswordSave = async () => {
+    if (!isEditMode || !collecteurToEdit || !manualPassword.trim()) {
+      Alert.alert("Erreur", "Veuillez saisir un mot de passe valide");
+      return;
+    }
+
+    if (manualPassword.length < 8) {
+      Alert.alert("Erreur", "Le mot de passe doit contenir au moins 8 caractères");
+      return;
+    }
+
+    Alert.alert(
+      "Confirmation",
+      "Êtes-vous sûr de vouloir modifier le mot de passe de ce collecteur?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Confirmer",
+          onPress: async () => {
+            setResetPasswordLoading(true);
+            try {
+              const result = await superAdminService.resetCollecteurPassword(
+                collecteurToEdit.id,
+                { newPassword: manualPassword }
+              );
+              
+              if (result.success) {
+                setNewPassword(manualPassword);
+                setShowPasswordField(false);
+                Alert.alert(
+                  "Succès",
+                  "Le mot de passe a été modifié avec succès.",
+                  [{ text: "OK" }]
+                );
+              } else {
+                Alert.alert("Erreur", result.error || "Erreur lors de la modification");
+              }
+            } catch (error) {
+              console.error('Erreur manual password save:', error);
+              Alert.alert("Erreur", "Une erreur inattendue est survenue");
+            } finally {
+              setResetPasswordLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const getSelectedAgenceName = () => {
@@ -370,7 +530,7 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
 
             {selectedAgenceId && (
               <View style={styles.pickerContainer}>
-                <Text style={styles.pickerLabel}>Admin superviseur (optionnel)</Text>
+                <Text style={styles.pickerLabel}>Admin responsable *</Text>
                 <Controller
                   control={control}
                   name="adminId"
@@ -381,7 +541,7 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
                         onValueChange={onChange}
                         style={styles.picker}
                       >
-                        <Picker.Item label="Aucun admin assigné" value="" />
+                        <Picker.Item label="Sélectionner un admin responsable" value="" />
                         {admins.filter(admin => admin.id).map(admin => (
                           <Picker.Item
                             key={admin.id}
@@ -393,6 +553,9 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
                     </View>
                   )}
                 />
+                {errors.adminId && (
+                  <Text style={styles.errorText}>{errors.adminId.message}</Text>
+                )}
               </View>
             )}
 
@@ -449,6 +612,112 @@ const CollecteurCreationScreen = ({ navigation, route }) => {
                 )}
               />
             </View>
+
+            {isEditMode && (
+              <>
+                <Text style={styles.sectionTitle}>Gestion des Identifiants</Text>
+                
+                <Card style={styles.credentialsCard}>
+                  <View style={styles.credentialRow}>
+                    <View style={styles.credentialInfo}>
+                      <Text style={styles.credentialLabel}>Email de connexion</Text>
+                      <Text style={styles.credentialValue}>
+                        {watch('adresseMail') || collecteurToEdit?.adresseMail || 'N/A'}
+                      </Text>
+                      <Text style={styles.credentialNote}>
+                        L'email peut être modifié dans la section Contact ci-dessus
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.credentialDivider} />
+                  
+                  <View style={styles.credentialRow}>
+                    <View style={styles.credentialInfo}>
+                      <Text style={styles.credentialLabel}>Mot de passe</Text>
+                      <Text style={styles.credentialValue}>
+                        {newPassword ? `Nouveau: ${newPassword}` : '••••••••••••• (crypté)'}
+                      </Text>
+                      <Text style={styles.credentialNote}>
+                        Le mot de passe actuel est crypté. Vous pouvez le réinitialiser manuellement ou automatiquement.
+                      </Text>
+                    </View>
+                  </View>
+
+                  {!showPasswordField ? (
+                    <View style={styles.passwordButtonsContainer}>
+                      <TouchableOpacity
+                        style={styles.manualPasswordButton}
+                        onPress={() => {
+                          setShowPasswordField(true);
+                          setManualPassword(newPassword || '');
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={16} color={theme.colors.primary} />
+                        <Text style={styles.manualPasswordText}>Définir manuellement</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity
+                        style={styles.resetPasswordButton}
+                        onPress={handleResetPassword}
+                        disabled={resetPasswordLoading}
+                      >
+                        <Ionicons 
+                          name="refresh" 
+                          size={16} 
+                          color={theme.colors.white} 
+                          style={resetPasswordLoading && { opacity: 0.6 }}
+                        />
+                        <Text style={[styles.resetPasswordText, resetPasswordLoading && { opacity: 0.6 }]}>
+                          {resetPasswordLoading ? 'Génération...' : 'Générer automatiquement'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.credentialDivider} />
+                      <View style={styles.passwordEditContainer}>
+                        <Text style={styles.credentialLabel}>Nouveau mot de passe</Text>
+                        <Input
+                          value={manualPassword}
+                          onChangeText={setManualPassword}
+                          placeholder="Saisissez le nouveau mot de passe (min. 8 caractères)"
+                          secureTextEntry
+                          style={styles.passwordInput}
+                        />
+                        <View style={styles.passwordEditButtons}>
+                          <TouchableOpacity
+                            style={styles.cancelPasswordButton}
+                            onPress={() => {
+                              setShowPasswordField(false);
+                              setManualPassword('');
+                            }}
+                          >
+                            <Text style={styles.cancelPasswordText}>Annuler</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={styles.savePasswordButton}
+                            onPress={handleManualPasswordSave}
+                            disabled={resetPasswordLoading}
+                          >
+                            <Ionicons 
+                              name="checkmark" 
+                              size={16} 
+                              color={theme.colors.white} 
+                              style={resetPasswordLoading && { opacity: 0.6 }}
+                            />
+                            <Text style={[styles.savePasswordText, resetPasswordLoading && { opacity: 0.6 }]}>
+                              {resetPasswordLoading ? 'Sauvegarde...' : 'Sauvegarder'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </>
+                  )}
+                </Card>
+              </>
+            )}
 
             <Card style={styles.infoCard}>
               <View style={styles.infoHeader}>
@@ -584,6 +853,141 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     marginBottom: 32,
+  },
+  credentialsCard: {
+    backgroundColor: theme.colors.white,
+    marginTop: 16,
+    marginBottom: 16,
+    padding: 16,
+  },
+  credentialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  credentialInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  credentialLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textDark,
+    marginBottom: 4,
+  },
+  credentialValue: {
+    fontSize: 16,
+    color: theme.colors.primary,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  credentialNote: {
+    fontSize: 12,
+    color: theme.colors.textLight,
+    fontStyle: 'italic',
+  },
+  credentialDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginVertical: 12,
+  },
+  resetPasswordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  resetPasswordText: {
+    color: theme.colors.white,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  newPasswordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.successLight,
+    padding: 12,
+    borderRadius: 6,
+  },
+  newPasswordText: {
+    fontSize: 12,
+    color: theme.colors.success,
+    marginLeft: 8,
+    flex: 1,
+  },
+  newPasswordValue: {
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  passwordButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 12,
+  },
+  manualPasswordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  manualPasswordText: {
+    color: theme.colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  passwordEditContainer: {
+    paddingTop: 16,
+  },
+  passwordInput: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  passwordEditButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  cancelPasswordButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 6,
+    backgroundColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  cancelPasswordText: {
+    color: theme.colors.textDark,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  savePasswordButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 6,
+    backgroundColor: theme.colors.success,
+  },
+  savePasswordText: {
+    color: theme.colors.white,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });
 

@@ -25,6 +25,7 @@ const AdminManagementScreen = ({ navigation }) => {
     admins,
     loadAdmins,
     resetAdminPassword,
+    toggleAdminStatus,
     clearError
   } = useSuperAdmin();
 
@@ -105,7 +106,45 @@ const AdminManagementScreen = ({ navigation }) => {
   };
 
   const handleViewAdmin = (admin) => {
-    navigation.navigate('AdminDetail', { adminId: admin.id });
+    console.log('handleViewAdmin appelé avec:', admin);
+    navigation.navigate('AdminDetail', { admin: admin });
+  };
+
+  const handleEditAdmin = (admin) => {
+    console.log('handleEditAdmin appelé avec:', admin);
+    navigation.navigate('AdminCreation', { 
+      mode: 'edit', 
+      admin: admin 
+    });
+  };
+
+  const handleToggleStatus = (admin) => {
+    const newStatus = !admin.active;
+    const action = newStatus ? 'activer' : 'désactiver';
+
+    Alert.alert(
+      `Confirmation`,
+      `Êtes-vous sûr de vouloir ${action} l'administrateur ${admin.nom} ${admin.prenom} ?\n\n${newStatus ? 'Il pourra se connecter à nouveau.' : 'Il ne pourra plus se connecter à l\'application.'}`,
+      [
+        {
+          text: 'Annuler',
+          style: 'cancel',
+        },
+        {
+          text: 'Confirmer',
+          onPress: async () => {
+            const success = await toggleAdminStatus(admin.id);
+            if (success) {
+              Alert.alert(
+                'Succès', 
+                `Administrateur ${action} avec succès.`
+              );
+              loadAdmins(); // Recharger la liste
+            }
+          },
+        },
+      ]
+    );
   };
 
   const renderAdminItem = ({ item }) => (
@@ -149,11 +188,39 @@ const AdminManagementScreen = ({ navigation }) => {
         
         <TouchableOpacity 
           style={styles.actionButton}
+          onPress={() => handleEditAdmin(item)}
+        >
+          <Ionicons name="pencil-outline" size={18} color={theme.colors.secondary} />
+          <Text style={[styles.actionButtonText, { color: theme.colors.secondary }]}>Modifier</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleToggleStatus(item)}
+          disabled={loading}
+        >
+          <Ionicons 
+            name={item.active ? "close-circle-outline" : "checkmark-circle-outline"} 
+            size={18} 
+            color={item.active ? theme.colors.warning : theme.colors.success} 
+          />
+          <Text 
+            style={[
+              styles.actionButtonText, 
+              { color: item.active ? theme.colors.warning : theme.colors.success }
+            ]}
+          >
+            {item.active ? 'Désactiver' : 'Activer'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.actionButton}
           onPress={() => handleResetPassword(item)}
           disabled={loading}
         >
-          <Ionicons name="key-outline" size={18} color={theme.colors.warning} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.warning }]}>
+          <Ionicons name="key-outline" size={18} color={theme.colors.info} />
+          <Text style={[styles.actionButtonText, { color: theme.colors.info }]}>
             Mot de passe
           </Text>
         </TouchableOpacity>

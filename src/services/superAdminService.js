@@ -204,6 +204,23 @@ class SuperAdminService {
     }
   }
 
+  async resetCollecteurPassword(collecteurId, passwordData) {
+    try {
+      const response = await axiosConfig.post(`/super-admin/collecteurs/${collecteurId}/reset-password`, passwordData);
+      return {
+        success: true,
+        data: response.data.data,
+        message: response.data.message
+      };
+    } catch (error) {
+      console.error('Erreur resetCollecteurPassword:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || 'Erreur lors de la réinitialisation du mot de passe'
+      };
+    }
+  }
+
   async getClientsByCollecteur(collecteurId) {
     try {
       const response = await axiosConfig.get(`/super-admin/collecteurs/${collecteurId}/clients`);
@@ -531,7 +548,7 @@ class SuperAdminService {
   /**
    * 👤 CRÉATION D'ADMIN (via UserController existant)
    */
-  async createAdmin(adminData) {
+  async createAdminViaUserController(adminData) {
     try {
       const response = await axiosConfig.post('/users/admin', adminData);
       return {
@@ -540,7 +557,7 @@ class SuperAdminService {
         message: response.data.message
       };
     } catch (error) {
-      console.error('Erreur createAdmin:', error);
+      console.error('Erreur createAdminViaUserController:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Erreur lors de la création de l\'admin'
@@ -745,7 +762,7 @@ class SuperAdminService {
   // ================================
 
   /**
-   * ✨ CRÉER UN NOUVEL ADMIN
+   * ✨ CRÉER UN NOUVEL ADMIN (SuperAdmin endpoint)
    */
   async createAdmin(adminData) {
     try {
@@ -789,7 +806,7 @@ class SuperAdminService {
   // ================================
 
   /**
-   * 📋 LISTE TOUS LES COLLECTEURS
+   * 👨‍💼 GESTION DES COLLECTEURS
    */
   async getAllCollecteurs() {
     try {
@@ -808,9 +825,6 @@ class SuperAdminService {
     }
   }
 
-  /**
-   * 🔍 DÉTAILS D'UN COLLECTEUR
-   */
   async getCollecteurDetails(collecteurId) {
     try {
       const response = await axiosConfig.get(`/super-admin/collecteurs/${collecteurId}`);
@@ -823,14 +837,11 @@ class SuperAdminService {
       console.error('Erreur getCollecteurDetails:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Erreur lors de la récupération des détails du collecteur'
+        error: error.response?.data?.message || 'Erreur lors de la récupération des détails collecteur'
       };
     }
   }
 
-  /**
-   * ✨ CRÉER UN NOUVEAU COLLECTEUR
-   */
   async createCollecteur(collecteurData) {
     try {
       const response = await axiosConfig.post('/super-admin/collecteurs', collecteurData);
@@ -848,9 +859,6 @@ class SuperAdminService {
     }
   }
 
-  /**
-   * 🔄 MODIFIER UN COLLECTEUR
-   */
   async updateCollecteur(collecteurId, collecteurData) {
     try {
       const response = await axiosConfig.put(`/super-admin/collecteurs/${collecteurId}`, collecteurData);
@@ -868,9 +876,6 @@ class SuperAdminService {
     }
   }
 
-  /**
-   * 🔄 ACTIVER/DÉSACTIVER UN COLLECTEUR
-   */
   async toggleCollecteurStatus(collecteurId) {
     try {
       const response = await axiosConfig.patch(`/super-admin/collecteurs/${collecteurId}/toggle-status`);
@@ -883,7 +888,7 @@ class SuperAdminService {
       console.error('Erreur toggleCollecteurStatus:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Erreur lors du changement de statut du collecteur'
+        error: error.response?.data?.message || 'Erreur lors de la modification du statut collecteur'
       };
     }
   }

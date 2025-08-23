@@ -1,5 +1,5 @@
 // src/screens/SuperAdmin/AdminDetailScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Header from '../../components/Header/Header';
 import Card from '../../components/Card/Card';
 import theme from '../../theme';
+import superAdminService from '../../services/superAdminService';
 
 const AdminDetailScreen = ({ navigation, route }) => {
   const { admin } = route.params || {};
@@ -22,68 +24,89 @@ const AdminDetailScreen = ({ navigation, route }) => {
   const [adminDetails, setAdminDetails] = useState(null);
   const [collecteurs, setCollecteurs] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // Si un admin est passé en paramètre, l'utiliser directement
-    if (admin) {
-      setAdminDetails(admin);
-      // Simuler le chargement des collecteurs
-      fetchCollecteurs();
-    } else {
-      // Afficher une erreur
-      Alert.alert('Erreur', 'Aucun administrateur sélectionné');
-      navigation.goBack();
-    }
-  }, [admin]);
+  // Charger les détails de l'admin
+  const loadAdminDetails = useCallback(async (showLoader = true) => {
+    try {
+      if (showLoader) {
+        setIsLoading(true);
+        setError(null);
+      }
 
-  const fetchCollecteurs = () => {
-    // Simuler une requête API
-    setTimeout(() => {
-      setCollecteurs([
-        {
-          id: 1,
-          nom: 'Martin',
-          prenom: 'Sophie',
-          status: 'active',
-          totalClients: 35,
-        },
-        {
-          id: 2,
-          nom: 'Dubois',
-          prenom: 'Michel',
-          status: 'active',
-          totalClients: 28,
-        },
-        {
-          id: 3,
-          nom: 'Leroy',
-          prenom: 'Thomas',
-          status: 'inactive',
-          totalClients: 0,
-        },
+      console.log('📊 Chargement détails admin:', admin?.id);
+      
+      if (!admin?.id) {
+        setError('ID administrateur manquant');
+        Alert.alert('Erreur', 'Aucun administrateur sélectionné');
+        navigation.goBack();
+        return;
+      }
+
+      // Charger en parallèle les données de l'admin
+      const [adminResult, collecteursResult] = await Promise.allSettled([
+        superAdminService.getAdminDetails(admin.id),
+        admin.agenceId ? superAdminService.getCollecteursByAgence(admin.agenceId) : Promise.resolve({ data: [] })
       ]);
-      setIsLoading(false);
-    }, 1000);
-  };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    // Simuler une requête API
-    setTimeout(() => {
-      fetchCollecteurs();
+      // Traiter les résultats
+      if (adminResult.status === 'fulfilled' && adminResult.value.success) {
+        setAdminDetails(adminResult.value.data);
+      } else {
+        // Utiliser les données passées en paramètre si l'API échoue
+        setAdminDetails(admin);
+      }
+
+      if (collecteursResult.status === 'fulfilled' && collecteursResult.value.success) {
+        setCollecteurs(collecteursResult.value.data || []);
+      }
+
+      // Vérifier s'il y a eu des erreurs critiques
+      const hasErrors = [adminResult, collecteursResult]
+        .some(result => result.status === 'rejected');
+
+      if (hasErrors && showLoader) {
+        console.warn('⚠️ Certaines données n\'ont pas pu être chargées');
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur chargement détails admin:', error);
+      setError(error.message);
+      // Utiliser les données passées en paramètre en cas d'erreur
+      setAdminDetails(admin);
+    } finally {
+      setIsLoading(false);
       setRefreshing(false);
-    }, 1500);
-  };
+    }
+  }, [admin, navigation]);
+
+  // Charger au focus de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      if (admin?.id) {
+        loadAdminDetails();
+      }
+    }, [loadAdminDetails, admin])
+  );
+
+  // Refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadAdminDetails(false);
+  }, [loadAdminDetails]);
 
   const handleEditAdmin = () => {
-    navigation.navigate('AdminEditScreen', { admin: adminDetails });
+    navigation.navigate('AdminCreation', { 
+      mode: 'edit', 
+      admin: adminDetails 
+    });
   };
 
-  const handleToggleStatus = () => {
-    if (!adminDetails) return;
+  const handleToggleStatus = async () => {
+    if (!adminDetails?.id) return;
     
-    const newStatus = adminDetails.status === 'active' ? 'inactive' : 'active';
-    const action = newStatus === 'active' ? 'activer' : 'désactiver';
+    const newStatus = !adminDetails.active;
+    const action = newStatus ? 'activer' : 'désactiver';
     
     Alert.alert(
       `Confirmation`,
@@ -95,24 +118,30 @@ const AdminDetailScreen = ({ navigation, route }) => {
         },
         {
           text: 'Confirmer',
-          onPress: () => {
-            setIsLoading(true);
-            
-            // Simuler une requête API
-            setTimeout(() => {
-              setAdminDetails({
-                ...adminDetails,
-                status: newStatus
-              });
+          onPress: async () => {
+            try {
+              setIsLoading(true);
               
+              const result = await superAdminService.toggleAdminStatus(adminDetails.id);
+              
+              if (result.success) {
+                // Recharger les données pour avoir les dernières infos
+                await loadAdminDetails(false);
+                
+                const message = newStatus
+                  ? `Le compte de ${adminDetails.prenom} ${adminDetails.nom} a été activé avec succès.`
+                  : `Le compte de ${adminDetails.prenom} ${adminDetails.nom} a été désactivé avec succès.`;
+                
+                Alert.alert('Succès', message);
+              } else {
+                Alert.alert('Erreur', result.error || 'Erreur lors du changement de statut');
+              }
+            } catch (error) {
+              console.error('❌ Erreur toggle status admin:', error);
+              Alert.alert('Erreur', 'Erreur lors du changement de statut');
+            } finally {
               setIsLoading(false);
-              
-              const message = newStatus === 'active'
-                ? `Le compte de ${adminDetails.prenom} ${adminDetails.nom} a été activé avec succès.`
-                : `Le compte de ${adminDetails.prenom} ${adminDetails.nom} a été désactivé avec succès.`;
-              
-              Alert.alert('Succès', message);
-            }, 1000);
+            }
           },
         },
       ]
@@ -175,14 +204,14 @@ const AdminDetailScreen = ({ navigation, route }) => {
               
               <View style={styles.profileInfo}>
                 <Text style={styles.adminName}>{adminDetails.prenom} {adminDetails.nom}</Text>
-                <Text style={styles.adminEmail}>{adminDetails.adresseMail}</Text>
+                <Text style={styles.adminEmail}>{adminDetails.email || adminDetails.adresseMail}</Text>
                 
                 <View style={[
                   styles.statusBadge,
-                  adminDetails.status === 'active' ? styles.activeBadge : styles.inactiveBadge
+                  adminDetails.active ? styles.activeBadge : styles.inactiveBadge
                 ]}>
                   <Text style={styles.statusText}>
-                    {adminDetails.status === 'active' ? 'Actif' : 'Inactif'}
+                    {adminDetails.active ? 'Actif' : 'Inactif'}
                   </Text>
                 </View>
               </View>
@@ -201,7 +230,7 @@ const AdminDetailScreen = ({ navigation, route }) => {
                 <View style={styles.detailItem}>
                   <Ionicons name="business-outline" size={18} color={theme.colors.textLight} />
                   <Text style={styles.detailLabel}>Agence:</Text>
-                  <Text style={styles.detailValue}>{adminDetails.agence.nomAgence}</Text>
+                  <Text style={styles.detailValue}>{adminDetails.agenceNom || 'Non assigné'}</Text>
                 </View>
               </View>
               
@@ -217,17 +246,17 @@ const AdminDetailScreen = ({ navigation, route }) => {
             <TouchableOpacity
               style={[
                 styles.actionButton,
-                adminDetails.status === 'active' ? styles.desactiverButton : styles.activerButton
+                adminDetails.active ? styles.desactiverButton : styles.activerButton
               ]}
               onPress={handleToggleStatus}
             >
               <Ionicons
-                name={adminDetails.status === 'active' ? "close-circle-outline" : "checkmark-circle-outline"}
+                name={adminDetails.active ? "close-circle-outline" : "checkmark-circle-outline"}
                 size={24}
                 color={theme.colors.white}
               />
               <Text style={styles.actionButtonText}>
-                {adminDetails.status === 'active' ? 'Désactiver le compte' : 'Activer le compte'}
+                {adminDetails.active ? 'Désactiver le compte' : 'Activer le compte'}
               </Text>
             </TouchableOpacity>
           </Card>

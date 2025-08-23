@@ -41,16 +41,38 @@ const ClientDetailScreen = ({ navigation, route }) => {
     try {
       setIsLoading(true);
       
-      // Note: Adapter selon votre API réelle
-      // Pour l'instant, on utilise les données passées en paramètres
-      setClientDetails(client);
-      
-      // TODO: Récupérer les transactions du client si l'API existe
-      // const transactionsResponse = await superAdminService.getClientTransactions(client.id);
+      if (!client?.id) {
+        Alert.alert('Erreur', 'ID client manquant');
+        navigation.goBack();
+        return;
+      }
+
+      // Charger en parallèle les détails du client et ses transactions
+      const [clientResult, transactionsResult] = await Promise.allSettled([
+        superAdminService.getClientDetailsComplete(client.id),
+        superAdminService.getClientTransactions(client.id, 0, 10) // Dernières 10 transactions
+      ]);
+
+      // Traiter les résultats
+      if (clientResult.status === 'fulfilled' && clientResult.value.success) {
+        setClientDetails(clientResult.value.data);
+      } else {
+        // Utiliser les données passées en paramètre si l'API échoue
+        setClientDetails(client);
+        console.warn('⚠️ Utilisation des données de base pour le client');
+      }
+
+      if (transactionsResult.status === 'fulfilled' && transactionsResult.value.success) {
+        setTransactions(transactionsResult.value.data || []);
+      } else {
+        console.warn('⚠️ Impossible de charger les transactions du client');
+      }
       
     } catch (error) {
       console.error('Erreur lors de la récupération des détails:', error);
-      Alert.alert('Erreur', 'Impossible de charger les détails du client');
+      // Utiliser les données de base en cas d'erreur
+      setClientDetails(client);
+      Alert.alert('Erreur', 'Certaines données n\'ont pas pu être chargées');
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +123,8 @@ const ClientDetailScreen = ({ navigation, route }) => {
         { 
           text: 'Exporter', 
           onPress: () => {
-            // TODO: Implémenter l'export des données client
+            // Export des données client (via Excel général)
+            console.log('📄 Export client:', clientDetails?.id);
             Alert.alert('Info', 'Fonction d\'export à implémenter');
           }
         }

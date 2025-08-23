@@ -76,26 +76,11 @@ const AgenceManagementScreen = ({ navigation }) => {
 
   const handleEditAgence = (agence) => {
     console.log('handleEditAgence appelé avec:', agence);
-    Alert.alert(
-      "Modification d'agence",
-      `Voulez-vous modifier l'agence "${agence.nomAgence}" ?\n\nVous pourrez modifier :\n• Nom et coordonnées\n• Responsable et téléphone\n• Paramètres de commission\n• Code agence`,
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Modifier',
-          onPress: () => {
-            console.log('Navigation vers AgenceCreation avec mode edit');
-            navigation.navigate('AgenceCreation', { 
-              mode: 'edit', 
-              agence: agence 
-            });
-          },
-        },
-      ]
-    );
+    console.log('Navigation directe vers AgenceCreation avec mode edit');
+    navigation.navigate('AgenceCreation', { 
+      mode: 'edit', 
+      agence: agence 
+    });
   };
 
   const handleToggleStatus = (agence) => {
